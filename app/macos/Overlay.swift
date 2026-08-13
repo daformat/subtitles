@@ -204,6 +204,16 @@ final class OverlayController {
     private let textIdleTimeout: TimeInterval = 4
     private var isDraggable = false
 
+    /// Paused. Nothing may put the overlay back on screen until resumed — not
+    /// words already in the engine's pipeline when the pause landed, not the ⇧
+    /// drag nudge.
+    ///
+    /// A flag rather than a one-shot `clearAndHide()`: pausing gates audio at the
+    /// tap, but whatever is already inside the ring and the recogniser keeps
+    /// arriving for a beat afterwards, and each update called `show()` and put the
+    /// box straight back up.
+    private var isSuppressed = false
+
     // ── paging state ──
     // Broadcast subtitles never scroll a wall of text: they fill, clear, and
     // start again. `page` is what is on screen now; when the next words would
@@ -288,7 +298,10 @@ final class OverlayController {
         // ⇧ toggles grabbable. Polled, not monitored — see the file header.
         modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             guard let self else { return }
-            let wantsDrag = NSEvent.modifierFlags.contains(.shift)
+            // Not while paused: the panel is invisible then, and making an
+            // invisible panel grabbable just means it swallows clicks meant for
+            // whatever is underneath.
+            let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
                 self.panel.ignoresMouseEvents = !wantsDrag
@@ -344,6 +357,7 @@ final class OverlayController {
     /// Fills to `maxLines`, then clears and restarts from the first word that did
     /// not fit — the same behaviour as broadcast subtitles, which never scroll.
     func showWords(_ words: [TimedWord]) {
+        guard !isSuppressed else { return }
         guard let newest = words.last else { return }
 
         // Time running backwards means the engine restarted its transcript
@@ -512,6 +526,7 @@ final class OverlayController {
     }
 
     private func show() {
+        guard !isSuppressed else { return }
         if panel.alphaValue < 1 {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.12
@@ -539,7 +554,24 @@ final class OverlayController {
         layout()
     }
 
-    /// Paused: drop what is on screen and stay dark until resumed.
+    /// Pause and resume: drop what is on screen and stay dark until resumed.
+    ///
+    /// Distinct from `clearAndHide()`, which model and source switches use and
+    /// which must *not* keep the overlay down — those are expected to start
+    /// showing text again on their own.
+    func setPaused(_ paused: Bool) {
+        isSuppressed = paused
+        if paused {
+            clearAndHide()
+            // Drop the drag state too, or a ⇧ held across the pause leaves the
+            // panel catching clicks it will never show anything for.
+            isDraggable = false
+            panel.ignoresMouseEvents = true
+        }
+    }
+
+    /// Wipe the box and fade it out, leaving it free to come back on the next
+    /// word. Used when the engine underneath changes — model or source switch.
     func clearAndHide() {
         lastShownText = ""
         lastTextAt = .distantPast

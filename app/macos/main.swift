@@ -449,7 +449,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 
 func togglePause() {
     isPaused.toggle()
-    if isPaused { renderer.overlay?.clearAndHide() }
+    renderer.overlay?.setPaused(isPaused)
     err(isPaused ? "paused" : "resumed")
 }
 
