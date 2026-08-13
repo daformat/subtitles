@@ -178,6 +178,13 @@ final class Renderer {
         overlay?.endUtterance()
     }
 
+    /// Drop the line without printing it. Used when the audio underneath changes
+    /// source: the half-sentence on screen belongs to an app we are no longer
+    /// listening to, so committing it to the terminal would be a lie.
+    func discardLine() {
+        line = ""
+    }
+
     func pause() {
         overlay?.markPause()
     }
@@ -461,6 +468,11 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
             UserDefaults.standard.set(name, forKey: Defaults.sourceName)
         }
         overlay?.clearAndHide()
+        renderer.discardLine()
+        // Clearing the overlay is not enough on its own: the recogniser keeps its
+        // accumulated transcript and its encoder context, so the new app's first
+        // words arrive appended to a sentence the previous app was saying.
+        if let fluid = fluidEngine { Task { await fluid.resetContext() } }
         err("listening to: \(source.label)")
     } catch {
         err("\(red)could not switch source:\(reset) \(error)")
