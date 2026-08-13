@@ -105,7 +105,11 @@ let app = NSApplication.shared
 // Globals rather than captures: the audio callback must not touch ARC.
 nonisolated(unsafe) var engine: OpaquePointer?
 nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
-nonisolated(unsafe) var currentVariant: FluidVariant = .eou320
+/// Nemotron 560 rather than EOU 320: it is the tier actually in use here, so the
+/// bundle a cold cache pulls is the one the app will go on running. Note this
+/// avoids downloading a *second* family that never gets used — a genuinely fresh
+/// machine still fetches this one from HuggingFace on first launch.
+nonisolated(unsafe) var currentVariant: FluidVariant = .nemotron560
 /// Non-nil while a model is downloading or loading.
 nonisolated(unsafe) var engineBusyMessage: String?
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.

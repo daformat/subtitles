@@ -56,11 +56,11 @@ enum FluidVariant: String, CaseIterable {
         // because 160 ms chunks double the model invocations per second. eou320
         // manages 0.13–0.15 on the same machine.
         case .eou160: return "120M · ⚠︎ RTF 0.6–2.2 here · often too slow"
-        case .eou320: return "120M · RTF 0.13–0.15 · a good default"
+        case .eou320: return "120M · RTF 0.13–0.15 · fast and light"
         case .eou1280: return "120M · highest throughput"
-        case .nemotron560: return "0.6B · lowest latency tier"
+        case .nemotron560: return "0.6B · default · lowest latency tier"
         case .nemotron1120: return "0.6B · the trained chunk size"
-        case .nemotron2240: return "0.6B · default · highest throughput"
+        case .nemotron2240: return "0.6B · upstream default · highest throughput"
         case .unified: return "0.6B · punctuation + capitals · 2.08 s latency"
         }
     }

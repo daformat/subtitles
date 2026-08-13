@@ -153,8 +153,8 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 - The shipped variants are **not measured by this project** — the numbers in the
   menu are upstream's. The harness in `spike/latency` cannot drive FluidAudio, so
   there is no like-for-like latency/WER comparison yet.
-- Only the EOU variants have been exercised in anger; the Nemotron ones are wired
-  but barely tested.
+- **Nemotron 560 ms** is the default and the tier in daily use; the EOU variants
+  are the ones measured. Nemotron 1120 / 2240 are wired but barely tested.
 - English only as configured. Parakeet v3 and the multilingual Nemotron models
   exist in FluidAudio but are not exposed here yet.
 - Singing is speech as far as the VAD is concerned, so vocal music will be
