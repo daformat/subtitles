@@ -1,0 +1,379 @@
+// Phase 2 — the subtitle overlay.
+//
+// A borderless, click-through, never-focused panel that floats above everything
+// including fullscreen apps. All the behaviour that made native the right call in
+// PLAN.md §1 lives in this file: in Electron each of these is a flag that half
+// works and regresses between versions.
+//
+// Interaction model: click-through by default, so the overlay never intercepts a
+// click meant for the app underneath. Hold ⌥ to make it grabbable and drag it
+// somewhere else; the position is remembered.
+//
+// ⌥ is detected by polling `NSEvent.modifierFlags` rather than installing a
+// global event monitor — a keyboard monitor would demand Accessibility
+// permission, and asking for a second scary prompt to enable dragging is a bad
+// trade.
+
+import AppKit
+
+// MARK: - Panel
+
+final class SubtitlePanel: NSPanel {
+    init(contentRect: NSRect) {
+        super.init(
+            contentRect: contentRect,
+            // .nonactivatingPanel is what stops the overlay from stealing focus
+            // from whatever the user is actually working in.
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false)
+
+        isFloatingPanel = true
+        level = .statusBar
+        backgroundColor = .clear
+        isOpaque = false
+        hasShadow = false
+        ignoresMouseEvents = true
+        isMovableByWindowBackground = true
+        hidesOnDeactivate = false
+
+        // Follow the user across Spaces and sit above fullscreen apps rather than
+        // being left behind on one desktop.
+        collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle,
+        ]
+    }
+
+    // Never become key or main: taking focus would pull the caret out of the
+    // user's editor every time a subtitle appeared.
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+// MARK: - View
+
+final class SubtitleView: NSView {
+    var committed = "" { didSet { needsDisplay = true } }
+    var tentative = "" { didSet { needsDisplay = true } }
+    var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
+
+    /// Hard ceiling on displayed lines. The controller pages the text so this is
+    /// never actually exceeded; the view clips as a last resort.
+    var maxLines = 3
+
+    private let inset = NSSize(width: 22, height: 14)
+    private let corner: CGFloat = 14
+
+    private var font: NSFont {
+        // A rounded, heavy face reads better at a glance against arbitrary video.
+        let base = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return NSFont(descriptor: d, size: fontSize) ?? base
+    }
+
+    private func paragraph(centered: Bool) -> NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        // Measured left-aligned, drawn centred. A centred line fragment spans the
+        // whole container, so measuring it reports the ceiling width rather than
+        // the width the glyphs actually need.
+        p.alignment = centered ? .center : .left
+        p.lineBreakMode = .byWordWrapping
+        p.lineSpacing = 2
+        return p
+    }
+
+    /// Committed text at full strength, the in-flight tail dimmed.
+    ///
+    /// Spike 0A measured this engine as effectively non-revising (0 ms p50 commit
+    /// lag, 4 of 66 words ever revised), so in practice the dimmed tail is usually
+    /// empty. It stays because it costs nothing and is what makes a revising
+    /// engine survivable if the model is ever swapped.
+    func attributed(committed: String, tentative: String,
+                    centered: Bool = true) -> NSAttributedString {
+        let style = paragraph(centered: centered)
+        let out = NSMutableAttributedString()
+        out.append(NSAttributedString(string: committed, attributes: [
+            .font: font,
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: style,
+        ]))
+        out.append(NSAttributedString(string: tentative, attributes: [
+            .font: font,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.55),
+            .paragraphStyle: style,
+        ]))
+        return out
+    }
+
+    private func textWidth(for width: CGFloat) -> CGFloat { width - inset.width * 2 }
+
+    /// Exact text extent and wrapped line count, from the real layout engine.
+    ///
+    /// `boundingRect` under-reports width by enough to clip the last word, and
+    /// dividing its height by a nominal line height is off-by-one near the
+    /// boundary — either error shows up directly as clipped or mis-paged text.
+    private func metrics(committed: String, tentative: String,
+                         maxWidth: CGFloat) -> (used: NSSize, lines: Int) {
+        let text = attributed(committed: committed, tentative: tentative, centered: false)
+        guard text.length > 0 else { return (.zero, 0) }
+
+        let container = NSTextContainer(
+            size: CGSize(width: textWidth(for: maxWidth), height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        let manager = NSLayoutManager()
+        let storage = NSTextStorage(attributedString: text)
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        manager.ensureLayout(for: container)
+
+        var lines = 0
+        var index = 0
+        var widest: CGFloat = 0
+        while index < manager.numberOfGlyphs {
+            var range = NSRange()
+            _ = manager.lineFragmentRect(forGlyphAt: index, effectiveRange: &range)
+            let used = manager.lineFragmentUsedRect(forGlyphAt: index, effectiveRange: nil)
+            widest = max(widest, used.width)
+            index = NSMaxRange(range)
+            lines += 1
+        }
+        let height = manager.usedRect(for: container).height
+        return (NSSize(width: ceil(widest), height: ceil(height)), lines)
+    }
+
+    func lineCount(committed: String, tentative: String, width: CGFloat) -> Int {
+        metrics(committed: committed, tentative: tentative, maxWidth: width).lines
+    }
+
+    /// Size the box needs, hugging its content.
+    ///
+    /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
+    func fittingSize(maxWidth: CGFloat) -> NSSize {
+        let m = metrics(committed: committed, tentative: tentative, maxWidth: maxWidth)
+        guard m.lines > 0 else { return .zero }
+
+        let lineHeight = font.ascender - font.descender + font.leading + 2
+        let cappedHeight = min(m.used.height, lineHeight * CGFloat(maxLines) + 4)
+
+        // +2 of slack so a fractional advance never clips the final glyph.
+        let hugging = m.used.width + 2 + inset.width * 2
+        // A floor stops one- or two-character updates producing a jittering pill.
+        let width = min(max(hugging, 140), maxWidth)
+        return NSSize(width: width, height: ceil(cappedHeight) + inset.height * 2)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let text = attributed(committed: committed, tentative: tentative)
+        guard text.length > 0 else { return }
+
+        NSColor.black.withAlphaComponent(0.72).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: corner, yRadius: corner).fill()
+
+        text.draw(with: bounds.insetBy(dx: inset.width, dy: inset.height),
+                  options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+}
+
+// MARK: - Controller
+
+final class OverlayController {
+    private let panel: SubtitlePanel
+    private let view: SubtitleView
+    private var hideTimer: Timer?
+    private var modifierTimer: Timer?
+    private var isDraggable = false
+
+    // ── paging state ──
+    // Broadcast subtitles never scroll a wall of text: they fill, clear, and
+    // start again. `page` is what is on screen now; when the next words would
+    // push past maxLines we drop the page entirely and begin a new one from
+    // those words, rather than letting old text slide up out of view.
+    private var page = ""
+    private var pendingCommit = ""
+    private var tentative = ""
+    private var startFreshOnNextText = false
+
+    /// Remembered across launches once the user drags the panel somewhere.
+    ///
+    /// Stored as (centre x, bottom y) rather than the frame origin: the box now
+    /// resizes with its text, and anchoring the origin would make it grow
+    /// rightwards off its position instead of expanding evenly about its centre.
+    private static let anchorKey = "overlay.anchor"
+
+    private var maxWidth: CGFloat {
+        guard let screen = NSScreen.main else { return 900 }
+        return min(screen.frame.width * 0.7, 1100)
+    }
+
+    init(fontSize: CGFloat) {
+        let initial = NSRect(x: 0, y: 0, width: 900, height: 80)
+        panel = SubtitlePanel(contentRect: initial)
+        view = SubtitleView(frame: initial)
+        view.fontSize = fontSize
+        panel.contentView = view
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+
+        // ⌥ toggles grabbable. Polled, not monitored — see the file header.
+        modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let wantsDrag = NSEvent.modifierFlags.contains(.option)
+            if wantsDrag != self.isDraggable {
+                self.isDraggable = wantsDrag
+                self.panel.ignoresMouseEvents = !wantsDrag
+                // Nudge visible while it can be grabbed, so it is obvious the
+                // overlay is now catching clicks instead of passing them through.
+                if wantsDrag { self.panel.alphaValue = 1.0 }
+                if !wantsDrag { self.saveAnchor() }
+            }
+        }
+    }
+
+    // MARK: text
+
+    /// Committed text arrives as a delta and does *not* render on its own — the
+    /// core always follows a COMMITTED with a TENTATIVE, and rendering on both
+    /// would paint the new word beside a stale tail for one frame.
+    func appendCommitted(_ delta: String) {
+        pendingCommit += delta
+    }
+
+    func setTentative(_ text: String) {
+        tentative = text
+        if startFreshOnNextText, !(pendingCommit.isEmpty && text.isEmpty) {
+            startFreshOnNextText = false
+            page = ""
+        }
+
+        let grown = page + pendingCommit
+        if !page.isEmpty,
+           view.lineCount(committed: grown, tentative: text, width: maxWidth) > view.maxLines {
+            // Would overflow: clear and restart from the words that caused it, so
+            // nothing is lost and nothing scrolls.
+            page = trimLeadingSpace(pendingCommit)
+        } else {
+            page = grown
+        }
+        pendingCommit = ""
+
+        view.committed = page
+        view.tentative = tentative
+        layout()
+        show()
+    }
+
+    /// Speech stopped briefly. Whatever is on screen stays there, but the next
+    /// words start a new page instead of being appended to it — so pages break at
+    /// natural pauses rather than wherever the text happened to overflow.
+    ///
+    /// Display-only: the core keeps the recognizer running across this, so there
+    /// is no accuracy cost (unlike an endpoint, which resets it).
+    func markPause() {
+        if !pendingCommit.isEmpty { setTentative("") }
+        startFreshOnNextText = true
+    }
+
+    /// Utterance finished: keep it on screen briefly, then fade. The next words
+    /// begin a new page rather than continuing this one.
+    func endUtterance() {
+        // Fold in any commit that arrived without a following tentative — an
+        // endpoint flush emits COMMITTED then ENDPOINT with nothing between.
+        if !pendingCommit.isEmpty {
+            setTentative("")
+        }
+        startFreshOnNextText = true
+        scheduleHide(after: 4)
+    }
+
+    private func trimLeadingSpace(_ s: String) -> String {
+        var out = s
+        while out.hasPrefix(" ") { out.removeFirst() }
+        return out
+    }
+
+    // MARK: layout / visibility
+
+    private func layout() {
+        let size = view.fittingSize(maxWidth: maxWidth)
+        guard size.height > 0, let screen = NSScreen.main else { return }
+
+        let anchor: NSPoint
+        if let saved = UserDefaults.standard.string(forKey: Self.anchorKey) {
+            anchor = NSPointFromString(saved)
+        } else {
+            anchor = NSPoint(x: screen.frame.midX,
+                             y: screen.frame.minY + screen.frame.height * 0.12)
+        }
+
+        // Round the origin: a half-pixel x makes the text render soft as the box
+        // resizes on every word.
+        let origin = NSPoint(x: (anchor.x - size.width / 2).rounded(), y: anchor.y.rounded())
+        // NSWindow resizes its content view itself, so assigning view.frame here
+        // is redundant — and actively harmful: setFrame(display: true) paints
+        // immediately, so a manual assignment afterwards means that paint happens
+        // with the view still at its previous, smaller size and the text is drawn
+        // clipped for a frame.
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    private func saveAnchor() {
+        let anchor = NSPoint(x: panel.frame.midX, y: panel.frame.minY)
+        UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
+    }
+
+    private func show() {
+        hideTimer?.invalidate()
+        if panel.alphaValue < 1 {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.12
+                panel.animator().alphaValue = 1
+            }
+        }
+    }
+
+    private func scheduleHide(after seconds: TimeInterval) {
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+            guard let self, !self.isDraggable else { return }
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.4
+                self.panel.animator().alphaValue = 0
+            }
+        }
+    }
+
+    func resetPosition() {
+        UserDefaults.standard.removeObject(forKey: Self.anchorKey)
+        layout()
+    }
+
+    func setFontSize(_ size: CGFloat) {
+        view.fontSize = size
+        // Re-page at the new size: text that fit three lines at 22pt may need five
+        // at 52pt, and without this the box would simply clip.
+        if !page.isEmpty,
+           view.lineCount(committed: page, tentative: tentative, width: maxWidth) > view.maxLines {
+            page = ""
+            view.committed = ""
+        }
+        layout()
+    }
+
+    /// Paused: drop what is on screen and stay dark until resumed.
+    func clearAndHide() {
+        hideTimer?.invalidate()
+        page = ""
+        pendingCommit = ""
+        tentative = ""
+        startFreshOnNextText = false
+        view.committed = ""
+        view.tentative = ""
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.2
+            panel.animator().alphaValue = 0
+        }
+    }
+}

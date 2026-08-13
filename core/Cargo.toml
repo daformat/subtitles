@@ -1,0 +1,20 @@
+[package]
+name = "subs-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "subs_core"
+# staticlib: the Swift app links this together with the sherpa-onnx archives.
+# The final link happens in build.sh, not here.
+crate-type = ["staticlib"]
+
+[build-dependencies]
+bindgen = "0.71"
+cbindgen = "0.29"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

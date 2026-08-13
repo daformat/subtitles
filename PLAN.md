@@ -1,0 +1,712 @@
+# Universal Subtitles — Plan
+
+Real-time transcription of system audio, rendered as an always-on-top subtitle overlay.
+The product only works if the delay is small enough to feel live, so latency is the
+primary design constraint and everything below is subordinate to it.
+
+**Status:** Phase 3 complete — menu bar, per-app source picker, hotkey, settings.
+Remaining before this is shippable: model bundling, signing identity, real-world WER.
+See §8a (ASR latency) and §8b (capture) for measured results.
+**Last updated:** 2026-08-13
+**Host used for planning:** macOS 15.7.3, Apple Silicon (arm64)
+
+---
+
+## 1. Decisions
+
+| # | Decision | Choice | Confidence | Revisit when |
+|---|---|---|---|---|
+| D1 | Native vs cross-platform | **Native per platform**, shared portable core | High | — |
+| D2 | Platform scope | **macOS first, Windows later** | High | After v1 ships |
+| D3 | Transcription location | **Local only** | High | If accuracy proves unusable |
+| D4 | Core language | **Rust** (staticlib + C header) | Medium — FFI still unvalidated | Phase 1 (0A used C to avoid hand-transcribing structs) |
+| D5 | ASR engine | **Streaming Zipformer transducer** via sherpa-onnx, model `en-2023-06-26` fp32, CPU provider | **High — confirmed by Spike 0A** | If real-world WER disappoints |
+| D6 | Capture API (macOS) | **Core Audio process tap** | **High — confirmed by Spike 0B** | — |
+| D7 | Translation | **Deferred**, but designed for | Medium | After v1 |
+
+### D1 rationale — why native
+
+Latency is *not* the argument. The UI framework is not where the delay lives (see §3);
+Electron would add ~20–40 ms on top of a 300–3000 ms model. The real reasons:
+
+1. **System audio capture is the whole app, and it is pure platform API.** Chromium's
+   loopback story on macOS is poor and pushes you toward ScreenCaptureKit, which triggers
+   the much heavier Screen Recording permission prompt.
+2. **The overlay window is platform API too.** Borderless, always-on-top, click-through,
+   never-takes-focus, visible across Spaces and over fullscreen apps — a handful of
+   `NSPanel` properties natively, a pile of half-working flags in Electron.
+3. **The app is always on.** A Chromium compositor running all day beside a live ASR model
+   is a battery cost that undermines the product.
+
+Cross-platform UI toolkits mostly save work you still have to do per-platform anyway
+(capture, permissions, window layer). If D2 is ever revisited toward a single UI,
+**Tauri v2, not Electron** — native webview, ~10 MB.
+
+---
+
+## 2. Goals / non-goals
+
+**Goals**
+- Subtitles that feel live. Target p95 under ~700 ms speaker-to-screen; ~1.2 s acceptable.
+- Fully on-device. System audio never leaves the machine.
+- Readable output — text that does not jitter or rewrite itself (see §6).
+- Low idle cost. This runs all day.
+
+**Non-goals for v1**
+- Translation (designed for, not built — see §7)
+- Speaker diarization
+- Transcript history, search, export
+- Microphone capture (system audio out only)
+- Mobile
+
+---
+
+## 3. Latency budget
+
+One word, speaker to screen:
+
+Estimated at planning time, then **measured in Spike 0** (measured values in bold):
+
+| Stage | Estimate | Measured |
+|---|---|---|
+| Audio tap callback | 5–20 ms | **10.7 ms** (512 frames @ 48 kHz) |
+| Resample 48k stereo → 16k mono f32 | < 1 ms | not yet built |
+| VAD frame | ~30 ms | not yet built |
+| **ASR emit (p50 / p95)** | **200–3000 ms** | **316 ms / 489 ms** (idle machine) |
+| Stabilisation (LocalAgreement-2) | — | **0 ms p50, 3 ms p95** |
+| Render / compositing | ~16 ms | not yet built |
+
+Everything that is not the model sums to well under ~100 ms — confirmed. **The ASR
+architecture is the latency decision; nothing else comes close.**
+
+The estimate held, but with one correction the planning version missed: the p95 tail
+degrades to **~1.8 s under machine load** while p50 barely moves (§8a Finding 2). Budget
+against p95-under-load, not p50-when-idle.
+
+---
+
+## 4. Architecture
+
+```
+[CoreAudio process tap]  ← platform layer, macOS
+        ↓ (copy only, no work in callback)
+[lock-free SPSC ring buffer]
+        ↓ (ASR thread pulls)
+[resample → 16k mono f32]
+        ↓
+[Silero VAD]            ← gates silence/music to prevent hallucination
+        ↓
+[streaming ASR engine]
+        ↓
+[stabilizer: LocalAgreement-2]
+        ↓ committed / tentative event stream
+[SwiftUI overlay NSPanel]
+```
+
+The boxed middle — ring buffer through stabilizer — is the portable Rust core. The tap and
+the overlay are platform layers. Porting to Windows means replacing the tap with WASAPI
+loopback and the overlay with a Win32 layered window; the core is unchanged.
+
+### Repo layout
+
+```
+subtitles/
+  core/                    # Rust → libsubs.a + subs.h (cbindgen)
+    src/lib.rs             # C ABI surface
+    src/ring.rs            # lock-free SPSC, allocation-free
+    src/resample.rs        # 48k stereo → 16k mono f32
+    src/asr.rs             # sherpa-onnx FFI
+    src/stabilize.rs       # LocalAgreement-2 → events
+    cbindgen.toml
+  platform/
+    macos/tap.swift        # Core Audio process tap
+    windows/               # later: WASAPI loopback
+  app/macos/               # SwiftUI app, NSPanel overlay
+  bench/                   # Spike 0A latency harness
+```
+
+### Core ABI (sketch)
+
+```c
+typedef struct subs_engine subs_engine_t;
+
+subs_engine_t* subs_create(const subs_config_t* cfg);
+void  subs_push_audio(subs_engine_t*, const float* interleaved,
+                      size_t frames, uint32_t sample_rate, uint16_t channels);
+void  subs_set_callback(subs_engine_t*, subs_event_cb cb, void* ctx);
+void  subs_destroy(subs_engine_t*);
+```
+
+Deliberately tiny — this is the entire porting surface.
+
+### Hard rule
+
+**Do nothing in the Core Audio tap callback except copy into the ring and return.**
+No allocation, no lock, no logging, no syscall. ASR runs on its own thread pulling from
+the far end. Violating this produces intermittent audio glitches that are miserable to
+diagnose after the fact.
+
+### Why Rust for the core (D4)
+
+sherpa-onnx already ships a C API *and* bundles Silero VAD, so the core is thinner than it
+looks. Rust is chosen mainly for the deferred Windows story: cargo cross-compiles without
+a build-system argument, and `cbindgen` emits one header consumed by both a Swift bridging
+module and a future Win32 layer. C++ would avoid an FFI hop but costs that tooling.
+
+---
+
+## 5. ASR engine options
+
+| Engine | Emit latency | Notes |
+|---|---|---|
+| **Streaming Zipformer transducer** (sherpa-onnx) | **measured 316 / 489 ms p50/p95** | Truly streaming, monotonic output, CPU-viable. **CHOSEN — 0.0 % WER on clean speech (§8a).** Model is 310 MB, not the ~100 MB assumed. |
+| Parakeet TDT v3 (MLX / ONNX) | ~1–1.5 s | Excellent quality, multilingual (~25 European langs incl. French), fast on Apple Silicon, but chunked. **Fallback tier.** |
+| whisper.cpp + LocalAgreement | 1.5–3 s | Best language coverage, worst latency. Whisper is a 30 s-window encoder-decoder; streaming is a bolt-on. Rejected for v1. |
+| Apple `SpeechTranscriber` | few hundred ms | Free, on-device, streaming-native. **Requires macOS 26** — dev host is on 15.7. Revisit on upgrade. |
+| Cloud (Deepgram / AssemblyAI) | 300–800 ms | Excellent, but violates D3. Rejected. |
+
+The common default is Whisper, and it is the wrong pick here — it yields ~2 s subtitles.
+Streaming transducers emit as you speak and their output is monotonic, which also makes
+§6 dramatically easier.
+
+### Known risk — language coverage (mostly retired)
+
+Streaming Zipformer coverage is thinner than Whisper's, but better than feared: a French
+streaming model exists and works (17.1 % WER on hard Common Voice audio, p95 753 ms —
+§8a Finding 4), and the errors are almost entirely proper nouns, so it reads fine as
+subtitles. English is excellent. Other languages remain unverified; check the model zoo
+before promising one. The Parakeet fallback tier at ~1.2 s stands if a language is missing.
+
+---
+
+## 6. Text stability — largely a non-problem on this engine
+
+> **Updated after Spike 0A.** This section was written expecting jitter to be a major
+> UI problem. Measured: LocalAgreement-2 commit lag is **0 ms p50 / 3 ms p95**, and only
+> 4 of 66 words were revised at all. Greedy transducer output is monotonic in practice.
+> The two-tier render below is therefore **cosmetic, not required** — build the simple
+> version first. The warning stands in full for Whisper, where revision is constant.
+
+Streaming ASR *can* continuously revise its hypothesis. Rendering raw partials then makes
+text jitter and rewrite itself, which is unreadable and damages perceived quality far
+more than 200 ms of extra latency.
+
+**Approach:**
+- Run **LocalAgreement-2** — a token is committed only once two consecutive hypotheses
+  agree on it.
+- Render committed text at full opacity, tentative tail dimmed. The eye learns to trust
+  the solid text and ignore the shimmer at the edge.
+- Make commit aggressiveness a tunable. Showing a slightly-wrong word fast and correcting
+  it usually beats waiting.
+- Scrolling 2–3 line window, not a growing transcript.
+- VAD-gate the engine so it does not hallucinate over silence or music. (Whisper is
+  notorious for emitting "Thank you for watching" on quiet passages; transducers are
+  better behaved but still benefit.)
+
+---
+
+## 7. Translation (deferred)
+
+Not in v1, but do not foreclose it: have the stabilizer emit committed segments as an
+**event stream** rather than mutating a shared text buffer. A translation stage then
+subscribes downstream without restructuring the pipeline.
+
+Expect it to cost an extra ~200–500 ms and to make stability harder — translations rewrite
+more aggressively than transcripts, so §6's commit logic will need separate tuning.
+
+---
+
+## 8. Phases
+
+### Spike 0 — measure before building
+Two independent, throwaway probes. Run in parallel. Together they retire nearly all the
+risk that could invalidate this plan.
+
+**0A — latency + quality harness.** Rust binary: read a WAV, feed it real-time-paced into
+sherpa-onnx streaming Zipformer, log `(audio_sample_time, wall_clock_at_emit)` per token.
+Report p50/p95 emit latency and WER against a reference transcript.
+- *Gate:* p95 < ~700 ms with acceptable accuracy → proceed on the fast tier.
+  Otherwise drop to Parakeet and accept ~1.2 s.
+- *Also settles:* the language-coverage risk in §5.
+
+**0B — tap probe.** ~50 lines creating a Core Audio process tap and printing RMS.
+- *Confirms:* the API path works on 15.7; which permission prompt the user actually sees.
+- *Why it matters:* shapes onboarding, and the ScreenCaptureKit fallback is a much worse
+  UX. This should be verified rather than assumed.
+- Doubles as the seed of the real capture layer.
+
+### Phase 1 — headless CLI
+Tap → ring → VAD → engine → stdout with timestamps. No UI. Most of the remaining risk
+lives here. Ends with a binary that prints live subtitles for whatever is playing.
+
+Carried in from Spike 0:
+- Must be a **bundle launched via `open`**, not a bare binary (§8b Finding 2).
+- Ship the **all-zero watchdog** from day one (§8b Finding 1) — without it a
+  permissions failure is invisible.
+- Resample 48 kHz stereo f32 → 16 kHz mono f32; the tap format is confirmed.
+- **Validate the Rust↔sherpa-onnx FFI here** — 0A deliberately used C, so D4 is
+  still unproven. Prefer `bindgen` over hand-written externs.
+- Instrument RTF continuously; define the degraded-mode fallback to the 20M model.
+- Re-measure latency and WER on **real captured system audio**, not test corpora.
+
+### Phase 1 results (DONE, 2026-08-13)
+
+Built: `core/` (Rust), `app/macos/` (Swift), `build.sh`, `run.sh`, `probe.sh`.
+15 unit tests green. **D4 validated** — bindgen over the sherpa C API and cbindgen
+for the outward header both work; the FFI never needed hand-written externs.
+
+Verified end to end: audio played through the system, captured by the tap,
+resampled 48k stereo → 16k mono, gated, transcribed, rendered live.
+
+| Reference | Output |
+|---|---|
+| AFTER EARLY NIGHTFALL … THE SQUALID QUARTER OF THE BROTHELS | **exact** |
+| YET THESE THOUGHTS AFFECTED HESTER PRYNNE LESS WITH HOPE THAN APPREHENSION | **exact** |
+
+RTF **0.10–0.20** (vs 0.25 in the offline harness — the energy gate skips silence
+entirely), 0 dropped samples.
+
+#### Bugs this phase found — all of them ordering/lifecycle, none in the ASR
+
+1. **Startup order.** Capture must not begin until the worker is running. Starting
+   the tap first buries the opening seconds of speech behind a model load's worth
+   of buffered audio. `SystemAudioTap` is therefore split into `prepare()` (create
+   tap, read format) and `start()` (begin IO).
+2. **Ring overflow policy.** Dropping the *newest* samples when full means a stall
+   leaves the stream permanently seconds behind — a live stream can never be caught
+   up. The consumer now skips forward when the backlog exceeds 1.5 s. Done on the
+   consumer side because it owns the read index, so it stays race-free and `push`
+   stays a plain memcpy.
+3. **Pre-roll is mandatory.** ~1 s of audio is replayed whenever the gate opens.
+   Fixes two things at once: the gate discards the quiet onset of a word, and a
+   streaming Zipformer restarted at an endpoint has no left context and emits
+   nothing for a second or more. Without it the second utterance lost its first six
+   words while the same model decoding the same clip offline got them all — that
+   offline control is what proved the fault was ours, not the model's.
+4. **Gate ≠ endpoint.** Two separate timeouts (400 ms / 1600 ms). One timeout means
+   an ordinary mid-sentence pause resets the recognizer and chops one utterance
+   into several lines.
+5. **Endpoints must flush.** Text still tentative at an endpoint was discarded on
+   reset, silently truncating the tail of any utterance the model was unsure about.
+6. **The watchdog counted itself.** Our own aggregate device registers as a process
+   outputting audio, so the permission warning fired during ordinary silence. A
+   watchdog that cries wolf is worse than none.
+7. **One redraw per update.** Commit and tentative each triggering a redraw painted
+   the newly committed word beside a stale tail for one frame.
+
+#### Dev-workflow traps (cost more time than any real bug)
+
+- **`open` reuses a running instance.** It activates the existing app rather than
+  launching the new binary, so you silently keep testing the last build and read
+  stale behaviour as your fix working. `run.sh` now kills any previous instance
+  first. Two conclusions in this session were wrong for exactly this reason.
+- **`open` without `-W` loses output.** Once a non-waiting `open` exits, the
+  redirected stdout/stderr stop receiving; everything after the first moment
+  vanishes and the app looks hung.
+- **Verify patches applied.** A silent no-op search-and-replace made unchanged code
+  look like a working fix. Prefer edits that fail loudly.
+
+#### Rebuilds re-trigger the permission prompt ⚠️
+
+`build.sh` signs ad-hoc (`codesign -s -`). TCC identifies an ad-hoc-signed app by
+its **cdhash**, which changes with every rebuild — so macOS treats each build as a
+brand-new app and prompts again. Any test that starts audio without waiting will
+race the dialog and read "not yet approved" as a broken pipeline. This wasted time
+twice in one session.
+
+**Mitigation now:** `probe.sh` retries for ~60 s and tells you to approve.
+
+**Proper fix (not yet done):** sign with a stable self-signed identity instead of
+ad-hoc, so the TCC identity survives rebuilds. Create one in Keychain Access
+(Certificate Assistant → Create a Certificate → Code Signing, self-signed), then
+point `build.sh` at it via `codesign -s "<name>"`. Not done automatically because
+it means creating a certificate in the user's keychain.
+
+#### `probe.sh` — answer the permission question before testing
+
+There is no API for "is audio capture granted". The only reliable test is
+empirical: play a known sound, see whether any non-zero sample arrives. Run it
+before any transcription test, or you race the permission dialog and misread
+"not approved yet" as a broken pipeline. Currently reports **GRANTED, peak −19 dBFS**.
+
+#### Not done in Phase 1
+
+- Silero VAD (an energy gate is used instead; adequate so far, revisit if music or
+  noise trips it)
+- Re-measuring first-emit latency in-app — the harness numbers stand, but the
+  in-app path adds the tap and ring and has not been measured
+- Model is loaded from the dev tree, not bundled (§9 distribution question)
+
+### Phase 2 — the overlay
+Click-through `NSPanel`, two-tier text rendering per §6, drag to reposition.
+
+### Phase 2 results (DONE, 2026-08-13)
+
+Built: `app/macos/Overlay.swift` (~265 lines). `--headless` keeps the Phase 1
+terminal renderer, which remains the better debugging view.
+
+Verified on screen while real audio played: the panel renders bottom-centre over
+other applications, translucent rounded background, centred text, wrapping to
+multiple lines.
+
+#### Verified, not assumed
+
+- **Does not steal focus.** Frontmost application sampled before, during and after
+  a subtitle: unchanged throughout. This is the property that justified going
+  native (§1) and it now has a measurement rather than a claim.
+- **Floats above other windows.** Confirmed in capture, over a normal app window.
+- **Translucency** reads correctly against arbitrary content behind it.
+
+#### Confirms the Spike 0A prediction
+
+No dimmed tentative tail was visible in any captured frame — because with this
+engine the tail is almost always empty (commit lag 0 ms p50, 4 of 66 words ever
+revised). §6's two-tier render is implemented and costs nothing, but it is
+genuinely cosmetic here, exactly as 0A predicted. It stays because it is what
+makes a *revising* engine survivable if the model is ever swapped.
+
+#### Design notes
+
+- **Click-through by default** (`ignoresMouseEvents`), so the overlay never
+  swallows a click meant for the app underneath. Hold **⌥** to make it grabbable;
+  position is remembered in `UserDefaults`.
+- **⌥ is detected by polling `NSEvent.modifierFlags`**, not a global event
+  monitor. A keyboard monitor would require Accessibility permission, and asking
+  for a second scary prompt just to enable dragging is a bad trade.
+- `.nonactivatingPanel` + `canBecomeKey/Main = false` + `.accessory` activation
+  policy together are what prevent focus theft. All three are needed.
+- `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]` so the
+  overlay follows the user across Spaces.
+- Text draws **bottom-aligned** when it overflows `maxLines`, so the newest line
+  stays put and older text slides up — how real subtitles behave.
+- The endpoint flush emits COMMITTED then ENDPOINT with no TENTATIVE between, and
+  only TENTATIVE drives the overlay, so `endpoint()` repaints explicitly. Without
+  that the last words of an uncertain utterance never reach the screen.
+
+#### Refinements after first manual use (2026-08-13)
+
+- **Sentence casing.** The models emit unpunctuated ALL CAPS, which is tiring to
+  read. `core/src/textcase.rs` lowercases and capitalises sentence starts plus the
+  pronoun "I". Done in the core, not the renderer, so the overlay, the terminal
+  view and any future translation stage all agree without duplicating the rule.
+  **Cost:** proper nouns lose their capitals ("HESTER PRYNNE" → "hester prynne").
+  Nothing in the token stream marks a name. The real fix is a punctuation/
+  truecasing model (sherpa-onnx ships CT-Transformer ones) after the stabiliser,
+  which would restore capitals *and* full stops for another model and some latency.
+- **Paging instead of scrolling.** Text never exceeds 3 lines: when the next words
+  would overflow, the overlay clears and restarts from those words, the way
+  broadcast subtitles behave. Verified on screen — 2 lines → 3 lines → cleared and
+  restarted mid-sentence. Line counting uses `NSLayoutManager` line fragments
+  rather than dividing a bounding-rect height, because an off-by-one there pages a
+  line early or spills a line late.
+
+#### Not verified / not done
+
+- **Behaviour over a fullscreen app is configured but not tested.**
+  `.fullScreenAuxiliary` should cover it; testing it would have meant taking over
+  the user's screen.
+- **Click-through is set but not click-tested** — verifying it would require
+  clicking into the user's actual UI.
+- Multi-monitor: uses `NSScreen.main` only; no per-display placement.
+- Only the current utterance is shown; no scrollback of previous lines.
+
+### Phase 3 — product
+Per-app source picker (process taps can target a single process — just Zoom, just Safari —
+which is far better than mixing everything), hotkey toggle, font/size/position settings,
+permission onboarding.
+
+### Phase 3 results (DONE, 2026-08-13)
+
+Built: `app/macos/MenuBar.swift`, `app/macos/Hotkey.swift`, source selection in
+`SystemAudioTap.swift`.
+
+#### The finding that mattered: a source is an app *family*, not a process
+
+The first cut let you pick a process. Enumeration immediately showed why that is
+useless: the only thing playing audio was `com.google.Chrome.helper`, not
+`com.google.Chrome`. **Browsers and Electron apps never play audio from their main
+process**, so picking "Google Chrome" would have captured silence — the feature
+would have looked implemented and worked for almost nothing.
+
+Sources are therefore app families: every process whose bundle id is, or is
+prefixed by, a `.regular` (Dock-visible) application's bundle id.
+`CATapDescription(stereoMixdownOfProcesses:)` takes an array, so the whole family
+is tapped at once. `Claude [3 proc]`, `Google Chrome [3 proc]`.
+
+Grouping targets must be `.regular` apps specifically. Matching against all running
+applications re-finds the helper — "Google Chrome Helper" is itself a running
+application with its own bundle id and localised name — and groups nothing.
+
+**Verified both directions:** with the source set to Firefox (silent), speech from
+another process produced **zero** transcript lines; switched to all system audio,
+the same clip transcribed in full.
+
+#### Rest of the phase
+
+- **Menu bar** (`NSStatusItem`), the app's only chrome since it is LSUIElement:
+  status line with live RTF, pause/resume, source picker, text size, reset overlay
+  position, permission state, quit. The source submenu is rebuilt on every open —
+  "what is playing right now" is stale a second after you cache it.
+- **⌥⌘S global hotkey** via Carbon `RegisterEventHotKey`, *not*
+  `NSEvent.addGlobalMonitorForEvents`. The AppKit monitor sees every keystroke
+  system-wide and so needs Accessibility permission; the Carbon hotkey needs none.
+  For an app whose pitch is "grant me audio access", not asking for keyboard
+  access too is worth the older API.
+- **Pause** gates the realtime callback on a plain `Bool`. Word-sized, no tearing
+  on arm64, and a lock in the audio callback would cost far more than a dropped
+  frame at the moment of toggling.
+- **Settings persist** (text size, overlay origin, source). Source is stored as a
+  bundle prefix, not a pid, so it survives relaunch.
+- **`--list-sources`** prints the source table and exits *before* any tap is
+  created, so it needs no audio permission — usable even when permission is the
+  thing being debugged.
+
+#### Known gap
+
+When a specific (non-"all") source is selected and that app is silent, the tap
+delivers no buffers at all, so the worker sleeps on an empty ring and emits no
+status events. The menu bar status line then shows the last value rather than
+"idle". Harmless, but it wants a heartbeat status independent of audio arriving.
+
+### Phase 4 — Windows (if ever)
+Swap the two platform layers. Core unchanged.
+
+---
+
+## 8a. Spike 0A results — ASR latency (DONE, 2026-08-13)
+
+**Verdict: gate PASSED.** Streaming Zipformer hits p95 489 ms with 0.0 % WER on
+clean read speech. D5 confirmed — but see the load-sensitivity caveat, which is
+the real finding.
+
+Code: `spike/latency/harness.c`. Test audio: two LibriSpeech clips (23.34 s) shipped
+with the model, with reference transcripts.
+
+### Method
+
+Audio is fed to the recognizer at **real-time pace** (20 ms chunks, wall-clock
+gated) and every token's first appearance is timestamped. Latency is reported
+**relative to the end of the spoken word** (approximated by the next token's start
+time) — you cannot emit a word before it has been said, so lag-after-end is the
+honest "how far behind the audio am I" figure. Latency from word *start* is ~180 ms
+higher and is the number most benchmarks quote; don't confuse the two.
+
+Harness validated by a `--fast` control: unpaced and paced runs produce byte-identical
+transcripts, so pacing is not corrupting the input.
+
+### Headline (idle machine, en-2023-06-26, fp32, CPU, 2 threads)
+
+| Metric | Value |
+|---|---|
+| first-emit p50 | **316 ms** |
+| first-emit p95 | **489 ms** |
+| first-emit max | 624 ms |
+| WER | **0.0 %** (66/66 words) |
+| RTF | 0.251 → 4.0× headroom |
+
+### Finding 1 — the transducer needs no stabilisation ✅
+
+LocalAgreement-2 commit delay: **p50 0 ms, p95 3 ms, max 22 ms**; only 4 of 66 words
+committed later than their first appearance at all.
+
+Greedy transducer output is monotonic in practice — it essentially never retracts a
+token. **§6's two-tier rendering is therefore not needed for correctness.** Keep a
+dimmed tail as a cosmetic touch if desired, but the feared text-jitter problem does
+not exist on this engine. This removes the largest piece of unknown UI work from the
+plan and further vindicates choosing a transducer over Whisper (where the problem is
+real and severe).
+
+### Finding 2 — latency is load-sensitive; WER is not ⚠️
+
+The same model, same audio, varying only machine contention:
+
+| Condition | p50 | p95 | RTF | WER |
+|---|---|---|---|---|
+| Idle (settled) | 316 ms | **489 ms** | 0.25 | 0.0 % |
+| Isolated single run | 335 ms | 631 ms | 0.33 | 0.0 % |
+| Back-to-back runs | 487 ms | **1816 ms** | 0.70 | 0.0 % |
+| Competing with a large download | 279 ms | 952 ms | 0.42 | — |
+
+Accuracy never budged. **Only latency degrades, and the p95 tail degrades ~4×.**
+
+This matters more than the headline: the intended use case is subtitling a video
+call, i.e. precisely when the machine is already busy. RTF 0.70 leaves ~1.4×
+headroom; if RTF reaches 1.0 the pipeline falls permanently behind, since a
+real-time stream cannot be caught up.
+
+**Consequences for Phase 1:**
+- Instrument RTF continuously and expose it; treat sustained RTF > 0.8 as a
+  degraded state.
+- Have a defined fallback when it degrades (drop to the 20M model, or int8).
+- The ASR thread should run at elevated (not realtime) QoS.
+- Never benchmark on an idle machine and quote that as the product number.
+
+### Finding 3 — CoreML is a negative result ❌
+
+`--provider coreml` was *worse* than CPU: RTF 0.414 vs 0.251, p95 650 ms vs 489 ms,
+plus a 10 s model-load penalty (vs ~1–6 s). Per-inference overhead dominates on
+20 ms streaming chunks. **Use the CPU provider.** Do not spend more time here.
+
+### Model comparison
+
+| Model | p50 | p95 | RTF | WER | Size |
+|---|---|---|---|---|---|
+| en-20M-2023-02-17 | 224 ms | 416 ms | 0.19 | 9.1 % | 128 MB |
+| **en-2023-06-26** | 316 ms | 489 ms | 0.25 | **0.0 %** | 310 MB |
+| en-2023-06-26 int8 | 429 ms | 975 ms | 0.57 | 0.0 % | — |
+
+The 20M model is faster but drops words (it lost "AFTER EARLY NIGHTFALL" entirely and
+rendered "BROTHELS" as "BRAFFLELS"). The full model is both accurate and fast enough.
+**Ship en-2023-06-26 fp32; keep 20M as the degraded-mode fallback.** int8 showed no
+benefit in these runs and is not worth the accuracy risk.
+
+### Finding 4 — French is viable; the §5 language risk is largely retired ✅
+
+`sherpa-onnx-streaming-zipformer-fr-2023-04-14` exists and works. Tested on the
+**Common Voice** clips it ships (crowd-sourced real speech — substantially harder
+than LibriSpeech):
+
+| Metric | Value |
+|---|---|
+| first-emit p50 / p95 | 419 ms / **753 ms** |
+| WER | 17.1 % |
+| RTF | 0.609 → 1.6× headroom |
+
+WER overstates the damage here. Almost every error is a proper noun:
+
+```
+hyp: ... DYNASTIE ASHÉMÉNIDE ET SEPT DES SASSANDIDES ... SAINT PIERRE ET MICHELIN
+ref: ... DYNASTIE ACHÉMÉNIDE ET SEPT DES SASSANIDES  ... SAINT PIERRE ET MIQUELON
+```
+
+As subtitles this is entirely readable. Note the French model is older
+(2023, stateless7 rather than zipformer2) and is a fair bit slower — p95 753 ms
+against English's 489 ms, with thinner RTF headroom. Usable, not equal.
+
+**The comparison is not apples-to-apples**: English was measured on LibriSpeech
+(easy), French on Common Voice (hard). Some of the gap is the test set, not the model.
+
+### Finding 5 — never validate ASR with TTS ⚠️
+
+The same French model scored **96.8 % WER** on speech generated by macOS `say`
+(14 hypothesis words against 31 reference), while scoring 17.1 % on real human
+speech. ASR models are trained on human acoustics and fall apart on synthetic
+audio. `say` is attractive because it gives free ground-truth text — **do not build
+a test corpus on it.** Use real recorded speech with reference transcripts.
+
+### Caveat on the 0.0 % WER — do not over-read it
+
+The test audio is clean, read, single-speaker LibriSpeech: close to the easiest
+possible input. Real system audio — podcasts with music beds, video calls with
+crosstalk, compressed streams, accents, overlapping speakers — will be materially
+worse. **0.0 % here means "the pipeline is correct", not "the product is accurate."**
+Re-measure on real captured audio during Phase 1.
+
+---
+
+## 8b. Spike 0B results — capture (DONE, 2026-08-13)
+
+**Verdict: process taps work on macOS 15.7.** No virtual audio driver, no
+ScreenCaptureKit, no Screen Recording prompt. D6 confirmed.
+
+Code: `spike/tap/` — `tap_probe.swift` (meter), `diag.swift` / `diag2.swift` (variant matrix).
+
+### Measured facts
+
+| Property | Value |
+|---|---|
+| Tap stream format | 48 000 Hz, 2 ch, 32-bit float packed (flags `0x9`), 8 bytes/frame |
+| IOProc granularity | 512 frames ≈ **10.7 ms** |
+| Continuity | 2 159 616 frames over 45 s = 44.99 s — zero dropouts |
+
+Capture-side latency is ~11 ms, at the low end of §3's 5–20 ms estimate. The
+resample target (48k stereo f32 → 16k mono f32) is confirmed as the real conversion.
+
+### Finding 1 — permission failure is completely silent ⚠️
+
+System audio capture requires the TCC audio-capture grant. When it is **missing**:
+
+- `AudioHardwareCreateProcessTap` → `noErr`
+- aggregate device creation → `noErr`, reports `input: [2] ch`
+- `AudioDeviceStart` → `noErr`, device reports running
+- IOProc fires at the correct rate with correctly-sized buffers
+- **every sample is 0.0**
+
+There is no error anywhere in the stack. Verified with one bundle, one grant,
+varying only the launch path:
+
+| Launch | Frames | Samples |
+|---|---|---|
+| `open TapProbe.app` | 5120 / 100 ms | real audio, −31 dB |
+| direct exec of the same binary | 5120 / 100 ms | all zeros |
+
+**Consequence for the app:** ship an explicit all-zero watchdog — if N consecutive
+seconds of frames arrive with peak == 0 while a process is known to be outputting
+audio, surface a "grant audio permission" state. Without it the app looks perfectly
+healthy and silently never produces a subtitle. This is a first-run UX landmine.
+
+### Finding 2 — TCC attribution follows the launch path
+
+A binary exec'd from a shell inherits the *terminal's* responsible process, which
+does not hold the grant → silent zeros. Launched via `open` (launchd), the app is
+its own responsible process and the grant applies.
+
+**Consequence for dev workflow:** the app must be run as a bundle via `open`, never
+`swift run` or a bare exec, or you will chase phantom silence. Requires a bundle
+with `NSAudioCaptureUsageDescription` and a signature that binds the Info.plist
+(ad-hoc `codesign -s -` is sufficient for local dev).
+
+### Finding 3 — `isExclusive` gotcha
+
+Do **not** override `isExclusive` on a description built by
+`CATapDescription(stereoGlobalTapButExcludeProcesses:)`. That initializer sets it
+to `true` ("the list is an exclusion list"); with an empty list that means tap
+everything. Forcing it to `false` reinterprets the empty list as an *inclusion*
+list of zero processes — the tap builds cleanly, reports 2 input channels, starts
+without error, and then never runs. Cost several hours of misdiagnosis; the
+comment in `tap_probe.swift` records it.
+
+### Bonus — the per-app picker is basically free
+
+`kAudioHardwarePropertyProcessObjectList` enumerates every audio process with its
+PID and bundle ID, and `kAudioProcessPropertyIsRunningOutput` flags which are
+*currently* playing. That is the Phase 3 source picker with no extra research.
+`CATapDescription(stereoMixdownOfProcesses:)` then taps just that process — but
+note process object IDs are short-lived, so resolve one immediately before
+creating the tap (a stale ID returns `'!obj'`).
+
+### Not yet confirmed
+
+- Tap-only aggregate (no output sub-device) with the corrected config — only tested
+  under the broken `isExclusive` variant, so its viability is unknown. The
+  with-output-sub-device shape is proven and is what Phase 1 should use.
+- Behaviour on output-device change mid-capture (headphones plugged in).
+
+---
+
+## 9. Open questions
+
+- **Which languages** does the audio actually need to cover? English is excellent;
+  French is usable but slower and less accurate (§8a Finding 4). Still the biggest
+  product-shaping unknown.
+- ~~Exact TCC prompt for process taps~~ — answered in §8b. Requires bundle +
+  `NSAudioCaptureUsageDescription` + launch via `open`.
+- Model distribution: en-2023-06-26 is **310 MB**, larger than the ~100 MB assumed.
+  Bundling makes for a heavy app; downloading on first run needs progress UI,
+  integrity check and failure handling. Adding French roughly doubles it.
+- What is the real-world WER on actual system audio (podcast, video call, YouTube)?
+  The 0.0 % figure is clean read speech only.
+- Does RTF stay under ~0.8 while a video call is running? This is the load case that
+  matters and it has not been measured (§8a Finding 2).
+- Signing / notarization path — needed before anyone else can run it.
+- Where should subtitles sit by default, and should position be per-app?
+
+---
+
+## 10. References
+
+- sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD
+- `AudioHardwareCreateProcessTap` / `CATapDescription` — Core Audio process taps, macOS 14.2+
+- LocalAgreement-2 — hypothesis commit policy, from the whisper_streaming line of work
+- NVIDIA Parakeet TDT v3 — multilingual fallback tier
+- Apple `SpeechAnalyzer` / `SpeechTranscriber` — macOS 26+, revisit on upgrade
