@@ -68,6 +68,9 @@ They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
 the only variant that emits punctuation and capitalisation itself — at the cost of
 2.08 s latency against EOU's 320 ms.
 
+The overlay fades four seconds after the last *new* text, not after the audio goes
+quiet — so a backing track no longer pins a stale subtitle on screen.
+
 **New Box On Speaker Change** starts a fresh subtitle box when someone else starts
 talking, the same way a pause or end-of-utterance does. Off by default because it
 runs a second model (Sortformer) on the Neural Engine: measured RTF went from

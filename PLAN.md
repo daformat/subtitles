@@ -953,6 +953,54 @@ diarizer's cadence, which is the wrong trade for a latency-first app.
 
 ---
 
+## 15. Fading on text, not audio (2026-08-13)
+
+The overlay used to fade off the *audio* gate: no sound → endpoint → fade. That
+fails on the case that matters most. **Music keeps the voice gate open
+indefinitely**, so the endpoint never fires and the last thing anyone said stays
+frozen on screen over the soundtrack.
+
+Fading is now driven by **text inactivity** — four seconds without a *changed*
+transcript. Verified with 6.6 s of speech followed by a continuous tone: the gate
+reported `listening -23dB` throughout, and the overlay still faded.
+
+Two details that matter:
+
+- Only a *changed* transcript counts. Engines resend identical partials, and
+  treating those as activity would keep the overlay alive forever on a stuck
+  hypothesis.
+- It is a **poll**, not a one-shot timer. The previous design had to cancel and
+  re-arm on every text change, and anything that forgot to re-arm stranded the
+  overlay on screen — which is precisely the bug that had to be fixed once
+  already. A poll cannot be forgotten.
+
+### A worse bug this uncovered ⚠️
+
+Testing with `eou160` collapsed the pipeline: RTF climbed past 380, the core's ring
+dropped 1.6M samples, and no audio got through at all.
+
+Cause was in the FluidAudio hand-off, not the fade. `onAudioFrames` spawned a
+`Task { await engine.feed(samples) }` **per callback**. When the engine falls
+behind real time those tasks queue without bound, each holding a sample array, and
+the resulting memory pressure drags down the whole process. The actor's internal
+`maxPending` bounded the samples it had already accepted — it could not bound the
+tasks waiting to hand samples over.
+
+Replaced with a bounded `FrameQueue` (3 s ceiling, drops oldest) drained by a
+single long-lived pump task. Same discipline the Rust ring already used: a fixed
+ceiling, and drop stale audio rather than accumulate latency that can never be
+repaid. Re-tested on the config that broke it — no drops, graceful degradation.
+
+### And a finding about the variants
+
+`eou160` is **not viable on this machine**: RTF 0.63–2.22, at or past real time,
+because 160 ms chunks double the model invocations per second. `eou320` runs at
+0.13–0.15 on the same hardware. Upstream advertises 160 ms as the lowest-latency
+tier; on this Mac it is the slowest thing here. The menu now shows the measured
+figure rather than the advertised one.
+
+---
+
 ## 10. References
 
 - sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD

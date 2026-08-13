@@ -129,8 +129,9 @@ if let override = variantOverride {
 let onAudioFrames: @convention(c) (UnsafePointer<Float>?, UInt, UnsafeMutableRawPointer?) -> Void = {
     ptr, count, _ in
     guard let ptr, count > 0, let fluid = fluidEngine else { return }
-    let samples = Array(UnsafeBufferPointer(start: ptr, count: Int(count)))
-    Task { await fluid.feed(samples) }
+    // Hand off to a bounded queue rather than spawning a task per callback: an
+    // engine that falls behind must drop audio, not accumulate tasks.
+    fluid.queue.push(UnsafeBufferPointer(start: ptr, count: Int(count)))
 }
 
 /// Renderer state. Events are marshalled onto the main thread before reaching
@@ -193,7 +194,6 @@ final class Renderer {
             audioHealthy = true
         }
 
-        if text.hasPrefix("idle") { overlay?.noteIdle() }
         onStatusRefresh?()
 
         guard showStatus else { return }
@@ -319,7 +319,6 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         onFinal: { text in
             DispatchQueue.main.async {
                 if !text.isEmpty { renderer.setText(text) }
-                // Re-arm the fade that painting the final text just cancelled.
                 renderer.overlay?.endUtterance()
             }
         },

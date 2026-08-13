@@ -40,8 +40,12 @@ enum FluidVariant: String, CaseIterable {
     /// Upstream's own characterisation — not numbers this project has measured.
     var note: String {
         switch self {
-        case .eou160: return "120M · lowest latency · ~8% WER"
-        case .eou320: return "120M · balanced · ~5% WER"
+        // Upstream calls this the lowest-latency tier, and in principle it is —
+        // but measured here it runs at RTF 0.63–2.22, i.e. at or past real time,
+        // because 160 ms chunks double the model invocations per second. eou320
+        // manages 0.13–0.15 on the same machine.
+        case .eou160: return "120M · ⚠︎ RTF 0.6–2.2 here · often too slow"
+        case .eou320: return "120M · RTF 0.13–0.15 · a good default"
         case .eou1280: return "120M · highest throughput"
         case .nemotron560: return "0.6B · lowest latency tier"
         case .nemotron1120: return "0.6B · the trained chunk size"
@@ -94,6 +98,45 @@ enum FluidVariant: String, CaseIterable {
 /// An actor because both managers are actors and audio arrives from the core's
 /// worker thread; serialising here keeps the feed ordered without locking on the
 /// caller's side.
+/// Bounded hand-off between the core's worker thread and the engine actor.
+///
+/// The obvious implementation — `Task { await engine.feed(samples) }` per
+/// callback — is a trap: if the engine falls behind real time the tasks queue
+/// without bound, each holding a sample array, and memory pressure drags the
+/// whole pipeline down. Observed as RTF climbing into the hundreds while the
+/// core's ring dropped 1.6M samples.
+///
+/// This is the same discipline the Rust ring already uses: a fixed ceiling, and
+/// drop the oldest audio rather than accumulate latency that can never be repaid.
+final class FrameQueue: @unchecked Sendable {
+    private var buffer: [Float] = []
+    private let lock = NSLock()
+    private let maxSamples = 16000 * 3  // 3 s
+    private(set) var droppedSamples = 0
+
+    /// Called on the core's worker thread — not the realtime audio thread, so a
+    /// lock here is fine.
+    func push(_ samples: UnsafeBufferPointer<Float>) {
+        lock.lock()
+        defer { lock.unlock() }
+        buffer.append(contentsOf: samples)
+        if buffer.count > maxSamples {
+            let excess = buffer.count - maxSamples
+            buffer.removeFirst(excess)
+            droppedSamples += excess
+        }
+    }
+
+    func drain() -> [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !buffer.isEmpty else { return [] }
+        let out = buffer
+        buffer.removeAll(keepingCapacity: true)
+        return out
+    }
+}
+
 actor FluidAudioEngine {
     private let variant: FluidVariant
     private var eou: StreamingEouAsrManager?
@@ -104,6 +147,11 @@ actor FluidAudioEngine {
 
     private var pending: [Float] = []
     private var loaded = false
+
+    /// Frames arrive here from the core and are drained by a single pump task, so
+    /// there is exactly one consumer no matter how fast audio arrives.
+    let queue = FrameQueue()
+    private var pumpTask: Task<Void, Never>?
 
     /// Partial transcripts, delivered on the main thread.
     private let onPartial: @Sendable (String) -> Void
@@ -199,6 +247,7 @@ actor FluidAudioEngine {
             // down.
             if let speakers { await speakers.load() }
             loaded = true
+            startPump()
             onStatus("")
             onReady(true)
             if droppedWhileLoading > 0 {
@@ -210,7 +259,24 @@ actor FluidAudioEngine {
         }
     }
 
-    /// 16 kHz mono frames from the core.
+    /// One long-lived consumer. Replaces a Task-per-callback, which could not
+    /// apply backpressure.
+    private func startPump() {
+        guard pumpTask == nil else { return }
+        pumpTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let chunk = self.queue.drain()
+                if chunk.isEmpty {
+                    try? await Task.sleep(nanoseconds: 10_000_000)  // 10 ms
+                    continue
+                }
+                await self.feed(chunk)
+            }
+        }
+    }
+
+    /// 16 kHz mono frames, drained from the queue by the pump.
     func feed(_ samples: [Float]) async {
         guard loaded else {
             droppedWhileLoading += samples.count
@@ -283,6 +349,8 @@ actor FluidAudioEngine {
     }
 
     func shutdown() async {
+        pumpTask?.cancel()
+        pumpTask = nil
         if let speakers { await speakers.shutdown() }
         if let unified { await unified.cleanup() }
         if let eou { await eou.cleanup() }

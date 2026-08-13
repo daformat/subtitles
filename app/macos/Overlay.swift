@@ -183,8 +183,19 @@ final class SubtitleView: NSView {
 final class OverlayController {
     private let panel: SubtitlePanel
     private let view: SubtitleView
-    private var hideTimer: Timer?
+    private var idleTimer: Timer?
     private var modifierTimer: Timer?
+
+    // Fade on *text* inactivity, not audio inactivity.
+    //
+    // Audio-driven fading fails on the case that matters most: music. A backing
+    // track keeps the voice gate open indefinitely, so the endpoint never fires
+    // and the last thing anyone said stays frozen on screen over the music. What
+    // the reader cares about is whether new words are arriving, not whether the
+    // room is quiet.
+    private var lastTextAt = Date.distantPast
+    private var lastShownText = ""
+    private let textIdleTimeout: TimeInterval = 4
     private var isDraggable = false
 
     // ── paging state ──
@@ -223,6 +234,14 @@ final class OverlayController {
         panel.contentView = view
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+
+        // Polled rather than armed per update: a one-shot timer must be cancelled
+        // and re-armed on every text change, and anything that forgets to re-arm
+        // strands the overlay on screen — which is exactly the bug this replaces.
+        // A poll cannot be forgotten.
+        idleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.fadeIfTextIdle()
+        }
 
         // ⌥ toggles grabbable. Polled, not monitored — see the file header.
         modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
@@ -304,6 +323,14 @@ final class OverlayController {
             pageStartWord = fitted                  // new page starts where it spilled
         }
 
+        // Only a *changed* transcript counts as activity. Engines happily resend
+        // an identical partial, and treating that as new text would keep the
+        // overlay alive indefinitely on a stuck hypothesis.
+        if text != lastShownText {
+            lastShownText = text
+            lastTextAt = Date()
+        }
+
         page = words[pageStartWord...].joined(separator: " ")
         pendingCommit = ""
         tentative = ""
@@ -339,6 +366,8 @@ final class OverlayController {
 
     /// Utterance finished: keep it on screen briefly, then fade. The next words
     /// begin a new page rather than continuing this one.
+    /// Utterance finished: the next words start a new page. Fading is handled by
+    /// the text-idle poll, so there is nothing to arm here.
     func endUtterance() {
         pageStartWord = 0
         // Fold in any commit that arrived without a following tentative — an
@@ -347,7 +376,6 @@ final class OverlayController {
             setTentative("")
         }
         startFreshOnNextText = true
-        scheduleHide(after: 4)
     }
 
     private func trimLeadingSpace(_ s: String) -> String {
@@ -386,34 +414,20 @@ final class OverlayController {
         UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
     }
 
-    /// The core reports the gate state once a second. When it says idle, arm a
-    /// fade — engine-agnostic, so the overlay cannot be left on screen forever by
-    /// a late or repeated update that keeps cancelling the timer.
-    func noteIdle() {
-        guard panel.alphaValue > 0, hideTimer == nil else { return }
-        scheduleHide(after: 3)
+    private func fadeIfTextIdle() {
+        guard !isDraggable, panel.alphaValue > 0 else { return }
+        guard Date().timeIntervalSince(lastTextAt) >= textIdleTimeout else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.4
+            panel.animator().alphaValue = 0
+        }
     }
 
     private func show() {
-        hideTimer?.invalidate()
-        hideTimer = nil
         if panel.alphaValue < 1 {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.12
                 panel.animator().alphaValue = 1
-            }
-        }
-    }
-
-    private func scheduleHide(after seconds: TimeInterval) {
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            self.hideTimer = nil
-            guard !self.isDraggable else { return }
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.4
-                self.panel.animator().alphaValue = 0
             }
         }
     }
@@ -437,7 +451,8 @@ final class OverlayController {
 
     /// Paused: drop what is on screen and stay dark until resumed.
     func clearAndHide() {
-        hideTimer?.invalidate()
+        lastShownText = ""
+        lastTextAt = .distantPast
         page = ""
         pendingCommit = ""
         tentative = ""
