@@ -196,6 +196,12 @@ final class OverlayController {
     private var pendingCommit = ""
     private var tentative = ""
     private var startFreshOnNextText = false
+    /// Index of the first word of the current page, for engines that resend the
+    /// whole transcript each update rather than deltas.
+    private var pageStartWord = 0
+    /// Word count of the last whole-transcript update, so a pause can start the
+    /// next page at the words that arrive *after* it.
+    private var lastFullWordCount = 0
 
     /// Remembered across launches once the user drags the panel somewhere.
     ///
@@ -267,28 +273,57 @@ final class OverlayController {
     }
 
     /// For engines that emit a whole transcript each update rather than deltas
-    /// (FluidAudio). Keeps the tail that fits, so the box still never exceeds
-    /// maxLines and the newest words are always the ones on screen.
+    /// (FluidAudio).
+    ///
+    /// Pages exactly like the delta path: fill to `maxLines`, then clear and
+    /// restart from the first word that did not fit. Trimming words off the front
+    /// instead would scroll — which is what broadcast subtitles deliberately do
+    /// not do, and which made this path behave unlike the rest of the app.
     func showFullText(_ text: String) {
-        if startFreshOnNextText, !text.isEmpty {
+        let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard !words.isEmpty else { return }
+
+        // The engine restarted its transcript (finish/reset), so the old page
+        // offset no longer refers to anything.
+        if words.count < pageStartWord { pageStartWord = 0 }
+        if startFreshOnNextText {
             startFreshOnNextText = false
+            // Begin the new page at the words that arrive after the pause. If the
+            // transcript got shorter the engine restarted it, so begin at zero —
+            // anchoring to the newest word instead would throw away everything
+            // the engine just said.
+            pageStartWord = words.count <= lastFullWordCount ? 0 : lastFullWordCount
         }
+        lastFullWordCount = words.count
+
+        // Advance the page while the text from pageStartWord overflows.
+        while true {
+            let fitted = longestFittingPrefix(words, from: pageStartWord)
+            if fitted >= words.count { break }      // everything fits
+            if fitted <= pageStartWord { break }    // one word wider than the box
+            pageStartWord = fitted                  // new page starts where it spilled
+        }
+
+        page = words[pageStartWord...].joined(separator: " ")
         pendingCommit = ""
         tentative = ""
-
-        var words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        var candidate = words.joined(separator: " ")
-        while words.count > 1,
-              view.lineCount(committed: candidate, tentative: "", width: maxWidth) > view.maxLines {
-            words.removeFirst()
-            candidate = words.joined(separator: " ")
-        }
-        page = candidate
-
         view.committed = page
         view.tentative = ""
         layout()
         show()
+    }
+
+    /// Index one past the last word that still fits within `maxLines`.
+    private func longestFittingPrefix(_ words: [String], from start: Int) -> Int {
+        var end = start
+        while end < words.count {
+            let candidate = words[start...end].joined(separator: " ")
+            if view.lineCount(committed: candidate, tentative: "", width: maxWidth) > view.maxLines {
+                return end
+            }
+            end += 1
+        }
+        return words.count
     }
 
     /// Speech stopped briefly. Whatever is on screen stays there, but the next
@@ -305,6 +340,7 @@ final class OverlayController {
     /// Utterance finished: keep it on screen briefly, then fade. The next words
     /// begin a new page rather than continuing this one.
     func endUtterance() {
+        pageStartWord = 0
         // Fold in any commit that arrived without a following tentative — an
         // endpoint flush emits COMMITTED then ENDPOINT with nothing between.
         if !pendingCommit.isEmpty {
@@ -350,8 +386,17 @@ final class OverlayController {
         UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
     }
 
+    /// The core reports the gate state once a second. When it says idle, arm a
+    /// fade — engine-agnostic, so the overlay cannot be left on screen forever by
+    /// a late or repeated update that keeps cancelling the timer.
+    func noteIdle() {
+        guard panel.alphaValue > 0, hideTimer == nil else { return }
+        scheduleHide(after: 3)
+    }
+
     private func show() {
         hideTimer?.invalidate()
+        hideTimer = nil
         if panel.alphaValue < 1 {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.12
@@ -363,7 +408,9 @@ final class OverlayController {
     private func scheduleHide(after seconds: TimeInterval) {
         hideTimer?.invalidate()
         hideTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
-            guard let self, !self.isDraggable else { return }
+            guard let self else { return }
+            self.hideTimer = nil
+            guard !self.isDraggable else { return }
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.4
                 self.panel.animator().alphaValue = 0
@@ -394,6 +441,8 @@ final class OverlayController {
         page = ""
         pendingCommit = ""
         tentative = ""
+        pageStartWord = 0
+        lastFullWordCount = 0
         startFreshOnNextText = false
         view.committed = ""
         view.tentative = ""

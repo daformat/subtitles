@@ -101,6 +101,7 @@ actor FluidAudioEngine {
     private let onStatus: @Sendable (String) -> Void
     /// Fires once the models are actually usable. Without it, audio fed during
     /// the (minutes-long, first-run) load is dropped with nothing to show for it.
+    private let onFinal: @Sendable (String) -> Void
     private let onReady: @Sendable (Bool) -> Void
 
     /// Counts frames discarded because the engine was not loaded yet, so the
@@ -114,10 +115,12 @@ actor FluidAudioEngine {
     init(variant: FluidVariant,
          onPartial: @escaping @Sendable (String) -> Void,
          onStatus: @escaping @Sendable (String) -> Void,
+         onFinal: @escaping @Sendable (String) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void) {
         self.variant = variant
         self.onPartial = onPartial
         self.onStatus = onStatus
+        self.onFinal = onFinal
         self.onReady = onReady
     }
 
@@ -210,11 +213,11 @@ actor FluidAudioEngine {
         do {
             if let eou {
                 let text = try await eou.finish()
-                if !text.isEmpty { onPartial(text) }
+                onFinal(text)
                 await eou.reset()
             } else if let nemotron {
                 let text = try await nemotron.finish()
-                if !text.isEmpty { onPartial(text) }
+                onFinal(text)
                 await nemotron.reset()
             }
         } catch {

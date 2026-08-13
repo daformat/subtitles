@@ -840,6 +840,27 @@ FluidAudio is only distributed as a Swift package, so the app moved from raw
   than `-import-objc-header`, whose relative path only resolves from the right
   working directory.
 
+### Overlay parity fixes
+
+Two behaviours diverged from the sherpa path and are now aligned:
+
+- **Paging.** `showFullText` trimmed words off the front to make the text fit,
+  which *scrolls*. Broadcast subtitles deliberately do not scroll, and the delta
+  path already pages. It now tracks a page start word, fills to `maxLines`, then
+  clears and restarts from the first word that did not fit.
+- **The overlay could stay up forever.** FluidAudio's final transcript arrives
+  asynchronously, *after* the endpoint armed the fade — and painting it called
+  `show()`, which cancelled that timer. Final text now goes through its own
+  `onFinal` callback that re-arms the fade. On top of that there is an
+  engine-agnostic safety net: the core reports the gate state every second, and an
+  `idle` report arms a fade if none is pending, so no late or repeated update can
+  strand the overlay on screen.
+
+A third bug surfaced while fixing the first: anchoring a fresh page to
+`words.count - 1` showed only the last word, and after an engine reset hid almost
+the entire transcript. The new page now starts at the word count recorded when the
+pause happened, or at zero if the engine restarted its transcript.
+
 ### Not done
 
 - Not measured. The sherpa numbers in this document come from this repo's harness;

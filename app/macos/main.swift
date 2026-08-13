@@ -234,6 +234,8 @@ final class Renderer {
         }
 
         lastRTF = rtf
+        // "idle …dB" means the gate is closed: nothing is playing.
+        if text.hasPrefix("idle") { overlay?.noteIdle() }
         onStatusRefresh?()
         guard showStatus else { return }
         // RTF above ~0.8 means the pipeline is close to falling behind
@@ -264,6 +266,9 @@ let onEvent: @convention(c) (UnsafePointer<subs_event_t>?, UnsafeMutableRawPoint
         case SUBS_EVENT_TENTATIVE: renderer.tentative(text)
         case SUBS_EVENT_ENDPOINT:
             renderer.endpoint()
+            // FluidAudio's final text arrives asynchronously, after endpoint()
+            // has already armed the fade. Showing it would cancel that timer, so
+            // the engine re-arms it via onFinal.
             if let fluid = fluidEngine { Task { await fluid.endUtterance() } }
         case SUBS_EVENT_PAUSE: renderer.overlay?.markPause()
         case SUBS_EVENT_STATUS:
@@ -481,6 +486,13 @@ func applyFluidVariant(_ variant: FluidVariant) {
                 modelBusyMessage = message.isEmpty ? nil : message
                 statusMenu?.updateHealthIndicator()
                 if !message.isEmpty { err(message) }
+            }
+        },
+        onFinal: { text in
+            DispatchQueue.main.async {
+                if !text.isEmpty { renderer.overlay?.showFullText(text) }
+                // Re-arm the fade that showing the final text just cancelled.
+                renderer.overlay?.endUtterance()
             }
         },
         onReady: { ok in
