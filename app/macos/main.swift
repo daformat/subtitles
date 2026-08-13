@@ -447,6 +447,26 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     }
 }
 
+/// Point the tap at a different source. One path, shared by the menu and by
+/// SIGUSR2, so what a test exercises is what the menu does.
+func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
+    do {
+        _ = try tap.switchTo(source: source)
+        switch source {
+        case .allSystemAudio:
+            UserDefaults.standard.removeObject(forKey: Defaults.sourceID)
+            UserDefaults.standard.removeObject(forKey: Defaults.sourceName)
+        case let .app(id, name):
+            UserDefaults.standard.set(id, forKey: Defaults.sourceID)
+            UserDefaults.standard.set(name, forKey: Defaults.sourceName)
+        }
+        overlay?.clearAndHide()
+        err("listening to: \(source.label)")
+    } catch {
+        err("\(red)could not switch source:\(reset) \(error)")
+    }
+}
+
 func togglePause() {
     isPaused.toggle()
     renderer.overlay?.setPaused(isPaused)
@@ -506,21 +526,7 @@ if useOverlay {
         UserDefaults.standard.set(Double(size), forKey: Defaults.fontSize)
     }
     menu.onSelectSource = { source in
-        do {
-            _ = try tap.switchTo(source: source)
-            switch source {
-            case .allSystemAudio:
-                UserDefaults.standard.removeObject(forKey: Defaults.sourceID)
-                UserDefaults.standard.removeObject(forKey: Defaults.sourceName)
-            case let .app(id, name):
-                UserDefaults.standard.set(id, forKey: Defaults.sourceID)
-                UserDefaults.standard.set(name, forKey: Defaults.sourceName)
-            }
-            controller.clearAndHide()
-            err("listening to: \(source.label)")
-        } catch {
-            err("\(red)could not switch source:\(reset) \(error)")
-        }
+        selectSource(source, overlay: controller)
     }
     // Speech has stopped even if audio has not. Drop the recogniser's context so
     // a backing track cannot swallow the first words of whoever speaks next.
@@ -555,6 +561,21 @@ let cycleVariant: @convention(c) (Int32) -> Void = { _ in
     }
 }
 signal(SIGUSR1, cycleVariant)
+
+// SIGUSR2 cycles sources over what is audible right now, for the same reason:
+// exercising the switch path otherwise needs a hand on the menu, and this is the
+// path where a stale tap shows up.
+let cycleSource: @convention(c) (Int32) -> Void = { _ in
+    DispatchQueue.main.async {
+        var options: [AudioSource] = [.allSystemAudio]
+        options += SystemAudioTap.audioSources()
+            .filter(\.isPlaying)
+            .map { AudioSource.app(id: $0.id, name: $0.name) }
+        let index = options.firstIndex(of: tap.source) ?? 0
+        selectSource(options[(index + 1) % options.count], overlay: renderer.overlay)
+    }
+}
+signal(SIGUSR2, cycleSource)
 
 let shutdown: @convention(c) (Int32) -> Void = { _ in
     FileHandle.standardOutput.write("\n".data(using: .utf8)!)

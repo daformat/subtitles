@@ -261,6 +261,14 @@ final class SystemAudioTap {
     func prepare(source: AudioSource = .allSystemAudio) throws -> TapFormat {
         guard #available(macOS 14.2, *) else { throw TapError.unsupportedOS }
 
+        // Idempotent, and that is load-bearing. Overwriting `tapID` without
+        // tearing the old one down orphans it — and if it had already been
+        // started, its aggregate and IOProc keep delivering that source's audio
+        // into the same sink forever, unreachable by any later `stop()`. Startup
+        // does exactly that, which is why switching source appeared to do nothing:
+        // the leaked device kept feeding whatever was selected at launch.
+        stop()
+
         let desc: CATapDescription
         switch source {
         case .allSystemAudio:
@@ -287,6 +295,20 @@ final class SystemAudioTap {
             // silent for browsers and Electron apps.
             desc = CATapDescription(stereoMixdownOfProcesses: objectIDs)
             self.source = source
+
+            // What actually got tapped. A scoping bug is invisible otherwise: the
+            // tap builds and runs either way, and the only symptom is hearing the
+            // wrong app.
+            let detail = objectIDs.map { id -> String in
+                let pid = Self.uint32(id, kAudioProcessPropertyPID).map { pid_t(bitPattern: $0) }
+                let bundle = Self.cfString(id, kAudioProcessPropertyBundleID) ?? "—"
+                let live = (Self.uint32(id, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0
+                return "obj \(id) pid \(pid.map(String.init) ?? "?") \(bundle)\(live ? " ●" : "")"
+            }
+            FileHandle.standardError.write(
+                ("tap → \(name) [\(familyID)] exclusive=\(desc.isExclusive) "
+                    + "processes=\(desc.processes.count): \(detail.joined(separator: ", "))\n")
+                    .data(using: .utf8)!)
         }
 
         desc.uuid = UUID()
@@ -312,6 +334,9 @@ final class SystemAudioTap {
     /// Builds the aggregate device and starts IO. `prepare()` must have run first.
     func start() throws {
         guard let desc = tapDescription else { throw TapError.notPrepared }
+        // Already running. Stacking a second aggregate on one tap leaks the first
+        // device and its IOProc the same way — see `prepare()`.
+        guard procID == nil, aggID == kAudioObjectUnknown else { return }
         let outputUID = try Self.defaultOutputUID()
         var err: OSStatus = noErr
 
@@ -369,21 +394,41 @@ final class SystemAudioTap {
         return newFormat == previous
     }
 
-    func stop() {
-        if let procID {
-            AudioDeviceStop(aggID, procID)
-            AudioDeviceDestroyIOProcID(aggID, procID)
-            self.procID = nil
+    /// Tear down IO, then the aggregate, then the tap — that order is required.
+    ///
+    /// Returns false if any step failed. Every status used to be discarded, which
+    /// is exactly what makes a source switch unreliable: a surviving IOProc keeps
+    /// delivering the *previous* app's audio into the same sink, and the only
+    /// symptom is still hearing the app you just switched away from. Worse,
+    /// `procID` was cleared regardless, so no later `stop()` could reach it.
+    @discardableResult
+    func stop() -> Bool {
+        var ok = true
+        func check(_ what: String, _ status: OSStatus) -> Bool {
+            guard status != noErr else { return true }
+            ok = false
+            FileHandle.standardError.write(
+                "tap teardown: \(what) failed (\(status))\n".data(using: .utf8)!)
+            return false
         }
-        if aggID != kAudioObjectUnknown {
-            AudioHardwareDestroyAggregateDevice(aggID)
+
+        if let procID {
+            check("AudioDeviceStop", AudioDeviceStop(aggID, procID))
+            // Only forget the IOProc once it is genuinely gone.
+            if check("AudioDeviceDestroyIOProcID", AudioDeviceDestroyIOProcID(aggID, procID)) {
+                self.procID = nil
+            }
+        }
+        if aggID != kAudioObjectUnknown,
+           check("AudioHardwareDestroyAggregateDevice", AudioHardwareDestroyAggregateDevice(aggID)) {
             aggID = AudioObjectID(kAudioObjectUnknown)
         }
-        if tapID != kAudioObjectUnknown {
-            AudioHardwareDestroyProcessTap(tapID)
+        if tapID != kAudioObjectUnknown,
+           check("AudioHardwareDestroyProcessTap", AudioHardwareDestroyProcessTap(tapID)) {
             tapID = AudioObjectID(kAudioObjectUnknown)
         }
         tapDescription = nil
+        return ok
     }
 
     deinit { stop() }
