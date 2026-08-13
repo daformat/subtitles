@@ -5,8 +5,10 @@ The product only works if the delay is small enough to feel live, so latency is 
 primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
+First-run download is visible and interruptible (§18); default is Nemotron 560.
 Phase 3 complete, published to a repo.
-Remaining before this is shippable: stable signing identity, real-world WER.
+Remaining before this is shippable: stable signing identity, real-world WER,
+download integrity check and failure handling.
 **Repo:** https://github.com/daformat/subtitles
 See §8a (ASR latency) and §8b (capture) for measured results.
 **Last updated:** 2026-08-13
@@ -333,8 +335,8 @@ before any transcription test, or you race the permission dialog and misread
 
 #### Not done in Phase 1
 
-- Silero VAD (an energy gate is used instead; adequate so far, revisit if music or
-  noise trips it)
+- ~~Silero VAD~~ — done in §17; an energy gate was used until music proved it
+  insufficient
 - Re-measuring first-emit latency in-app — the harness numbers stand, but the
   in-app path adds the tap and ring and has not been measured
 - Model is loaded from the dev tree, not bundled (§9 distribution question)
@@ -376,6 +378,14 @@ makes a *revising* engine survivable if the model is ever swapped.
 - **⇧ is detected by polling `NSEvent.modifierFlags`**, not a global event
   monitor. A keyboard monitor would require Accessibility permission, and asking
   for a second scary prompt just to enable dragging is a bad trade.
+- **The anchor lives in memory while running**; `UserDefaults` is persistence,
+  read once at startup and written on release. `layout()` used to re-read the
+  defaults on every text update, so a word arriving mid-drag snapped the box back
+  to where the drag started — the more the speaker talked, the harder it fought
+  the mouse. A `didMove` observer feeds the panel's real position back in, and it
+  must be registered with `queue: nil` so it runs synchronously inside the posting
+  call: on `.main` it lands after the repositioning flag is cleared and re-derives
+  the anchor from a frame we just computed, creeping it half a pixel per word.
 - `.nonactivatingPanel` + `canBecomeKey/Main = false` + `.accessory` activation
   policy together are what prevent focus theft. All three are needed.
 - `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]` so the
@@ -711,9 +721,12 @@ creating the tap (a stale ID returns `'!obj'`).
   product-shaping unknown.
 - ~~Exact TCC prompt for process taps~~ — answered in §8b. Requires bundle +
   `NSAudioCaptureUsageDescription` + launch via `open`.
-- Model distribution: en-2023-06-26 is **310 MB**, larger than the ~100 MB assumed.
-  Bundling makes for a heavy app; downloading on first run needs progress UI,
-  integrity check and failure handling. Adding French roughly doubles it.
+- Model distribution — **partly settled** (§18). The sherpa figure below is dead;
+  FluidAudio downloads CoreML bundles from HuggingFace on first run, **613 MB** for
+  the default Nemotron 560. Bundling was considered and rejected: it would take the
+  app from 7.4 MB to ~620 MB, and the download path has to exist regardless for the
+  other six variants. Progress UI is done; **integrity check and failure handling
+  are still open**.
 - What is the real-world WER on actual system audio (podcast, video call, YouTube)?
   The 0.0 % figure is clean read speech only.
 - Does RTF stay under ~0.8 while a video call is running? This is the load case that
@@ -868,10 +881,10 @@ pause happened, or at zero if the engine restarted its transcript.
 - Not measured. The sherpa numbers in this document come from this repo's harness;
   the FluidAudio variants have only been smoke-tested. A like-for-like latency/WER
   comparison is the obvious next step, and the harness cannot currently drive them.
-- Only EOU 320 ms has actually been exercised; the other five variants are wired
-  but unverified.
-- `Parakeet Unified` (the variant with punctuation *and* casing) is not exposed
-  yet — it is a third manager with a different context-window contract.
+- Only EOU 320 ms and Nemotron 560 ms have actually been exercised; the rest are
+  wired but unverified.
+- ~~`Parakeet Unified` is not exposed~~ — exposed since, as a third manager with
+  its own context-window contract. Costs 2.08 s latency against EOU's 320 ms.
 
 ---
 
@@ -1153,6 +1166,80 @@ costs nothing and covers non-speech the VAD lets through.
 Off/on from the menu (**Skip Non-Speech (VAD)**), default on. The status line now
 reports the speech fraction alongside RTF, so "how much of what I am hearing is
 actually speech" is visible.
+
+---
+
+## 18. First-run download, made visible (2026-08-14)
+
+First launch fetches ~613 MB and said only "Loading Nemotron · 560 ms…" for the
+several minutes that took — indistinguishable from hung. The default also moved to
+**Nemotron 560**, so the bundle a cold cache pulls is the one the app goes on
+running rather than an EOU one it never touches.
+
+### Bundling was considered and rejected
+
+`StreamingNemotronAsrManager.loadModels(from:)` loads straight from a directory, so
+shipping the model inside the `.app` is possible. It was not taken:
+
+- 613 MB for the 560 ms bundle against a **7.4 MB** app — an 84x increase, and every
+  rebuild would re-copy and re-sign it.
+- The download path has to exist anyway. Switching variants pulls EOU (1.3 GB),
+  Unified (595 MB) or another Nemotron size (~600 MB each).
+- The bytes do not disappear, they move from first-run to install-time. What
+  bundling actually buys is that first run cannot fail halfway — which is an
+  argument for handling that failure, not for a 620 MB app.
+
+### The progress scale is not what it looks like ⚠️
+
+FluidAudio reserves the **top half** of its 0…1 scale for compiling CoreML models
+(`downloadPhaseWeight: 0.5`). Our bundles ship precompiled, so that phase never
+fires and a fully finished download reports **50% forever**. Each phase is rescaled
+locally to fill the bar; the headline says which phase is running, so nothing is
+lost by not sharing the range.
+
+Byte-granular progress *within* each file was worth confirming: the encoder alone is
+578 MB of the 613 MB, so a file-boundary-only bar would have sat near zero for the
+entire meaningful wait.
+
+### Menu items do not update while a menu is open
+
+Three separate causes, all found on screen rather than by reading:
+
+- A menu's contents are frozen while it is displayed. A timer fixes it, but it must
+  be registered in **`.eventTracking`** — `.common` alone was silent for exactly as
+  long as the menu was up, which is the only time it matters.
+- A custom item view needs `displayIfNeeded()`. Marking it dirty defers the redraw
+  to a display cycle an open menu is not reliably running, so the values updated
+  underneath while the pixels stayed put.
+- Finishing with the menu open left the bar parked, since the menu only rebuilds on
+  open. The item is swapped for the status line in place — one item, not a
+  `rebuild()`, which would tear every item out from under a menu being read.
+
+Two presentation notes. The badge is a **pulsing dot, not an `NSProgressIndicator`**:
+at 6pt, matching the health dot, a spinner is an illegible smudge. And it waits
+**1.5 s** before appearing, because a cached model loads in about two seconds and
+flashed the badge on and straight back off, which reads as a glitch.
+
+### Switching now cancels the pending load
+
+`applyVariant` opened with a guard on the busy flag, so picking a model mid-load did
+nothing at all — silently. Removing that guard exposed three things it had been
+hiding:
+
+- **Stale callbacks.** A cancelled load kept writing status for a model no longer
+  selected. Callbacks now carry the generation they were built with.
+- **Concurrent teardown.** Two overlapping switches would run their destroy/create
+  pairs at once — precisely the use-after-free §Phase-3 warns about. Core swaps go
+  through a serial queue, and a superseded switch bails before touching the core.
+- **Leaked engines.** `shutdown()` existed but was never called on a switch, so each
+  one stranded the outgoing engine's pump task and its loaded CoreML models.
+
+Cancellation reaches the engine as a *thrown error* — `CancellationError` or
+`URLError.cancelled` depending how far in it got — so the catch checks
+`Task.isCancelled` first. Without that, every switch flashed "failed to load".
+
+Nothing already fetched is wasted: completed files are kept and skipped as
+`.alreadyPresent`, so switching back resumes rather than restarts.
 
 ---
 

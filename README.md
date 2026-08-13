@@ -26,8 +26,10 @@ at roughly 0.15 real-time factor.
 ./run.sh     # go
 ```
 
-Models download themselves on first run (~440 MB from HuggingFace), so the first
-launch takes a few minutes before `engine ready` appears.
+Models download themselves on first run — ~613 MB from HuggingFace for the default
+Nemotron 560, so the first launch takes minutes before `engine ready` appears. The
+menu bar shows the progress: a pulsing blue dot on the icon, and a bar with the
+percentage and file count in the menu.
 
 `probe.sh` is not ceremony — see below.
 
@@ -64,9 +66,13 @@ The app lives in the menu bar (no Dock icon).
 
 **Model** switches between Parakeet variants at runtime and remembers your choice.
 They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
-160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms, plus **Parakeet Unified**,
-the only variant that emits punctuation and capitalisation itself — at the cost of
-2.08 s latency against EOU's 320 ms.
+160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms (**560 is the default**),
+plus **Parakeet Unified**, the only variant that emits punctuation and
+capitalisation itself — at the cost of 2.08 s latency against EOU's 320 ms.
+
+Picking a variant that has not been downloaded starts its download there and then.
+Changing your mind mid-download cancels it and starts the new one immediately;
+files already fetched are kept, so switching back resumes rather than restarts.
 
 The overlay fades four seconds after the last *new* text, not after the audio goes
 quiet — so a backing track no longer pins a stale subtitle on screen.
@@ -90,7 +96,7 @@ Electron apps never play audio from their main process.
 ### Command line
 
 ```
---variant NAME     eou160 | eou320 | eou1280 | nemotron560 | nemotron1120 | nemotron2240
+--variant NAME     eou160 | eou320 | eou1280 | nemotron560 | nemotron1120 | nemotron2240 | unified
 --headless         no overlay, terminal output only
 --font-size N      overlay text size
 --reset-position   recentre the overlay
@@ -163,8 +169,9 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   reports on a ~0.5 s cadence, so a word or two of the new speaker can land on the
   outgoing box before it clears. Waiting for the label instead would delay every
   subtitle by the diarizer's cadence.
-- First launch downloads ~440 MB and then compiles CoreML models, which takes
-  minutes.
+- First launch downloads ~613 MB, which takes minutes. Switching model downloads
+  that variant too — 595 MB to 1.3 GB each — though anything already fetched is
+  kept and skipped.
 - Single display; the overlay uses the main screen.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of
