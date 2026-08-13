@@ -4,8 +4,9 @@ Real-time transcription of system audio, rendered as an always-on-top subtitle o
 The product only works if the delay is small enough to feel live, so latency is the
 primary design constraint and everything below is subordinate to it.
 
-**Status:** Phase 3 complete — menu bar, per-app source picker, hotkey, settings.
-Remaining before this is shippable: model bundling, signing identity, real-world WER.
+**Status:** Phase 3 complete, published to a private repo.
+Remaining before this is shippable: stable signing identity, real-world WER, Silero VAD.
+**Repo:** https://github.com/daformat/subtitles
 See §8a (ASR latency) and §8b (capture) for measured results.
 **Last updated:** 2026-08-13
 **Host used for planning:** macOS 15.7.3, Apple Silicon (arm64)
@@ -460,6 +461,23 @@ the same clip transcribed in full.
 - **`--list-sources`** prints the source table and exits *before* any tap is
   created, so it needs no audio permission — usable even when permission is the
   thing being debugged.
+
+#### Post-Phase-3 refinements
+
+- **Permission failure moved off the overlay.** It now shows as a red dot badging
+  the menu bar icon. Covering the subtitles with a diagnostic is exactly when the
+  user is least able to tell what is wrong. The dot is a subview, not composited
+  into the icon — compositing would force `isTemplate = false` and the icon would
+  stop adapting to light/dark menu bars.
+- **Pages break at pauses.** A new `SUBS_EVENT_PAUSE` fires at `GATE_HANGOVER`
+  (400 ms), and the overlay starts a fresh page on the next words. Display-only:
+  the recognizer keeps running, so unlike an endpoint this costs no accuracy —
+  the same gate/endpoint separation as Phase 1, applied to the renderer.
+- **Overlay width hugs its content**, anchored by centre so it expands
+  symmetrically. Measurement uses `NSLayoutManager` line fragments.
+- **Fetched, not versioned.** `scripts/fetch-deps.sh` pins the sherpa-onnx
+  libraries and the 310 MB model by URL *and* SHA-256. A silently different model
+  would change transcription quality with nothing in the diff to explain it.
 
 #### Known gap
 
