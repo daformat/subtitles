@@ -295,10 +295,34 @@ func resumeCapture() {
     }
 }
 
+/// Serialises core teardown and creation. Switching used to be blocked while a
+/// load ran, so this could not overlap; now that a second switch may arrive mid
+/// download, two destroy/create pairs running at once is exactly the
+/// use-after-free the comment below warns about.
+let variantQueue = DispatchQueue(label: "dev.mat.subtitles.variant")
+
+/// Bumped by every switch. Callbacks capture the value they were built with and
+/// drop anything that arrives after they have been superseded, so a cancelled
+/// 600 MB download cannot write status for a model nobody selected.
+nonisolated(unsafe) var loadGeneration = 0
+/// The in-flight model load, held so the next switch can cancel it.
+nonisolated(unsafe) var loadTask: Task<Void, Never>?
+
 /// Build the core and the FluidAudio engine for `variant`, replacing whatever is
 /// running.
 func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
-    guard engineBusyMessage == nil else { return }
+    loadGeneration += 1
+    let generation = loadGeneration
+    // Abandon whatever was loading. The user has asked for something else, and a
+    // download for a model they no longer want should neither hold up the new one
+    // nor keep writing to the status line.
+    loadTask?.cancel()
+    if let previous = fluidEngine {
+        // The actor serialises this behind the cancelled load, so it cannot tear
+        // models out from under a call still inside `loadModels`.
+        Task { await previous.shutdown() }
+    }
+
     currentVariant = variant
     UserDefaults.standard.set(variant.rawValue, forKey: Defaults.variant)
 
@@ -330,10 +354,14 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     let fluid = FluidAudioEngine(
         variant: variant,
         onWords: { words in
-            DispatchQueue.main.async { renderer.setWords(words) }
+            DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
+                renderer.setWords(words)
+            }
         },
         onStatus: { message in
             DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
                 engineBusyMessage = message.isEmpty ? nil : message
                 if message.isEmpty { engineBusyProgress = 0 }
                 statusMenu?.updateHealthIndicator()
@@ -342,6 +370,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         },
         onProgress: { fraction, headline in
             DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
                 engineBusyMessage = headline
                 engineBusyProgress = fraction
                 statusMenu?.updateHealthIndicator()
@@ -350,12 +379,14 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         },
         onFinal: { words in
             DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
                 if !words.isEmpty { renderer.setWords(words) }
                 renderer.overlay?.endUtterance()
             }
         },
         onReady: { ok in
             DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
                 err(ok ? "engine ready: \(variant.displayName)"
                        : "\(red)engine failed to load\(reset)")
                 engineBusyMessage = nil
@@ -364,7 +395,10 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
             }
         },
         onRTF: { rtf in
-            DispatchQueue.main.async { lastRTF = rtf }
+            DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
+                lastRTF = rtf
+            }
             // Sampled alongside RTF so the two health numbers stay in step.
             Task {
                 if let f = await fluidEngine?.speechFraction() {
@@ -376,7 +410,14 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         vad: detector)
     fluidEngine = fluid
 
-    DispatchQueue.global(qos: .userInitiated).async {
+    // Start the load now rather than after the core swap. It needs nothing from
+    // the core, and on a cold cache this is a ~600 MB download — no reason to
+    // spend even the teardown on it.
+    loadTask = Task { await fluid.load() }
+
+    variantQueue.async {
+        // A third switch may have landed while this one sat in the queue.
+        guard generation == loadGeneration else { return }
         let old = engine
         engine = nil
         subs_stop(old)
@@ -393,10 +434,6 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         subs_set_callback(created, onEvent, nil)
         subs_set_audio_callback(created, onAudioFrames, nil)
         let rc = subs_start(created)
-
-        // First run downloads the CoreML bundles from HuggingFace; progress goes
-        // to the status line via onStatus.
-        Task { await fluid.load() }
 
         DispatchQueue.main.async {
             engine = rc == 0 ? created : nil

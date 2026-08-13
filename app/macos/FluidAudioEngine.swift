@@ -364,6 +364,11 @@ actor FluidAudioEngine {
                 onStatus("")
             }
         } catch {
+            // A switch mid-download cancels this task, which surfaces here as an
+            // error — as `CancellationError` or as `URLError.cancelled`, depending
+            // on how far in it got. Neither is a fault, and the load that
+            // superseded it owns the status line now.
+            guard !Task.isCancelled else { return }
             onStatus("FluidAudio failed to load: \(error.localizedDescription)")
             onReady(false)
         }
