@@ -90,6 +90,7 @@ enum Defaults {
     static let sourceID = "source.id"
     static let sourceName = "source.name"
     static let variant = "engine.variant"
+    static let speakerBreaks = "engine.speakerBreaks"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -108,6 +109,10 @@ nonisolated(unsafe) var currentVariant: FluidVariant = .eou320
 nonisolated(unsafe) var engineBusyMessage: String?
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.
 nonisolated(unsafe) var lastRTF: Float = 0
+/// Break the subtitle page when the speaker changes. Off by default: it is a
+/// second model on the ANE, so it should be an opt-in cost.
+nonisolated(unsafe) var speakerBreaksEnabled =
+    UserDefaults.standard.bool(forKey: Defaults.speakerBreaks)
 
 if let saved = UserDefaults.standard.object(forKey: Defaults.fontSize) as? Double {
     fontSize = CGFloat(saved)
@@ -289,6 +294,16 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     // AudioDeviceStop is synchronous — once it returns no IOProc is in flight.
     if !initial { tap.stop() }
 
+    let tracker: SpeakerTracker? = speakerBreaksEnabled
+        ? SpeakerTracker(
+            onChange: {
+                // Same treatment as a pause: the words already shown stay put and
+                // the next ones start a fresh box.
+                DispatchQueue.main.async { renderer.overlay?.markPause() }
+            },
+            onStatus: { message in DispatchQueue.main.async { err(message) } })
+        : nil
+
     let fluid = FluidAudioEngine(
         variant: variant,
         onPartial: { text in
@@ -318,7 +333,8 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         },
         onRTF: { rtf in
             DispatchQueue.main.async { lastRTF = rtf }
-        })
+        },
+        speakers: tracker)
     fluidEngine = fluid
 
     DispatchQueue.global(qos: .userInitiated).async {
@@ -390,6 +406,13 @@ if useOverlay {
     menu.onResetPosition = { controller.resetPosition() }
     menu.onQuit = { shutdownCleanly() }
     menu.onSelectVariant = { applyVariant($0) }
+    menu.speakerBreaksEnabled = { speakerBreaksEnabled }
+    menu.onToggleSpeakerBreaks = {
+        speakerBreaksEnabled.toggle()
+        UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
+        // Cheapest correct path: the tracker is built with the engine, so rebuild.
+        applyVariant(currentVariant)
+    }
     menu.onFontSize = { size in
         fontSize = size
         controller.setFontSize(size)

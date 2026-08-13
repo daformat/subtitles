@@ -56,7 +56,7 @@ Cross-platform UI toolkits mostly save work you still have to do per-platform an
 
 **Non-goals for v1**
 - Translation (designed for, not built — see §7)
-- Speaker diarization
+- Speaker *labelling* (diarization is used, but only to break the page — §14)
 - Transcript history, search, export
 - Microphone capture (system audio out only)
 - Mobile
@@ -910,6 +910,46 @@ project ended up here — particularly the CPU-versus-ANE result, which is the w
 justification for depending on FluidAudio at all. `spike/latency` still contains
 the harness that produced them, and still needs sherpa to run; see
 `spike/README.md`.
+
+---
+
+## 14. Punctuation, and breaking on speaker change (2026-08-13)
+
+**Punctuation and capitalisation** come from `StreamingUnifiedAsrManager`, now
+exposed as the `unified` variant. It is the only Parakeet export that emits them
+itself, and it capitalises proper nouns — *"God as a direct consequence…"* — which
+the old sentence-casing pass fundamentally could not do. The cost is latency: its
+`[70,13,13]` window is 2.08 s against EOU's 320 ms. That is a big enough trade to
+be a visible choice rather than a silent default.
+
+**Speaker change breaks the page.** Sortformer runs alongside the recogniser on the
+same 16 kHz frames; when the active speaker index changes, the overlay is told to
+start fresh on the next words — exactly the treatment a pause already gets.
+
+Deliberately *not* labelling or colouring speakers: all the overlay needs is an
+edge. That keeps it cheap, and means a wrong speaker index costs a page break
+rather than a wrong name on screen.
+
+| | RTF |
+|---|---|
+| Recogniser only | 0.13–0.18 |
+| With Sortformer | 0.27–0.33 |
+
+Roughly double, so it is **off by default** and toggled from the menu.
+
+**Verified against a control.** Two LibriSpeech utterances butt-joined with no
+silence between them, so no pause or endpoint could fire. With the feature on, the
+box cleared and restarted at the second speaker's first words; with it off, they
+ran straight into the same box (*"…a blessed soul in heaven after early nightfall
+the"*). The control happened to run a different ASR variant, which does not affect
+the comparison — page-breaking is overlay behaviour, independent of the model
+producing the text.
+
+**Known limitation: it is retrospective.** Diarization needs ~1 s of warmup and
+reports on a ~0.5 s cadence, so the change is detected *after* the new speaker
+starts and a word or two of theirs can land on the outgoing page. The alternative —
+holding text until the speaker is known — would delay every subtitle by the
+diarizer's cadence, which is the wrong trade for a latency-first app.
 
 ---
 

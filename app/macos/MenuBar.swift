@@ -29,6 +29,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
     var onSelectVariant: ((FluidVariant) -> Void)?
+    var onToggleSpeakerBreaks: (() -> Void)?
+    var speakerBreaksEnabled: () -> Bool = { false }
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -136,6 +138,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(sourceMenuItem())
         menu.addItem(modelMenuItem())
         menu.addItem(textSizeMenuItem())
+
+        let speakers = NSMenuItem(title: "New Box On Speaker Change",
+                                  action: #selector(toggleSpeakerBreaks), keyEquivalent: "")
+        speakers.target = self
+        speakers.state = speakerBreaksEnabled() ? .on : .off
+        speakers.toolTip = "Runs a second model on the Neural Engine"
+        menu.addItem(speakers)
 
         let reset = NSMenuItem(title: "Reset Overlay Position",
                                action: #selector(resetPosition), keyEquivalent: "")
@@ -294,6 +303,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: actions
 
     @objc private func togglePause() { onTogglePause?(); refreshIcon() }
+    @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }
 }

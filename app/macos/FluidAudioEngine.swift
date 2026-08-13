@@ -23,6 +23,7 @@ import Foundation
 enum FluidVariant: String, CaseIterable {
     case eou160, eou320, eou1280
     case nemotron560, nemotron1120, nemotron2240
+    case unified
 
     var displayName: String {
         switch self {
@@ -32,6 +33,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron560: return "Nemotron · 560 ms"
         case .nemotron1120: return "Nemotron · 1120 ms"
         case .nemotron2240: return "Nemotron · 2240 ms"
+        case .unified: return "Parakeet Unified · punctuated"
         }
     }
 
@@ -44,6 +46,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron560: return "0.6B · lowest latency tier"
         case .nemotron1120: return "0.6B · the trained chunk size"
         case .nemotron2240: return "0.6B · default · highest throughput"
+        case .unified: return "0.6B · punctuation + capitals · 2.08 s latency"
         }
     }
 
@@ -54,8 +57,12 @@ enum FluidVariant: String, CaseIterable {
         }
     }
 
+    /// True for the one variant that emits punctuation and capitalisation itself.
+    var isUnified: Bool { self == .unified }
+
     var chunkSamples: Int {
         switch self {
+        case .unified: return UnifiedConfig().chunkSamples
         case .eou160: return 16000 * 160 / 1000
         case .eou320: return 16000 * 320 / 1000
         case .eou1280: return 16000 * 1280 / 1000
@@ -91,6 +98,9 @@ actor FluidAudioEngine {
     private let variant: FluidVariant
     private var eou: StreamingEouAsrManager?
     private var nemotron: StreamingNemotronAsrManager?
+    private var unified: StreamingUnifiedAsrManager?
+    /// Optional: breaks the page when the speaker changes. nil when disabled.
+    private var speakers: SpeakerTracker?
 
     private var pending: [Float] = []
     private var loaded = false
@@ -123,13 +133,15 @@ actor FluidAudioEngine {
          onStatus: @escaping @Sendable (String) -> Void,
          onFinal: @escaping @Sendable (String) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
-         onRTF: @escaping @Sendable (Float) -> Void) {
+         onRTF: @escaping @Sendable (Float) -> Void,
+         speakers: SpeakerTracker? = nil) {
         self.variant = variant
         self.onPartial = onPartial
         self.onStatus = onStatus
         self.onFinal = onFinal
         self.onReady = onReady
         self.onRTF = onRTF
+        self.speakers = speakers
     }
 
     private static var pcmFormat: AVAudioFormat {
@@ -155,7 +167,15 @@ actor FluidAudioEngine {
         guard !loaded else { return }
         onStatus("Loading \(variant.displayName)…")
         do {
-            if variant.isEou {
+            if variant.isUnified {
+                // The only variant that punctuates and capitalises. Costs latency:
+                // its [70,13,13] window is 2.08 s against EOU's 320 ms.
+                let manager = StreamingUnifiedAsrManager()
+                let partial = onPartial
+                await manager.setPartialTranscriptCallback { text in partial(text) }
+                try await manager.loadModels()
+                unified = manager
+            } else if variant.isEou {
                 let manager = StreamingEouAsrManager(chunkSize: variant.eouChunkSize)
                 let partial = onPartial
                 await manager.setPartialTranscriptCallback { text in partial(text) }
@@ -174,6 +194,10 @@ actor FluidAudioEngine {
                 try await manager.loadModels()
                 nemotron = manager
             }
+            // Load the diarizer after the recogniser: subtitles are the point, and
+            // this way they start working while the second model is still coming
+            // down.
+            if let speakers { await speakers.load() }
             loaded = true
             onStatus("")
             onReady(true)
@@ -204,7 +228,12 @@ actor FluidAudioEngine {
             guard let buf = buffer(from: slice) else { continue }
             let started = Date()
             do {
-                if let eou {
+                if let unified {
+                    // Unified separates buffering from decoding; it does its own
+                    // windowing, so append then let it drain.
+                    try await unified.appendAudio(buf)
+                    try await unified.processBufferedAudio()
+                } else if let eou {
                     _ = try await eou.process(audioBuffer: buf)
                 } else if let nemotron {
                     _ = try await nemotron.process(audioBuffer: buf)
@@ -213,7 +242,10 @@ actor FluidAudioEngine {
                 onStatus("transcription error: \(error.localizedDescription)")
             }
 
+            if let speakers { await speakers.feed(slice) }
+
             computeSeconds += Date().timeIntervalSince(started)
+            if let speakers { computeSeconds += await speakers.takeComputeSeconds() }
             processedSeconds += Double(chunk) / 16000.0
             // Report about once a second, over a rolling window so a bad moment
             // does not haunt the average.
@@ -230,8 +262,13 @@ actor FluidAudioEngine {
     func endUtterance() async {
         guard loaded else { return }
         pending.removeAll()
+        if let speakers { await speakers.reset() }
         do {
-            if let eou {
+            if let unified {
+                let text = try await unified.finish()
+                onFinal(text)
+                try await unified.reset()
+            } else if let eou {
                 let text = try await eou.finish()
                 onFinal(text)
                 await eou.reset()
@@ -246,8 +283,11 @@ actor FluidAudioEngine {
     }
 
     func shutdown() async {
+        if let speakers { await speakers.shutdown() }
+        if let unified { await unified.cleanup() }
         if let eou { await eou.cleanup() }
         if let nemotron { await nemotron.cleanup() }
+        unified = nil
         eou = nil
         nemotron = nil
         loaded = false

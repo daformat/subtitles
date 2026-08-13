@@ -64,7 +64,14 @@ The app lives in the menu bar (no Dock icon).
 
 **Model** switches between Parakeet variants at runtime and remembers your choice.
 They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
-160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms.
+160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms, plus **Parakeet Unified**,
+the only variant that emits punctuation and capitalisation itself — at the cost of
+2.08 s latency against EOU's 320 ms.
+
+**New Box On Speaker Change** starts a fresh subtitle box when someone else starts
+talking, the same way a pause or end-of-utterance does. Off by default because it
+runs a second model (Sortformer) on the Neural Engine: measured RTF went from
+0.13–0.18 to 0.27–0.33 with it on.
 `pkill -USR1 -f Subtitles.app` cycles them, which makes A/B comparison scriptable.
 
 **Listen To** picks a source. Entries are app *families*: selecting "Google Chrome"
@@ -141,6 +148,10 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   but barely tested.
 - English only as configured. Parakeet v3 and the multilingual Nemotron models
   exist in FluidAudio but are not exposed here yet.
+- Speaker-change breaks are **retrospective**: diarization needs ~1 s of warmup and
+  reports on a ~0.5 s cadence, so a word or two of the new speaker can land on the
+  outgoing box before it clears. Waiting for the label instead would delay every
+  subtitle by the diarizer's cadence.
 - First launch downloads ~440 MB and then compiles CoreML models, which takes
   minutes.
 - Single display; the overlay uses the main screen.
