@@ -50,6 +50,7 @@ swiftc -O \
   "$ROOT/app/macos/Overlay.swift" \
   "$ROOT/app/macos/Hotkey.swift" \
   "$ROOT/app/macos/MenuBar.swift" \
+  "$ROOT/app/macos/ModelCatalog.swift" \
   "$ROOT/app/macos/main.swift" \
   "$ROOT/core/target/release/libsubs_core.a" \
   "$SHERPA/lib/libsherpa-onnx-c-api.a" \

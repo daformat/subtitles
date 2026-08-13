@@ -169,12 +169,17 @@ int main(int argc, char **argv) {
   }
   const char *model_dir = argv[1];
   const char *provider = "cpu";
-  int threads = 2, use_int8 = 0, no_pacing = 0;
+  int threads = 2, use_int8 = 0, no_pacing = 0, debug = 0;
+  const char *model_type = NULL;
+  int feat_dim = 80;
   const char *wavs[16]; int n_wavs = 0;
   const char *ref = NULL;
 
   for (int i = 2; i < argc; i++) {
     if (!strcmp(argv[i], "--fast")) no_pacing = 1;
+    else if (!strcmp(argv[i], "--debug")) debug = 1;
+    else if (!strcmp(argv[i], "--model-type") && i + 1 < argc) model_type = argv[++i];
+    else if (!strcmp(argv[i], "--feat-dim") && i + 1 < argc) feat_dim = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--int8")) use_int8 = 1;
     else if (!strcmp(argv[i], "--provider") && i + 1 < argc) provider = argv[++i];
     else if (!strcmp(argv[i], "--threads") && i + 1 < argc) threads = atoi(argv[++i]);
@@ -200,9 +205,15 @@ int main(int argc, char **argv) {
   char enc[512], dec[512], joi[512], tok[512];
   // Model filenames vary between releases (e.g. "-chunk-16-left-128" suffixes),
   // so locate encoder/decoder/joiner by prefix rather than hardcoding.
-  if (!find_model(model_dir, "encoder", use_int8, enc, sizeof enc) ||
-      !find_model(model_dir, "decoder", 0, dec, sizeof dec) ||   // decoder stays fp32
-      !find_model(model_dir, "joiner",  use_int8, joi, sizeof joi)) {
+  // Prefer the requested precision, but fall back: some releases (e.g. the
+  // streaming Parakeet models) ship int8 weights only.
+  if (!find_model(model_dir, "encoder", use_int8, enc, sizeof enc) &&
+      !find_model(model_dir, "encoder", !use_int8, enc, sizeof enc)) { enc[0] = 0; }
+  if (!find_model(model_dir, "decoder", 0, dec, sizeof dec) &&
+      !find_model(model_dir, "decoder", 1, dec, sizeof dec)) { dec[0] = 0; }
+  if (!find_model(model_dir, "joiner", use_int8, joi, sizeof joi) &&
+      !find_model(model_dir, "joiner", !use_int8, joi, sizeof joi)) { joi[0] = 0; }
+  if (!enc[0] || !dec[0] || !joi[0]) {
     fprintf(stderr, "could not locate encoder/decoder/joiner in %s\n", model_dir);
     return 1;
   }
@@ -213,14 +224,15 @@ int main(int argc, char **argv) {
   SherpaOnnxOnlineRecognizerConfig cfg;
   memset(&cfg, 0, sizeof cfg);
   cfg.feat_config.sample_rate = 16000;
-  cfg.feat_config.feature_dim = 80;
+  cfg.feat_config.feature_dim = feat_dim;
   cfg.model_config.transducer.encoder = enc;
   cfg.model_config.transducer.decoder = dec;
   cfg.model_config.transducer.joiner  = joi;
   cfg.model_config.tokens = tok;
   cfg.model_config.num_threads = threads;
   cfg.model_config.provider = provider;
-  cfg.model_config.debug = 0;
+  cfg.model_config.debug = debug;
+  cfg.model_config.model_type = model_type;
   cfg.decoding_method = "greedy_search";
   cfg.max_active_paths = 4;
   cfg.enable_endpoint = 0;             // no endpointing: we want a continuous stream

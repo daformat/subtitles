@@ -57,7 +57,13 @@ The app lives in the menu bar (no Dock icon).
 |---|---|
 | **⌥⌘S** | pause / resume |
 | **Hold ⌥** | make the overlay draggable — it is click-through otherwise |
-| Menu bar | source, text size, overlay position, permission state |
+| Menu bar | model, source, text size, overlay position, permission state |
+
+**Model** switches the ASR model at runtime, downloading it on demand (checksum
+verified) and remembering your choice. The menu shows each model's measured
+latency, RTF and WER so the trade-off is visible at the point of choosing.
+`pkill -USR1 -f Subtitles.app` cycles models, which makes A/B comparison
+scriptable.
 
 **Listen To** picks a source. Entries are app *families*: selecting "Google Chrome"
 captures Chrome and all its helper processes, which matters because browsers and
@@ -139,8 +145,12 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   podcasts, calls, and noisy audio will be meaningfully worse.
 - Sentence casing lowercases proper nouns — "Hester Prynne" becomes "hester
   prynne". Fixing it properly needs a truecasing model.
-- English only as shipped. A French streaming model exists and works (~17 % WER on
-  Common Voice); other languages need checking against the sherpa-onnx model zoo.
+- English and French ship in the model picker; other languages need checking
+  against the sherpa-onnx model zoo.
+- **Parakeet is not offered**, despite being the obvious model to want — it emits
+  punctuation and true casing itself. Its streaming export re-encodes 5.6 s of
+  context per 80 ms chunk and measures RTF 10.7–31.8 on CPU, about 100× too slow.
+  Running it needs the Apple Neural Engine via CoreML (FluidAudio); see PLAN.md §11.
 - Single display; the overlay uses the main screen.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of

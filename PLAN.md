@@ -161,7 +161,7 @@ module and a future Win32 layer. C++ would avoid an FFI hop but costs that tooli
 | Engine | Emit latency | Notes |
 |---|---|---|
 | **Streaming Zipformer transducer** (sherpa-onnx) | **measured 316 / 489 ms p50/p95** | Truly streaming, monotonic output, CPU-viable. **CHOSEN — 0.0 % WER on clean speech (§8a).** Model is 310 MB, not the ~100 MB assumed. |
-| Parakeet TDT v3 (MLX / ONNX) | ~1–1.5 s | Excellent quality, multilingual (~25 European langs incl. French), fast on Apple Silicon, but chunked. **Fallback tier.** |
+| Parakeet TDT 0.6b (sherpa-onnx, streaming export) | — | **Measured RTF 10.7–31.8 on CPU: ~100× too slow.** Quality is excellent and it emits punctuation and true casing itself. Needs the ANE — see §11. |
 | whisper.cpp + LocalAgreement | 1.5–3 s | Best language coverage, worst latency. Whisper is a 30 s-window encoder-decoder; streaming is a bolt-on. Rejected for v1. |
 | Apple `SpeechTranscriber` | few hundred ms | Free, on-device, streaming-native. **Requires macOS 26** — dev host is on 15.7. Revisit on upgrade. |
 | Cloud (Deepgram / AssemblyAI) | 300–800 ms | Excellent, but violates D3. Rejected. |
@@ -718,6 +718,66 @@ creating the tap (a stale ID returns `'!obj'`).
   matters and it has not been measured (§8a Finding 2).
 - Signing / notarization path — needed before anyone else can run it.
 - Where should subtitles sit by default, and should position be per-app?
+
+---
+
+## 11. Model switching, and the Parakeet result (2026-08-13)
+
+The app can now switch models at runtime from the menu bar. `ModelCatalog.swift`
+holds the catalogue (URL + SHA-256 + measured characteristics); uninstalled models
+download on demand with checksum verification. Selection persists.
+
+Verified: switching between Zipformer EN and EN-20M live reproduces exactly the
+harness difference (20M dropped "AFTER EARLY NIGHTFALL" and rendered "BROTHELS" as
+"braffls"), and the French model downloaded, verified, extracted and transcribed
+without a restart.
+
+`SIGUSR1` cycles the catalogue, so A/B comparison is scriptable:
+`pkill -USR1 -f Subtitles.app`.
+
+**Swap safety.** Clearing the engine pointer is not enough — the realtime callback
+may already have loaded it and be inside `subs_push_audio`, so destroying it there
+is a use-after-free. The swap therefore stops the tap first: `AudioDeviceStop` is
+synchronous, so once it returns no IOProc is in flight.
+
+### Parakeet does not work on CPU ❌
+
+sherpa-onnx ships streaming Parakeet 0.6b exports at 240/560/1120 ms latency.
+Quality is excellent — on the same LibriSpeech clip it produced *"After early
+nightfall, the yellow lamps would light up here and there the squalid quarter of
+the brothels"*, **with punctuation and true casing**, which would remove this
+project's sentence-casing hack and its lowercased proper nouns.
+
+But measured on this machine:
+
+| Config | RTF |
+|---|---|
+| Zipformer EN | **0.10** |
+| Parakeet 240 ms, 2 threads | 14.7 |
+| Parakeet 240 ms, 4 threads | 10.8 |
+| Parakeet 240 ms, 8 threads | 31.8 (thread thrashing) |
+
+Roughly 100× too slow. The model's own metadata explains it: the export is
+`buffered_streaming=1` with `left_feature_frames=560` — it re-encodes 5.6 s of
+left context for every 80 ms chunk. That assumes an accelerator.
+
+**The ANE is the answer, via CoreML.** That is exactly what
+[FluidAudio](https://github.com/FluidInference/FluidAudio) exists for (fully local,
+Parakeet TDT v2/v3 on the ANE, SwiftPM), and what
+[VoiceInk](https://github.com/Beingpax/VoiceInk) uses for the same reason. VoiceInk
+is GPL-3.0 and a mic-dictation app rather than a library — useful as a reference
+for *approach*, not something to lift code from.
+
+Integrating FluidAudio is a genuinely different shape of work: a SwiftPM dependency
+and a second engine implementation on the **Swift** side of the C ABI, whereas
+every engine today lives in the Rust core. The core would need to expose resampled
+16 kHz frames outward and accept transcript text back, rather than owning the
+recognizer. Not started.
+
+**This does not contradict Spike 0A Finding 3.** That measured ONNX Runtime's
+CoreML *execution provider* running a Zipformer on 20 ms chunks, where
+per-inference overhead dominates. A model exported specifically for the ANE is a
+different proposition and needs its own measurement.
 
 ---
 

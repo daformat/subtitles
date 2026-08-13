@@ -28,6 +28,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // Wired up by main.swift.
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
+    var onSelectModel: ((ModelSpec) -> Void)?
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -35,6 +36,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var isPaused: () -> Bool = { false }
     var currentSource: () -> AudioSource = { .allSystemAudio }
     var currentFontSize: () -> CGFloat = { 30 }
+    var currentModelID: () -> String = { "" }
+    /// Non-nil while a model is downloading or loading; disables the picker.
+    var modelBusy: () -> String? = { nil }
     /// (headline, isHealthy) — e.g. ("Listening · RTF 0.12", true)
     var statusLine: () -> (String, Bool) = { ("", true) }
 
@@ -130,6 +134,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(sourceMenuItem())
+        menu.addItem(modelMenuItem())
         menu.addItem(textSizeMenuItem())
 
         let reset = NSMenuItem(title: "Reset Overlay Position",
@@ -201,6 +206,45 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func selectProcess(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? AudioSourceEntry else { return }
         onSelectSource?(.app(id: p.id, name: p.name))
+    }
+
+    // MARK: model
+
+    private func modelMenuItem() -> NSMenuItem {
+        // While a model is downloading or loading, replace the picker with its
+        // progress rather than letting a second switch be started underneath it.
+        if let busy = modelBusy() {
+            let item = NSMenuItem(title: busy, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            return item
+        }
+
+        let item = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentModelID()
+
+        for spec in ModelCatalog.all {
+            let installed = ModelCatalog.isInstalled(spec)
+            let entry = NSMenuItem(title: spec.name,
+                                   action: #selector(selectModel(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = spec
+            entry.state = spec.id == current ? .on : .off
+            // Measured numbers, plus the download size when it is not yet local —
+            // the two things you actually need to choose between them.
+            let detail = installed ? spec.note : "\(spec.note) · \(spec.sizeMB) MB download"
+            entry.attributedTitle = NSAttributedString(
+                string: "\(spec.name)\n\(detail)",
+                attributes: [.font: NSFont.menuFont(ofSize: 0)])
+            sub.addItem(entry)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectModel(_ sender: NSMenuItem) {
+        guard let spec = sender.representedObject as? ModelSpec else { return }
+        onSelectModel?(spec)
     }
 
     // MARK: text size

@@ -84,27 +84,37 @@ if listSources {
     exit(0)
 }
 
-/// Model lookup: explicit flag, then the app bundle, then the dev tree.
+/// The catalogue entry to start with: last used, else the first one installed.
+func resolveInitialModel() -> ModelSpec? {
+    if let id = UserDefaults.standard.string(forKey: Defaults.modelID),
+       let spec = ModelCatalog.spec(withID: id),
+       ModelCatalog.isInstalled(spec) { return spec }
+    return ModelCatalog.all.first { ModelCatalog.isInstalled($0) }
+}
+
+/// Model lookup: explicit flag wins, then the catalogue, then the app bundle.
 func resolveModelDir() -> String? {
     if let modelDir { return modelDir }
+    if let spec = resolveInitialModel() { return ModelCatalog.directory(for: spec).path }
     if let res = Bundle.main.resourceURL?.appendingPathComponent("model").path,
        FileManager.default.fileExists(atPath: res) { return res }
-    let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-    let dev = exe.deletingLastPathComponent()
-        .appendingPathComponent("../../../../models/sherpa-onnx-streaming-zipformer-en-2023-06-26")
-        .standardized.path
-    return FileManager.default.fileExists(atPath: dev) ? dev : nil
+    return nil
 }
 
 guard let model = resolveModelDir() else {
-    err("\(red)no model found\(reset) — pass --model DIR, or put one in Contents/Resources/model")
+    err("\(red)no model installed\(reset) — run ./scripts/fetch-deps.sh, or pass --model DIR")
     exit(1)
 }
+nonisolated(unsafe) var currentModelSpec: ModelSpec? = resolveInitialModel()
+/// Non-nil while a model is downloading or loading.
+nonisolated(unsafe) var modelBusyMessage: String?
+let modelInstaller = ModelInstaller()
 
 // ── persisted settings ──
 enum Defaults {
     static let fontSize = "overlay.fontSize"
     static let sourceID = "source.id"
+    static let modelID = "model.id"
     static let sourceName = "source.name"
 }
 
@@ -315,6 +325,102 @@ func togglePause() {
     err(isPaused ? "paused" : "resumed")
 }
 
+/// Rebuild the engine against a different model directory.
+///
+/// Loading takes seconds, so it runs off the main thread; the audio callback sees
+/// `engine == nil` meanwhile and drops samples, which is preferable to queueing a
+/// backlog of audio recorded against the old model.
+func swapEngine(toDirectory dir: String, label: String) {
+    modelBusyMessage = "Loading \(label)…"
+    statusMenu?.updateHealthIndicator()
+    renderer.overlay?.clearAndHide()
+
+    // Stop capture *before* touching the engine. Clearing the global is not
+    // enough on its own: the realtime callback may already have loaded the old
+    // pointer and be inside subs_push_audio, so destroying it here would be a
+    // use-after-free. AudioDeviceStop is synchronous — once it returns no IOProc
+    // is in flight and the swap is safe.
+    tap.stop()
+
+    DispatchQueue.global(qos: .userInitiated).async {
+        let old = engine
+        engine = nil
+        subs_stop(old)
+        subs_destroy(old)
+
+        let created: OpaquePointer? = dir.withCString { ptr in
+            var cfg = subs_config_t(
+                model_dir: ptr,
+                num_threads: threads,
+                input_sample_rate: UInt32(format.sampleRate),
+                input_channels: UInt16(format.channels),
+                int8: useInt8 ? 1 : 0)
+            return subs_create(&cfg)
+        }
+        guard let created else {
+            DispatchQueue.main.async {
+                modelBusyMessage = nil
+                err("\(red)could not create engine for \(label)\(reset)")
+                resumeCapture()
+            }
+            return
+        }
+        subs_set_callback(created, onEvent, nil)
+        let rc = subs_start(created)
+        DispatchQueue.main.async {
+            if rc == 0 {
+                // Publish only once the worker is running, so nothing queues up
+                // behind a model that is still loading.
+                engine = created
+                err("model: \(label)")
+            } else {
+                subs_destroy(created)
+                err("\(red)subs_start failed (\(rc)) for \(label)\(reset)")
+            }
+            modelBusyMessage = nil
+            statusMenu?.updateHealthIndicator()
+            resumeCapture()
+        }
+    }
+}
+
+/// Restart capture after a model swap, keeping whatever source was selected.
+func resumeCapture() {
+    do {
+        try tap.prepare(source: tap.source)
+        try tap.start()
+    } catch {
+        err("\(red)could not restart capture:\(reset) \(error)")
+    }
+}
+
+/// Switch to a catalogue model, downloading it first if necessary.
+func applyModel(_ spec: ModelSpec) {
+    guard modelBusyMessage == nil else { return }
+    UserDefaults.standard.set(spec.id, forKey: Defaults.modelID)
+
+    if ModelCatalog.isInstalled(spec) {
+        currentModelSpec = spec
+        swapEngine(toDirectory: ModelCatalog.directory(for: spec).path, label: spec.name)
+        return
+    }
+    modelInstaller.install(spec, onProgress: { message in
+        modelBusyMessage = message
+        statusMenu?.updateHealthIndicator()
+    }, onFinish: { result in
+        switch result {
+        case let .success(installed):
+            currentModelSpec = installed
+            swapEngine(toDirectory: ModelCatalog.directory(for: installed).path,
+                       label: installed.name)
+        case let .failure(error):
+            modelBusyMessage = nil
+            statusMenu?.updateHealthIndicator()
+            err("\(red)could not install \(spec.name):\(reset) \(error.localizedDescription)")
+        }
+    })
+}
+
 func shutdownCleanly() -> Never {
     subs_stop(engine)
     subs_destroy(engine)
@@ -335,7 +441,11 @@ if useOverlay {
     menu.isPaused = { isPaused }
     menu.currentSource = { tap.source }
     menu.currentFontSize = { fontSize }
+    menu.currentModelID = { currentModelSpec?.id ?? "" }
+    menu.modelBusy = { modelBusyMessage }
+    menu.onSelectModel = { applyModel($0) }
     menu.statusLine = {
+        if let busy = modelBusyMessage { return (busy, true) }
         if !renderer.audioHealthy { return ("No audio reaching Subtitles", false) }
         if isPaused { return ("Paused", true) }
         // RTF over ~0.8 means the pipeline is close to falling behind for good
@@ -390,6 +500,19 @@ let shutdown: @convention(c) (Int32) -> Void = { _ in
     FileHandle.standardOutput.write("\n".data(using: .utf8)!)
     shutdownCleanly()
 }
+// SIGUSR1 cycles to the next installed model. Makes A/B comparison scriptable
+// (`pkill -USR1 -f Subtitles.app`) and gives the menu path a testable equivalent.
+let cycleModel: @convention(c) (Int32) -> Void = { _ in
+    DispatchQueue.main.async {
+        // Cycles the whole catalogue, not just what is installed — applyModel
+        // downloads on demand, so this also exercises that path.
+        let all = ModelCatalog.all
+        guard all.count > 1 else { return }
+        let index = all.firstIndex { $0.id == currentModelSpec?.id } ?? 0
+        applyModel(all[(index + 1) % all.count])
+    }
+}
+signal(SIGUSR1, cycleModel)
 signal(SIGINT, shutdown)
 signal(SIGTERM, shutdown)
 

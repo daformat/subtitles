@@ -54,9 +54,15 @@ impl Recognizer {
             return Err(format!("model dir not found: {model_dir}"));
         }
 
-        let encoder = find_model(dir, "encoder", int8)?;
-        let decoder = find_model(dir, "decoder", false)?; // decoder stays fp32
-        let joiner = find_model(dir, "joiner", int8)?;
+        // Prefer the requested precision, but fall back to whatever exists: some
+        // releases ship int8 weights only, and demanding fp32 makes them look
+        // like broken model directories.
+        let pick = |prefix: &str, want: bool| -> Result<String, String> {
+            find_model(dir, prefix, want).or_else(|_| find_model(dir, prefix, !want))
+        };
+        let encoder = pick("encoder", int8)?;
+        let decoder = pick("decoder", false)?; // fp32 decoder when there is a choice
+        let joiner = pick("joiner", int8)?;
         let tokens = dir.join("tokens.txt").to_string_lossy().to_string();
         if !Path::new(&tokens).exists() {
             return Err(format!("missing tokens.txt in {model_dir}"));
