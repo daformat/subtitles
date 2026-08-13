@@ -991,6 +991,33 @@ single long-lived pump task. Same discipline the Rust ring already used: a fixed
 ceiling, and drop stale audio rather than accumulate latency that can never be
 repaid. Re-tested on the config that broke it — no drops, graceful degradation.
 
+### Clearing on fade
+
+Fading alone was not enough: the page state survived it, so the next words resumed
+a paragraph nobody could still see. When the fade *completes* the box is now
+emptied and the next words start a new page.
+
+Two details:
+
+- The clear runs in the animation's completion handler and re-checks that the
+  panel is still hidden — new text can arrive mid-fade, and discarding the page
+  then would throw away what is back on screen.
+- `lastFullWordCount` is deliberately **kept**. Engines that never reset keep
+  growing a single transcript, so "fresh" has to mean *the words after this point*,
+  not *replay everything from the beginning*.
+- An unchanged transcript no longer resurrects a faded overlay. Engines resend
+  identical partials freely; without that guard the box blinks back and fades again
+  on the timer.
+
+Verified with speech → 12 s tone → speech, continuous so no endpoint could fire:
+the box showed the first utterance, faded mid-tone despite the gate reporting
+`listening` throughout, and the second utterance opened a clean box with no trace
+of the first.
+
+Same boundary caveat as the speaker-change break: a word or two arriving in the
+same update as the anchor can be skipped, so the new box may start slightly into
+the sentence.
+
 ### And a finding about the variants
 
 `eou160` is **not viable on this machine**: RTF 0.63–2.22, at or past real time,

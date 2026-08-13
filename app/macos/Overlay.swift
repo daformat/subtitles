@@ -302,6 +302,11 @@ final class OverlayController {
         let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard !words.isEmpty else { return }
 
+        // An unchanged transcript is not new information, so it must not bring a
+        // faded overlay back. Engines resend the same partial freely; without this
+        // the box would blink back into view and then fade again on the timer.
+        if text == lastShownText, panel.alphaValue == 0 { return }
+
         // The engine restarted its transcript (finish/reset), so the old page
         // offset no longer refers to anything.
         if words.count < pageStartWord { pageStartWord = 0 }
@@ -417,10 +422,29 @@ final class OverlayController {
     private func fadeIfTextIdle() {
         guard !isDraggable, panel.alphaValue > 0 else { return }
         guard Date().timeIntervalSince(lastTextAt) >= textIdleTimeout else { return }
-        NSAnimationContext.runAnimationGroup { ctx in
+
+        NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.4
             panel.animator().alphaValue = 0
-        }
+        }, completionHandler: { [weak self] in
+            guard let self else { return }
+            // New text may have arrived during the fade and shown the panel again;
+            // discarding the page then would throw away what is on screen.
+            guard self.panel.alphaValue == 0 else { return }
+
+            // Empty the box now that it is invisible, so the next words open a
+            // clean one instead of resuming a paragraph nobody can still see.
+            self.page = ""
+            self.pendingCommit = ""
+            self.tentative = ""
+            self.view.committed = ""
+            self.view.tentative = ""
+
+            // `lastFullWordCount` is deliberately *kept*: engines that never reset
+            // keep growing one transcript, and "fresh" has to mean "the words
+            // after this point", not "replay everything from the beginning".
+            self.startFreshOnNextText = true
+        })
     }
 
     private func show() {
