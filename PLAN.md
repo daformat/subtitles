@@ -1028,6 +1028,54 @@ figure rather than the advertised one.
 
 ---
 
+## 16. Paging on audio time (2026-08-13)
+
+Page anchors are now **audio timestamps**, not word counts. A count anchor skips
+any words that arrive in the same update as the anchor point, so a new page could
+start part-way into a sentence. `showWords([TimedWord])` replaces
+`showFullText(String)`, and the fade, the pause and the speaker-change break all
+anchor the same way.
+
+**All three managers can do this**, contrary to what I said first — Unified via
+`consumeWordTimings()`, Nemotron via `getTokenTimings()`, EOU via
+`getTokenTimestampsMs()` + `getRawTokenStrings()`. Unified is the only one giving
+word boundaries ready-made; on the others words are reassembled from tokens using
+the leading-space convention. One asymmetry that matters for an always-on app:
+Unified's accessor *drains*, so the running transcript must be accumulated locally,
+while EOU's is a plain getter that returns everything every time.
+
+### Three bugs found doing it
+
+**The overlay flashed during music.** Reported by the user, and the key diagnostic.
+The unchanged-text guard only skipped re-showing when alpha was exactly 0; mid-fade
+the alpha is between 0 and 1, so the guard missed, `show()` animated back to full,
+and the poll faded again — a flash loop several times a second. Worse, `show()`
+interrupting the fade meant its completion handler kept seeing a non-zero alpha and
+**never cleared the page**, which is why the next speaker appended to text that
+should long since have gone. Fixed by returning on unchanged text before touching
+visibility at all.
+
+**`build.sh` shipped a stale binary.** The `swift build` output was piped through
+`grep … || true`, which masked a failed compile; the script then copied the
+*previous* binary into the bundle and signed it. A fix that never compiled was
+tested and appeared not to work. `build.sh` now checks the exit status, prints the
+errors, and refuses to package. Worth remembering as a class: never let `|| true`
+sit on a build step.
+
+**The word-start marker was drawn on screen.** `getRawTokenStrings()` returns
+tokens with a literal U+2581 prefix — the C API translated it to a space, the Swift
+accessor does not — so subtitles rendered as `▁after ▁early ▁nightfall`. Both forms
+are stripped now.
+
+### Still imperfect
+
+On EOU the new page can still start a few words into the sentence. The trim is
+smaller than the word-count anchor gave, but not gone. EOU exposes only token
+*start* times (no end), so `latestWordEnd` is coarser there; Unified, with real
+word start/end pairs, should be exact. Not yet isolated.
+
+---
+
 ## 10. References
 
 - sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD

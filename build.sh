@@ -45,8 +45,16 @@ echo "==> compiling swift app (SwiftPM)"
 # SwiftPM rather than raw swiftc because FluidAudio is only distributed as a
 # Swift package. The Rust core is linked via linkerSettings in Package.swift;
 # it must already be built, which is why cargo runs first.
-swift build -c release 2>&1 \
-  | grep -vE "was built for newer 'macOS' version|ld: warning: object file" || true
+# Do NOT pipe this through `grep ... || true`: that masks a failed build, and the
+# stale binary from the previous run then gets copied into the bundle and shipped.
+# Cost an hour of debugging a "fix" that was never compiled.
+if ! swift build -c release > "$OUT/swift-build.log" 2>&1; then
+  grep -E "error:" "$OUT/swift-build.log" | head -20 >&2
+  echo "!! swift build failed (full log: $OUT/swift-build.log)" >&2
+  exit 1
+fi
+grep -vE "was built for newer 'macOS' version|ld: warning: object file" "$OUT/swift-build.log" \
+  | grep -E "^Compiling|^Build complete" || true
 
 BIN=".build/release/subtitles"
 [ -x "$BIN" ] || { echo "!! swift build produced no binary" >&2; exit 1; }

@@ -207,12 +207,15 @@ final class OverlayController {
     private var pendingCommit = ""
     private var tentative = ""
     private var startFreshOnNextText = false
-    /// Index of the first word of the current page, for engines that resend the
-    /// whole transcript each update rather than deltas.
-    private var pageStartWord = 0
-    /// Word count of the last whole-transcript update, so a pause can start the
-    /// next page at the words that arrive *after* it.
-    private var lastFullWordCount = 0
+    /// Audio time the current page starts at. Words spoken before this are on a
+    /// page the reader has already lost.
+    ///
+    /// A *time* anchor rather than a word index: a word-count anchor skips any
+    /// words that arrive in the same update as the anchor point, which is why a
+    /// new page could previously start part-way into a sentence.
+    private var pageStartTime: TimeInterval = 0
+    /// Latest word end seen, so "start fresh" means "from here on in the audio".
+    private var latestWordEnd: TimeInterval = 0
 
     /// Remembered across launches once the user drags the panel somewhere.
     ///
@@ -291,52 +294,58 @@ final class OverlayController {
         show()
     }
 
-    /// For engines that emit a whole transcript each update rather than deltas
-    /// (FluidAudio).
+    /// Render the transcript, paged by audio time.
     ///
-    /// Pages exactly like the delta path: fill to `maxLines`, then clear and
-    /// restart from the first word that did not fit. Trimming words off the front
-    /// instead would scroll — which is what broadcast subtitles deliberately do
-    /// not do, and which made this path behave unlike the rest of the app.
-    func showFullText(_ text: String) {
-        let words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        guard !words.isEmpty else { return }
+    /// Fills to `maxLines`, then clears and restarts from the first word that did
+    /// not fit — the same behaviour as broadcast subtitles, which never scroll.
+    func showWords(_ words: [TimedWord]) {
+        guard let newest = words.last else { return }
 
-        // An unchanged transcript is not new information, so it must not bring a
-        // faded overlay back. Engines resend the same partial freely; without this
-        // the box would blink back into view and then fade again on the timer.
-        if text == lastShownText, panel.alphaValue == 0 { return }
+        // Time running backwards means the engine restarted its transcript
+        // (finish/reset), so the old anchor refers to audio that no longer exists.
+        if newest.end < latestWordEnd {
+            pageStartTime = 0
+            latestWordEnd = 0
+        }
 
-        // The engine restarted its transcript (finish/reset), so the old page
-        // offset no longer refers to anything.
-        if words.count < pageStartWord { pageStartWord = 0 }
         if startFreshOnNextText {
             startFreshOnNextText = false
-            // Begin the new page at the words that arrive after the pause. If the
-            // transcript got shorter the engine restarted it, so begin at zero —
-            // anchoring to the newest word instead would throw away everything
-            // the engine just said.
-            pageStartWord = words.count <= lastFullWordCount ? 0 : lastFullWordCount
+            // Everything already spoken belongs to the page just closed; the new
+            // one begins with whatever comes after it. Anchoring on *time* is what
+            // stops words arriving in this same update from being skipped.
+            pageStartTime = latestWordEnd
         }
-        lastFullWordCount = words.count
+        latestWordEnd = max(latestWordEnd, newest.end)
 
-        // Advance the page while the text from pageStartWord overflows.
+        var visible = words.filter { $0.start >= pageStartTime }
+        guard !visible.isEmpty else { return }
+
+        // Advance the page while the visible text overflows.
         while true {
-            let fitted = longestFittingPrefix(words, from: pageStartWord)
-            if fitted >= words.count { break }      // everything fits
-            if fitted <= pageStartWord { break }    // one word wider than the box
-            pageStartWord = fitted                  // new page starts where it spilled
+            let fitted = longestFittingPrefix(visible.map(\.text), from: 0)
+            if fitted >= visible.count { break }   // it all fits
+            if fitted <= 0 { break }               // one word wider than the box
+            pageStartTime = visible[fitted].start  // new page starts where it spilled
+            visible = Array(visible[fitted...])
         }
 
-        // Only a *changed* transcript counts as activity. Engines happily resend
-        // an identical partial, and treating that as new text would keep the
-        // overlay alive indefinitely on a stuck hypothesis.
-        if text != lastShownText {
-            lastShownText = text
-            lastTextAt = Date()
-        }
+        let text = visible.map(\.text).joined(separator: " ")
 
-        page = words[pageStartWord...].joined(separator: " ")
+        // An unchanged transcript is not new information: return before touching
+        // visibility at all.
+        //
+        // Testing `alphaValue == 0` here instead was not enough. Engines resend
+        // identical partials several times a second; mid-fade the alpha is
+        // somewhere between 0 and 1, so the guard missed, `show()` animated it
+        // back to full, and the idle poll faded it again — the overlay flashed.
+        // Worse, `show()` interrupting the fade meant its completion handler kept
+        // seeing a non-zero alpha and never cleared the page, so the next speaker
+        // appended to text that should long since have gone.
+        guard text != lastShownText else { return }
+        lastShownText = text
+        lastTextAt = Date()
+
+        page = text
         pendingCommit = ""
         tentative = ""
         view.committed = page
@@ -374,7 +383,6 @@ final class OverlayController {
     /// Utterance finished: the next words start a new page. Fading is handled by
     /// the text-idle poll, so there is nothing to arm here.
     func endUtterance() {
-        pageStartWord = 0
         // Fold in any commit that arrived without a following tentative — an
         // endpoint flush emits COMMITTED then ENDPOINT with nothing between.
         if !pendingCommit.isEmpty {
@@ -440,9 +448,9 @@ final class OverlayController {
             self.view.committed = ""
             self.view.tentative = ""
 
-            // `lastFullWordCount` is deliberately *kept*: engines that never reset
-            // keep growing one transcript, and "fresh" has to mean "the words
-            // after this point", not "replay everything from the beginning".
+            // `latestWordEnd` is deliberately *kept*: engines that never reset keep
+            // growing one transcript, so "fresh" must mean "the words after this
+            // moment in the audio", not "replay everything from the beginning".
             self.startFreshOnNextText = true
         })
     }
@@ -466,9 +474,10 @@ final class OverlayController {
         // Re-page at the new size: text that fit three lines at 22pt may need five
         // at 52pt, and without this the box would simply clip.
         if !page.isEmpty,
-           view.lineCount(committed: page, tentative: tentative, width: maxWidth) > view.maxLines {
+           view.lineCount(committed: page, tentative: "", width: maxWidth) > view.maxLines {
             page = ""
             view.committed = ""
+            startFreshOnNextText = true
         }
         layout()
     }
@@ -480,8 +489,8 @@ final class OverlayController {
         page = ""
         pendingCommit = ""
         tentative = ""
-        pageStartWord = 0
-        lastFullWordCount = 0
+        pageStartTime = 0
+        latestWordEnd = 0
         startFreshOnNextText = false
         view.committed = ""
         view.tentative = ""

@@ -146,11 +146,12 @@ final class Renderer {
     private var lastStatus = ""
     private(set) var audioHealthy = true
 
-    /// FluidAudio reports the whole transcript each update rather than deltas.
-    func setText(_ text: String) {
-        line = text
-        overlay?.showFullText(text)
-        FileHandle.standardOutput.write("\r\(clearLine)\(text)".data(using: .utf8)!)
+    /// FluidAudio reports the whole transcript each update rather than deltas,
+    /// with the audio time of every word — which is what the overlay pages on.
+    func setWords(_ words: [TimedWord]) {
+        line = words.map(\.text).joined(separator: " ")
+        overlay?.showWords(words)
+        FileHandle.standardOutput.write("\r\(clearLine)\(line)".data(using: .utf8)!)
     }
 
     /// End of utterance: freeze the line and start a new one.
@@ -306,8 +307,8 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 
     let fluid = FluidAudioEngine(
         variant: variant,
-        onPartial: { text in
-            DispatchQueue.main.async { renderer.setText(text) }
+        onWords: { words in
+            DispatchQueue.main.async { renderer.setWords(words) }
         },
         onStatus: { message in
             DispatchQueue.main.async {
@@ -316,9 +317,9 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 if !message.isEmpty { err(message) }
             }
         },
-        onFinal: { text in
+        onFinal: { words in
             DispatchQueue.main.async {
-                if !text.isEmpty { renderer.setText(text) }
+                if !words.isEmpty { renderer.setWords(words) }
                 renderer.overlay?.endUtterance()
             }
         },

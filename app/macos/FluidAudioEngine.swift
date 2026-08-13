@@ -16,6 +16,17 @@ import CoreML
 import FluidAudio
 import Foundation
 
+/// One transcribed word with the audio time it was spoken at.
+///
+/// Paging anchors on these times rather than on a word *count*. A count anchor
+/// skips any words that happen to arrive in the same update as the anchor point,
+/// so a new page could start part-way into a sentence; a time anchor cannot.
+struct TimedWord: Equatable {
+    let text: String
+    let start: TimeInterval
+    let end: TimeInterval
+}
+
 /// A selectable FluidAudio configuration.
 ///
 /// Both families trade latency against accuracy through chunk size, which is the
@@ -145,6 +156,11 @@ actor FluidAudioEngine {
     /// Optional: breaks the page when the speaker changes. nil when disabled.
     private var speakers: SpeakerTracker?
 
+    /// Unified's `consumeWordTimings()` *drains*, so the running transcript has to
+    /// be accumulated here. Cleared at each utterance boundary so an always-on
+    /// session cannot grow it without bound.
+    private var accumulated: [TimedWord] = []
+
     private var pending: [Float] = []
     private var loaded = false
 
@@ -153,12 +169,12 @@ actor FluidAudioEngine {
     let queue = FrameQueue()
     private var pumpTask: Task<Void, Never>?
 
-    /// Partial transcripts, delivered on the main thread.
-    private let onPartial: @Sendable (String) -> Void
+    /// Timed words for the current transcript, delivered on the main thread.
+    private let onWords: @Sendable ([TimedWord]) -> Void
     private let onStatus: @Sendable (String) -> Void
     /// Fires once the models are actually usable. Without it, audio fed during
     /// the (minutes-long, first-run) load is dropped with nothing to show for it.
-    private let onFinal: @Sendable (String) -> Void
+    private let onFinal: @Sendable ([TimedWord]) -> Void
     private let onReady: @Sendable (Bool) -> Void
     /// Rolling real-time factor. The core can no longer measure this — it does not
     /// transcribe — so the health signal has to come from here.
@@ -177,14 +193,14 @@ actor FluidAudioEngine {
     private let maxPending = 16000 * 3
 
     init(variant: FluidVariant,
-         onPartial: @escaping @Sendable (String) -> Void,
+         onWords: @escaping @Sendable ([TimedWord]) -> Void,
          onStatus: @escaping @Sendable (String) -> Void,
-         onFinal: @escaping @Sendable (String) -> Void,
+         onFinal: @escaping @Sendable ([TimedWord]) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
          onRTF: @escaping @Sendable (Float) -> Void,
          speakers: SpeakerTracker? = nil) {
         self.variant = variant
-        self.onPartial = onPartial
+        self.onWords = onWords
         self.onStatus = onStatus
         self.onFinal = onFinal
         self.onReady = onReady
@@ -219,14 +235,10 @@ actor FluidAudioEngine {
                 // The only variant that punctuates and capitalises. Costs latency:
                 // its [70,13,13] window is 2.08 s against EOU's 320 ms.
                 let manager = StreamingUnifiedAsrManager()
-                let partial = onPartial
-                await manager.setPartialTranscriptCallback { text in partial(text) }
                 try await manager.loadModels()
                 unified = manager
             } else if variant.isEou {
                 let manager = StreamingEouAsrManager(chunkSize: variant.eouChunkSize)
-                let partial = onPartial
-                await manager.setPartialTranscriptCallback { text in partial(text) }
                 try await manager.loadModels()
                 eou = manager
             } else {
@@ -237,8 +249,6 @@ actor FluidAudioEngine {
                 // engine exists to avoid.
                 let manager = StreamingNemotronAsrManager(
                     requestedChunkSize: variant.nemotronChunkSize)
-                let partial = onPartial
-                await manager.setPartialCallback { text in partial(text) }
                 try await manager.loadModels()
                 nemotron = manager
             }
@@ -308,6 +318,12 @@ actor FluidAudioEngine {
                 onStatus("transcription error: \(error.localizedDescription)")
             }
 
+            // Poll timings after each chunk rather than using the partial-text
+            // callback: the text alone cannot say *when* a word was spoken, and
+            // that is what the overlay anchors on.
+            let words = await currentWords()
+            if !words.isEmpty { onWords(words) }
+
             if let speakers { await speakers.feed(slice) }
 
             computeSeconds += Date().timeIntervalSince(started)
@@ -324,25 +340,91 @@ actor FluidAudioEngine {
         }
     }
 
+    /// Words for the transcript so far, whichever manager is running.
+    ///
+    /// Unified hands back word boundaries directly; the other two only expose
+    /// token timings, so words are reassembled using the leading-space convention
+    /// the tokenisers share (a token beginning a word starts with a space).
+    private func currentWords() async -> [TimedWord] {
+        if let unified {
+            let fresh = await unified.consumeWordTimings()
+            accumulated.append(contentsOf: fresh.map {
+                TimedWord(text: Self.clean($0.word), start: $0.startTime, end: $0.endTime)
+            })
+            return accumulated
+        }
+        if let nemotron {
+            return Self.assemble(await nemotron.getTokenTimings())
+        }
+        if let eou {
+            let tokens = await eou.getRawTokenStrings()
+            let startsMs = await eou.getTokenTimestampsMs()
+            return Self.assemble(tokens: tokens, startsMs: startsMs)
+        }
+        return []
+    }
+
+    /// Strip the word-start marker. Tokenisers mark it as U+2581 in the vocab and
+    /// some APIs translate it to a plain space on the way out — the raw-token
+    /// accessors do not, so both forms have to be handled or the marker is drawn
+    /// on screen.
+    private static func clean(_ piece: String) -> String {
+        var t = piece
+        while let f = t.first, f == " " || f == "\u{2581}" { t.removeFirst() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func assemble(_ timings: [TokenTiming]) -> [TimedWord] {
+        var out: [TimedWord] = []
+        for t in timings {
+            let piece = t.token
+            if piece.hasPrefix(" ") || piece.hasPrefix("\u{2581}") || out.isEmpty {
+                out.append(TimedWord(text: clean(piece), start: t.startTime, end: t.endTime))
+            } else {
+                let last = out.removeLast()
+                out.append(TimedWord(text: last.text + clean(piece),
+                                     start: last.start, end: t.endTime))
+            }
+        }
+        return out.filter { !$0.text.isEmpty }
+    }
+
+    private static func assemble(tokens: [String], startsMs: [Int]) -> [TimedWord] {
+        var out: [TimedWord] = []
+        for (i, piece) in tokens.enumerated() {
+            let start = i < startsMs.count ? TimeInterval(startsMs[i]) / 1000 : 0
+            if piece.hasPrefix(" ") || piece.hasPrefix("\u{2581}") || out.isEmpty {
+                out.append(TimedWord(text: clean(piece), start: start, end: start))
+            } else {
+                let last = out.removeLast()
+                out.append(TimedWord(text: last.text + clean(piece),
+                                     start: last.start, end: start))
+            }
+        }
+        return out.filter { !$0.text.isEmpty }
+    }
+
     /// Called at the core's endpoint: flush and start a fresh utterance.
     func endUtterance() async {
         guard loaded else { return }
         pending.removeAll()
+        accumulated.removeAll()
         if let speakers { await speakers.reset() }
         do {
+            // Take the words before finishing: finish() resets some managers'
+            // timing state, and the final text alone has no timestamps.
+            let final = await currentWords()
             if let unified {
-                let text = try await unified.finish()
-                onFinal(text)
+                _ = try await unified.finish()
                 try await unified.reset()
             } else if let eou {
-                let text = try await eou.finish()
-                onFinal(text)
+                _ = try await eou.finish()
                 await eou.reset()
             } else if let nemotron {
-                let text = try await nemotron.finish()
-                onFinal(text)
+                _ = try await nemotron.finish()
                 await nemotron.reset()
             }
+            onFinal(final)
         } catch {
             onStatus("finish failed: \(error.localizedDescription)")
         }
