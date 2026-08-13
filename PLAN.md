@@ -6,6 +6,7 @@ primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
 First-run download is visible and interruptible (§18); default is Nemotron 560.
+Per-app capture actually switches as of §19.
 Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER,
 download integrity check and failure handling.
@@ -497,6 +498,9 @@ When a specific (non-"all") source is selected and that app is silent, the tap
 delivers no buffers at all, so the worker sleeps on an empty ring and emits no
 status events. The menu bar status line then shows the last value rather than
 "idle". Harmless, but it wants a heartbeat status independent of audio arriving.
+
+Selecting a source also did not actually take effect until §19 — the picker was
+correct all along, and a leaked device from startup was overriding it.
 
 ### Phase 4 — Windows (if ever)
 Swap the two platform layers. Core unchanged.
@@ -1240,6 +1244,76 @@ Cancellation reaches the engine as a *thrown error* — `CancellationError` or
 
 Nothing already fetched is wasted: completed files are kept and skipped as
 `.alreadyPresent`, so switching back resumes rather than restarts.
+
+---
+
+## 19. The tap that would not switch (2026-08-14)
+
+Picking a different app in **Listen To** mostly did nothing — you kept hearing
+whatever was selected when the app launched. It presented as *flaky* rather than
+broken, which is what made it slow to pin down: switching away from an app that
+happened to be silent looked like it worked perfectly.
+
+### Nothing on the failure path was wrong ⚠️
+
+Every suspect checked out, which is the point of writing this down:
+
+- `CATapDescription(stereoMixdownOfProcesses:)` sets `exclusive=false` with the
+  processes populated — an inclusion list, as intended. Verified directly, since
+  the symmetric trap for the *exclude* initializer already cost hours in §8b
+  Finding 3.
+- Family resolution was correct: `Claude [com.anthropic.claudefordesktop]` resolved
+  to its three process objects, distinct from Chrome's two helpers.
+- The aggregate device was built with the *new* tap's UUID every time.
+- Teardown reported no errors at all.
+- No fallback fired, and `menu.currentSource` reads the tap's real source, so the
+  checkmark could not drift from reality.
+
+The tap being created was right. A second one was overriding it.
+
+### The bug: startup creates the tap twice
+
+`prepare()` runs at load and `start()` a few lines later. Then
+`applyVariant(initial:)`'s async tail lands *after* the run loop starts and calls
+`prepare()` + `start()` again. The second pair overwrote `tapID`, `aggID` and
+`procID` while the first aggregate and its IOProc were **still running** — now
+unreachable by any later `stop()`, and still pumping the original tap's audio into
+the same sink. Every subsequent switch tore down only the tracked device.
+
+Hence the dependence on launch source, and hence "unreliable".
+
+`prepare()` and `start()` are idempotent now: `prepare()` tears down whatever is
+live before building, `start()` refuses to stack a second aggregate on one tap.
+
+`stop()` also discarded every `OSStatus`, and cleared `procID` whether or not the
+IOProc had actually gone — which is precisely how a live IOProc becomes
+unreachable. It reports each failure now and only forgets what is genuinely gone.
+Teardown was innocent this time; the same silence would have hidden the next one.
+
+### What made it findable
+
+- **Log what actually got tapped** — family, exclusive flag, and every process
+  object with its pid and bundle id. A scoping bug is invisible otherwise: the tap
+  builds and runs either way, and the only symptom is hearing the wrong app.
+- **`SIGUSR2` cycles sources**, the way `SIGUSR1` already cycles variants, so the
+  switch path can be exercised without a hand on the menu. The menu and the signal
+  share one `selectSource()`, so a test drives the same code the menu does.
+- **Test against a silent app.** Two apps both playing cannot distinguish "switched"
+  from "did not switch" when both are talking over each other; scoping to something
+  guaranteed silent turns the question into "does any word arrive at all".
+
+A false negative to remember: testing this by *launching* scoped to the silent app
+passes for the wrong reason. The leaked tap is then also the silent app, and
+everything looks correct.
+
+### Switching now clears what was on screen
+
+The overlay was already cleared; the recogniser was not. FluidAudio reports the
+whole transcript on every update, so its accumulated words and encoder context
+carried across the switch and the new app's first words arrived appended to a
+sentence nobody was saying any more. `resetContext()` runs on switch too, and the
+terminal line is *discarded* rather than committed — `endpoint()` prints what it
+has before clearing, which is right at an utterance boundary and wrong here.
 
 ---
 

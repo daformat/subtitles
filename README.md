@@ -88,10 +88,14 @@ talking, the same way a pause or end-of-utterance does. Off by default because i
 runs a second model (Sortformer) on the Neural Engine: measured RTF went from
 0.13–0.18 to 0.27–0.33 with it on.
 `pkill -USR1 -f Subtitles.app` cycles them, which makes A/B comparison scriptable.
+`pkill -USR2 -f Subtitles.app` does the same for sources, cycling over whatever is
+audible right now.
 
 **Listen To** picks a source. Entries are app *families*: selecting "Google Chrome"
 captures Chrome and all its helper processes, which matters because browsers and
-Electron apps never play audio from their main process.
+Electron apps never play audio from their main process. Switching clears whatever
+is on screen and resets the recogniser, so the new app starts a fresh sentence
+rather than continuing the last one.
 
 ### Command line
 
