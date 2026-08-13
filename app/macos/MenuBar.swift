@@ -8,7 +8,6 @@
 // are playing audio right now" is exactly the kind of thing that is stale a second
 // after you cache it.
 
-import CSubs
 import AppKit
 
 final class StatusMenuController: NSObject, NSMenuDelegate {
@@ -29,8 +28,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // Wired up by main.swift.
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
-    var onSelectModel: ((ModelSpec) -> Void)?
-    var onSelectFluid: ((FluidVariant) -> Void)?
+    var onSelectVariant: ((FluidVariant) -> Void)?
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -38,10 +36,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var isPaused: () -> Bool = { false }
     var currentSource: () -> AudioSource = { .allSystemAudio }
     var currentFontSize: () -> CGFloat = { 30 }
-    var currentModelID: () -> String = { "" }
-    var currentFluidID: () -> String = { "" }
+    var currentVariantID: () -> String = { "" }
     /// Non-nil while a model is downloading or loading; disables the picker.
-    var modelBusy: () -> String? = { nil }
+    var engineBusy: () -> String? = { nil }
     /// (headline, isHealthy) — e.g. ("Listening · RTF 0.12", true)
     var statusLine: () -> (String, Bool) = { ("", true) }
 
@@ -215,8 +212,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func modelMenuItem() -> NSMenuItem {
         // While a model is downloading or loading, replace the picker with its
-        // progress rather than letting a second switch be started underneath it.
-        if let busy = modelBusy() {
+        // progress rather than letting a second switch start underneath it.
+        if let busy = engineBusy() {
             let item = NSMenuItem(title: busy, action: nil, keyEquivalent: "")
             item.isEnabled = false
             return item
@@ -224,59 +221,29 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         let item = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
         let sub = NSMenu()
-        let current = currentModelID()
+        let current = currentVariantID()
 
-        for spec in ModelCatalog.all {
-            let installed = ModelCatalog.isInstalled(spec)
-            let entry = NSMenuItem(title: spec.name,
-                                   action: #selector(selectModel(_:)), keyEquivalent: "")
-            entry.target = self
-            entry.representedObject = spec
-            entry.state = spec.id == current ? .on : .off
-            // Measured numbers, plus the download size when it is not yet local —
-            // the two things you actually need to choose between them.
-            let detail = installed ? spec.note : "\(spec.note) · \(spec.sizeMB) MB download"
-            entry.attributedTitle = NSAttributedString(
-                string: "\(spec.name)\n\(detail)",
-                attributes: [.font: NSFont.menuFont(ofSize: 0)])
-            sub.addItem(entry)
-        }
-        // FluidAudio runs Parakeet on the Neural Engine. Separate section
-        // because it is a different engine, not just a different checkpoint:
-        // it punctuates and cases its own output, and the core stops
-        // transcribing entirely.
-        sub.addItem(.separator())
-        let header = NSMenuItem(title: "FluidAudio · Apple Neural Engine",
-                                action: nil, keyEquivalent: "")
-        header.isEnabled = false
-        sub.addItem(header)
-
-        let currentFluid = currentFluidID()
+        // Every variant is Parakeet on the Neural Engine; they differ in chunk
+        // size, which is the latency/accuracy dial worth exposing.
         for variant in FluidVariant.allCases {
             let entry = NSMenuItem(title: variant.displayName,
-                                   action: #selector(selectFluid(_:)), keyEquivalent: "")
+                                   action: #selector(selectVariant(_:)), keyEquivalent: "")
             entry.target = self
             entry.representedObject = variant.rawValue
-            entry.state = variant.rawValue == currentFluid ? .on : .off
+            entry.state = variant.rawValue == current ? .on : .off
             entry.attributedTitle = NSAttributedString(
                 string: "\(variant.displayName)\n\(variant.note)",
                 attributes: [.font: NSFont.menuFont(ofSize: 0)])
             sub.addItem(entry)
         }
-
         item.submenu = sub
         return item
     }
 
-    @objc private func selectFluid(_ sender: NSMenuItem) {
+    @objc private func selectVariant(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let variant = FluidVariant(rawValue: raw) else { return }
-        onSelectFluid?(variant)
-    }
-
-    @objc private func selectModel(_ sender: NSMenuItem) {
-        guard let spec = sender.representedObject as? ModelSpec else { return }
-        onSelectModel?(spec)
+        onSelectVariant?(variant)
     }
 
     // MARK: text size

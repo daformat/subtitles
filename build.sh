@@ -11,7 +11,6 @@ cd "$(dirname "$0")"
 ROOT="$PWD"
 OUT="$ROOT/build"
 APP="$OUT/Subtitles.app"
-SHERPA="$ROOT/third_party/sherpa-onnx"
 export MACOSX_DEPLOYMENT_TARGET=14.2
 
 echo "==> building rust core"
@@ -44,8 +43,8 @@ PLIST
 
 echo "==> compiling swift app (SwiftPM)"
 # SwiftPM rather than raw swiftc because FluidAudio is only distributed as a
-# Swift package. The Rust core and sherpa archives are linked via linkerSettings
-# in Package.swift; they must already be built, which is why cargo runs first.
+# Swift package. The Rust core is linked via linkerSettings in Package.swift;
+# it must already be built, which is why cargo runs first.
 swift build -c release 2>&1 \
   | grep -vE "was built for newer 'macOS' version|ld: warning: object file" || true
 

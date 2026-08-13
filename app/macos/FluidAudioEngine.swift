@@ -35,8 +35,7 @@ enum FluidVariant: String, CaseIterable {
         }
     }
 
-    /// Upstream's own characterisation. Unlike the sherpa entries in
-    /// ModelCatalog, these are not numbers this project has measured.
+    /// Upstream's own characterisation — not numbers this project has measured.
     var note: String {
         switch self {
         case .eou160: return "120M · lowest latency · ~8% WER"
@@ -103,6 +102,13 @@ actor FluidAudioEngine {
     /// the (minutes-long, first-run) load is dropped with nothing to show for it.
     private let onFinal: @Sendable (String) -> Void
     private let onReady: @Sendable (Bool) -> Void
+    /// Rolling real-time factor. The core can no longer measure this — it does not
+    /// transcribe — so the health signal has to come from here.
+    private let onRTF: @Sendable (Float) -> Void
+
+    private var processedSeconds = 0.0
+    private var computeSeconds = 0.0
+    private var lastRTFReport = Date()
 
     /// Counts frames discarded because the engine was not loaded yet, so the
     /// "nothing is happening" case is observable instead of silent.
@@ -116,12 +122,14 @@ actor FluidAudioEngine {
          onPartial: @escaping @Sendable (String) -> Void,
          onStatus: @escaping @Sendable (String) -> Void,
          onFinal: @escaping @Sendable (String) -> Void,
-         onReady: @escaping @Sendable (Bool) -> Void) {
+         onReady: @escaping @Sendable (Bool) -> Void,
+         onRTF: @escaping @Sendable (Float) -> Void) {
         self.variant = variant
         self.onPartial = onPartial
         self.onStatus = onStatus
         self.onFinal = onFinal
         self.onReady = onReady
+        self.onRTF = onRTF
     }
 
     private static var pcmFormat: AVAudioFormat {
@@ -194,6 +202,7 @@ actor FluidAudioEngine {
             let slice = Array(pending.prefix(chunk))
             pending.removeFirst(chunk)
             guard let buf = buffer(from: slice) else { continue }
+            let started = Date()
             do {
                 if let eou {
                     _ = try await eou.process(audioBuffer: buf)
@@ -202,6 +211,17 @@ actor FluidAudioEngine {
                 }
             } catch {
                 onStatus("transcription error: \(error.localizedDescription)")
+            }
+
+            computeSeconds += Date().timeIntervalSince(started)
+            processedSeconds += Double(chunk) / 16000.0
+            // Report about once a second, over a rolling window so a bad moment
+            // does not haunt the average.
+            if Date().timeIntervalSince(lastRTFReport) >= 1.0, processedSeconds > 0 {
+                onRTF(Float(computeSeconds / processedSeconds))
+                lastRTFReport = Date()
+                computeSeconds = 0
+                processedSeconds = 0
             }
         }
     }

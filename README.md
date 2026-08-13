@@ -4,8 +4,9 @@ Live captions for whatever your Mac is playing — videos, calls, podcasts —
 rendered as an always-on-top overlay. Everything runs on-device; no audio ever
 leaves the machine.
 
-Measured **316 ms median / 489 ms p95** from word spoken to word on screen, at
-0.25 real-time factor on Apple Silicon.
+Transcription runs on the **Apple Neural Engine** via
+[FluidAudio](https://github.com/FluidInference/FluidAudio) (NVIDIA Parakeet),
+at roughly 0.15 real-time factor.
 
 ![status](https://img.shields.io/badge/platform-macOS%2014.2%2B-blue)
 
@@ -20,11 +21,13 @@ Measured **316 ms median / 489 ms p95** from word spoken to word on screen, at
 ## Quick start
 
 ```bash
-./scripts/fetch-deps.sh   # sherpa-onnx libs + ASR model (~400 MB, not versioned)
-./build.sh                # Rust core, Swift app, signed .app bundle
-./probe.sh                # confirm the audio permission actually took
-./run.sh                  # go
+./build.sh   # Rust core, Swift app, signed .app bundle
+./probe.sh   # confirm the audio permission actually took
+./run.sh     # go
 ```
+
+Models download themselves on first run (~440 MB from HuggingFace), so the first
+launch takes a few minutes before `engine ready` appears.
 
 `probe.sh` is not ceremony — see below.
 
@@ -59,11 +62,10 @@ The app lives in the menu bar (no Dock icon).
 | **Hold ⌥** | make the overlay draggable — it is click-through otherwise |
 | Menu bar | model, source, text size, overlay position, permission state |
 
-**Model** switches the ASR model at runtime, downloading it on demand (checksum
-verified) and remembering your choice. The menu shows each model's measured
-latency, RTF and WER so the trade-off is visible at the point of choosing.
-`pkill -USR1 -f Subtitles.app` cycles models, which makes A/B comparison
-scriptable.
+**Model** switches between Parakeet variants at runtime and remembers your choice.
+They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
+160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms.
+`pkill -USR1 -f Subtitles.app` cycles them, which makes A/B comparison scriptable.
 
 **Listen To** picks a source. Entries are app *families*: selecting "Google Chrome"
 captures Chrome and all its helper processes, which matters because browsers and
@@ -72,9 +74,7 @@ Electron apps never play audio from their main process.
 ### Command line
 
 ```
---model DIR        model directory
---threads N        ASR threads (default 2)
---int8             int8 weights
+--variant NAME     eou160 | eou320 | eou1280 | nemotron560 | nemotron1120 | nemotron2240
 --headless         no overlay, terminal output only
 --font-size N      overlay text size
 --reset-position   recentre the overlay
@@ -92,37 +92,30 @@ Electron apps never play audio from their main process.
 [resample 48k stereo → 16k mono]
         ↓
 [energy gate + pre-roll]      skips silence; replays ~1 s so no word starts cold
-        ↓
-[streaming Zipformer transducer]   sherpa-onnx, greedy
-        ↓
-[LocalAgreement-2 stabiliser]
-        ↓
-[sentence casing]
+        ↓                     ── C ABI: the core hands frames out here ──
+[FluidAudio · Parakeet]       CoreML on the Apple Neural Engine
         ↓
 [overlay]                     3-line pages, clears and restarts like broadcast subs
 ```
 
-Everything from the ring buffer through casing is a portable Rust core
-(`core/`) behind a small C ABI. The tap and the overlay are the only
-macOS-specific parts, so a Windows port means replacing those two, not the
-pipeline.
+Everything from the ring buffer to the C ABI is a portable Rust core (`core/`).
+The core deliberately does **not** transcribe — it hands 16 kHz mono frames out
+and FluidAudio takes them from there. The tap and the overlay are the only other
+macOS-specific parts, so a Windows port means replacing those, not the pipeline.
 
 Two choices worth knowing about:
 
-- **A streaming transducer, not Whisper.** Whisper is a 30-second-window
-  encoder-decoder; streaming it is a bolt-on that lands around 1.5–3 s. A
-  transducer emits as you speak and its output is monotonic, which also makes the
-  text stable enough that no anti-jitter machinery is needed.
-- **CPU, not CoreML.** Measured: CoreML was *worse* (RTF 0.41 vs 0.25) plus a 10 s
-  model-load penalty. Per-inference overhead dominates on 20 ms chunks.
+- **The Neural Engine, not the CPU.** Parakeet's streaming export re-encodes 5.6 s
+  of left context per 80 ms chunk. On CPU that measured RTF 10.7–31.8 — about
+  100× too slow. On the ANE it runs comfortably faster than real time.
+- **A streaming model, not Whisper.** Whisper is a 30-second-window
+  encoder-decoder; streaming it is a bolt-on that lands around 1.5–3 s.
 
 ## Layout
 
 ```
-core/          Rust: ring buffer, resampler, ASR binding, stabiliser, casing
-app/macos/     Swift: process tap, overlay panel, menu bar, hotkey
-third_party/   sherpa-onnx (fetched)
-models/        ASR model (fetched)
+core/          Rust: ring buffer, resampler, voice gate, pre-roll, C ABI
+app/macos/     Swift: process tap, FluidAudio engine, overlay, menu bar, hotkey
 spike/         throwaway probes from the measurement phase
 PLAN.md        design decisions, measurements, and everything that went wrong
 ```
@@ -130,7 +123,7 @@ PLAN.md        design decisions, measurements, and everything that went wrong
 ## Development
 
 ```bash
-cargo test --manifest-path core/Cargo.toml   # 21 tests
+cargo test --manifest-path core/Cargo.toml   # 11 tests
 ./build.sh && ./probe.sh && ./run.sh
 tail -f build/subtitles.log
 ```
@@ -141,16 +134,15 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 
 ## Known limits
 
-- Accuracy is measured on clean read speech (0.0 % WER on LibriSpeech clips). Real
-  podcasts, calls, and noisy audio will be meaningfully worse.
-- Sentence casing lowercases proper nouns — "Hester Prynne" becomes "hester
-  prynne". Fixing it properly needs a truecasing model.
-- English and French ship in the model picker; other languages need checking
-  against the sherpa-onnx model zoo.
-- **Parakeet is not offered**, despite being the obvious model to want — it emits
-  punctuation and true casing itself. Its streaming export re-encodes 5.6 s of
-  context per 80 ms chunk and measures RTF 10.7–31.8 on CPU, about 100× too slow.
-  Running it needs the Apple Neural Engine via CoreML (FluidAudio); see PLAN.md §11.
+- The shipped variants are **not measured by this project** — the numbers in the
+  menu are upstream's. The harness in `spike/latency` cannot drive FluidAudio, so
+  there is no like-for-like latency/WER comparison yet.
+- Only the EOU variants have been exercised in anger; the Nemotron ones are wired
+  but barely tested.
+- English only as configured. Parakeet v3 and the multilingual Nemotron models
+  exist in FluidAudio but are not exposed here yet.
+- First launch downloads ~440 MB and then compiles CoreML models, which takes
+  minutes.
 - Single display; the overlay uses the main screen.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of

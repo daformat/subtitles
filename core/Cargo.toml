@@ -10,7 +10,6 @@ name = "subs_core"
 crate-type = ["staticlib"]
 
 [build-dependencies]
-bindgen = "0.71"
 cbindgen = "0.29"
 
 [profile.release]

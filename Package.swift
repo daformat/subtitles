@@ -2,9 +2,8 @@
 import PackageDescription
 
 // The app is a SwiftPM executable so it can depend on FluidAudio, which is only
-// distributed as a Swift package. The Rust core and the sherpa-onnx archives are
-// linked in via linkerSettings — they are produced by build.sh before `swift
-// build` runs, and SPM has no notion of a cargo build step.
+// distributed as a Swift package. The Rust core is linked in via linkerSettings —
+// build.sh runs cargo first, since SPM has no notion of a cargo build step.
 //
 // NOTE: the package directory must not be named after a dependency. SPM derives
 // the root package's identity from its directory, and a collision makes it look
@@ -33,16 +32,7 @@ let package = Package(
             // a dependency.
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
-                .unsafeFlags([
-                    "-Lcore/target/release", "-lsubs_core",
-                    "-Lthird_party/sherpa-onnx/lib",
-                    "-lsherpa-onnx-c-api", "-lsherpa-onnx-core",
-                    "-lkaldi-native-fbank-core", "-lkaldi-decoder-core",
-                    "-lsherpa-onnx-kaldifst-core", "-lsherpa-onnx-fst",
-                    "-lsherpa-onnx-fstfar", "-lssentencepiece_core",
-                    "-lkissfft-float", "-lonnxruntime",
-                    "-lc++",
-                ]),
+                .unsafeFlags(["-Lcore/target/release", "-lsubs_core"]),
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("CoreML"),

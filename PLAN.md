@@ -4,7 +4,8 @@ Real-time transcription of system audio, rendered as an always-on-top subtitle o
 The product only works if the delay is small enough to feel live, so latency is the
 primary design constraint and everything below is subordinate to it.
 
-**Status:** Phase 3 complete, published to a private repo.
+**Status:** FluidAudio only — sherpa-onnx removed (§13).
+Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER, Silero VAD.
 **Repo:** https://github.com/daformat/subtitles
 See §8a (ASR latency) and §8b (capture) for measured results.
@@ -870,6 +871,45 @@ pause happened, or at zero if the engine restarted its transcript.
   but unverified.
 - `Parakeet Unified` (the variant with punctuation *and* casing) is not exposed
   yet — it is a third manager with a different context-window contract.
+
+---
+
+## 13. sherpa-onnx removed (2026-08-13)
+
+The app now has exactly one engine: FluidAudio, Parakeet on the Neural Engine.
+Everything sherpa is gone — the vendored archives, the bindgen build step, the
+model catalogue and downloader, and the sherpa recogniser in the core.
+
+What that deleted, and why it was safe:
+
+| Removed | Why it became dead |
+|---|---|
+| `core/src/asr.rs` | the core no longer transcribes |
+| `core/src/stabilize.rs` | LocalAgreement-2 stabilised sherpa hypotheses; FluidAudio emits whole transcripts |
+| `core/src/textcase.rs` | sentence casing fixed sherpa's ALL CAPS output |
+| `app/macos/ModelCatalog.swift` | catalogue + downloader for sherpa checkpoints; FluidAudio fetches its own |
+| `scripts/fetch-deps.sh`, `third_party/` | nothing left to vendor |
+| bindgen in `core/build.rs` | no C API to bind; cbindgen for the outward header stays |
+
+The core went from 1303 to 702 lines and is now purely the audio front end:
+capture → ring → resample → gate → pre-roll → frames out. Its C ABI lost
+`model_dir`, `num_threads`, `int8` and `external_engine` (there is no longer an
+alternative to being external), and the COMMITTED/TENTATIVE events (text no longer
+originates in the core).
+
+**RTF moved.** The core measured decode cost, which was the "am I falling behind"
+signal — and it can no longer see it. `FluidAudioEngine` now tracks its own
+compute-versus-audio ratio over a rolling window and reports it, so the health
+signal survives the move. Measured 0.13–0.15 on the ANE.
+
+Verified after removal: builds clean, 11 core tests pass, and live transcription
+still reaches the overlay.
+
+**The measurements in §8a and §11 are kept deliberately.** They are why the
+project ended up here — particularly the CPU-versus-ANE result, which is the whole
+justification for depending on FluidAudio at all. `spike/latency` still contains
+the harness that produced them, and still needs sherpa to run; see
+`spike/README.md`.
 
 ---
 
