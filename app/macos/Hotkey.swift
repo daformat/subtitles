@@ -9,6 +9,7 @@
 // For an app whose whole value proposition is "grant me audio access", not asking
 // for keyboard access too is worth the older API.
 
+import CSubs
 import AppKit
 import Carbon.HIToolbox
 

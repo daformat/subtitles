@@ -8,6 +8,7 @@
 // directly makes the terminal the TCC-responsible process and the tap then
 // delivers all-zero audio with no error anywhere — Spike 0B Finding 2.
 
+import CSubs
 import AppKit
 import Carbon.HIToolbox
 import Darwin
@@ -110,11 +111,16 @@ nonisolated(unsafe) var currentModelSpec: ModelSpec? = resolveInitialModel()
 nonisolated(unsafe) var modelBusyMessage: String?
 let modelInstaller = ModelInstaller()
 
+/// Set when the FluidAudio engine is active; nil when sherpa is driving.
+nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
+nonisolated(unsafe) var currentFluidVariant: FluidVariant?
+
 // ── persisted settings ──
 enum Defaults {
     static let fontSize = "overlay.fontSize"
     static let sourceID = "source.id"
     static let modelID = "model.id"
+    static let fluidVariant = "engine.fluid"
     static let sourceName = "source.name"
 }
 
@@ -123,6 +129,10 @@ enum Defaults {
 /// callback would be far worse than a missed frame at the moment of toggling.
 nonisolated(unsafe) var isPaused = false
 
+/// True when transcription is handled outside the core (FluidAudio on the ANE).
+/// The core then supplies gated, pre-rolled 16 kHz frames instead of transcribing.
+nonisolated(unsafe) var usingExternalEngine = false
+
 // Touch NSApplication before any window exists. .accessory is applied at the
 // bottom of this file, just before the run loop starts.
 let app = NSApplication.shared
@@ -130,6 +140,16 @@ let app = NSApplication.shared
 // ── engine ──
 // Global rather than captured: the audio callback must not touch ARC.
 nonisolated(unsafe) var engine: OpaquePointer?
+
+/// Receives gated, pre-rolled 16 kHz frames from the core when an external engine
+/// is active. Runs on the core's worker thread, not the audio thread, so the hop
+/// into the actor is safe here.
+let onAudioFrames: @convention(c) (UnsafePointer<Float>?, UInt, UnsafeMutableRawPointer?) -> Void = {
+    ptr, count, _ in
+    guard let ptr, count > 0, let fluid = fluidEngine else { return }
+    let samples = Array(UnsafeBufferPointer(start: ptr, count: Int(count)))
+    Task { await fluid.feed(samples) }
+}
 
 /// Renderer state. Events are marshalled onto the main thread before reaching
 /// this, because the overlay is AppKit and the core calls back from its worker.
@@ -242,7 +262,9 @@ let onEvent: @convention(c) (UnsafePointer<subs_event_t>?, UnsafeMutableRawPoint
         switch kind {
         case SUBS_EVENT_COMMITTED: renderer.commit(text)
         case SUBS_EVENT_TENTATIVE: renderer.tentative(text)
-        case SUBS_EVENT_ENDPOINT: renderer.endpoint()
+        case SUBS_EVENT_ENDPOINT:
+            renderer.endpoint()
+            if let fluid = fluidEngine { Task { await fluid.endUtterance() } }
         case SUBS_EVENT_PAUSE: renderer.overlay?.markPause()
         case SUBS_EVENT_STATUS:
             renderer.status(text, rtf: rtf, silentSeconds: silent, dropped: dropped)
@@ -295,7 +317,8 @@ engine = model.withCString { modelPtr in
         num_threads: threads,
         input_sample_rate: UInt32(format.sampleRate),
         input_channels: UInt16(format.channels),
-        int8: useInt8 ? 1 : 0)
+        int8: useInt8 ? 1 : 0,
+                external_engine: usingExternalEngine ? 1 : 0)
     return subs_create(&cfg)
 }
 
@@ -354,7 +377,8 @@ func swapEngine(toDirectory dir: String, label: String) {
                 num_threads: threads,
                 input_sample_rate: UInt32(format.sampleRate),
                 input_channels: UInt16(format.channels),
-                int8: useInt8 ? 1 : 0)
+                int8: useInt8 ? 1 : 0,
+                external_engine: usingExternalEngine ? 1 : 0)
             return subs_create(&cfg)
         }
         guard let created else {
@@ -400,6 +424,13 @@ func applyModel(_ spec: ModelSpec) {
     UserDefaults.standard.set(spec.id, forKey: Defaults.modelID)
 
     if ModelCatalog.isInstalled(spec) {
+        // Engine choice is exclusive: leaving FluidAudio means tearing it down
+        // and putting the recogniser back inside the core.
+        if let fluid = fluidEngine { Task { await fluid.shutdown() } }
+        fluidEngine = nil
+        currentFluidVariant = nil
+        usingExternalEngine = false
+        UserDefaults.standard.removeObject(forKey: Defaults.fluidVariant)
         currentModelSpec = spec
         swapEngine(toDirectory: ModelCatalog.directory(for: spec).path, label: spec.name)
         return
@@ -419,6 +450,86 @@ func applyModel(_ spec: ModelSpec) {
             err("\(red)could not install \(spec.name):\(reset) \(error.localizedDescription)")
         }
     })
+}
+
+/// Switch to FluidAudio: the core stops transcribing and just supplies frames.
+func applyFluidVariant(_ variant: FluidVariant) {
+    guard modelBusyMessage == nil else { return }
+    UserDefaults.standard.set(variant.rawValue, forKey: Defaults.fluidVariant)
+    UserDefaults.standard.removeObject(forKey: Defaults.modelID)
+
+    currentFluidVariant = variant
+    currentModelSpec = nil
+    usingExternalEngine = true
+
+    modelBusyMessage = "Loading \(variant.displayName)…"
+    statusMenu?.updateHealthIndicator()
+    renderer.overlay?.clearAndHide()
+    tap.stop()
+
+    // FluidAudio hands back the whole transcript each update rather than deltas,
+    // so it drives the overlay directly and the core's stabiliser sits idle.
+    // Parakeet also punctuates and cases its own output, so the casing pass is
+    // not wanted here either.
+    let fluid = FluidAudioEngine(
+        variant: variant,
+        onPartial: { text in
+            DispatchQueue.main.async { renderer.overlay?.showFullText(text) }
+        },
+        onStatus: { message in
+            DispatchQueue.main.async {
+                modelBusyMessage = message.isEmpty ? nil : message
+                statusMenu?.updateHealthIndicator()
+                if !message.isEmpty { err(message) }
+            }
+        },
+        onReady: { ok in
+            DispatchQueue.main.async {
+                err(ok ? "engine ready: \(variant.displayName)"
+                       : "\(red)engine failed to load\(reset)")
+                modelBusyMessage = nil
+                statusMenu?.updateHealthIndicator()
+            }
+        })
+    fluidEngine = fluid
+
+    DispatchQueue.global(qos: .userInitiated).async {
+        let old = engine
+        engine = nil
+        subs_stop(old)
+        subs_destroy(old)
+
+        // model_dir is unused in external mode but must still be a valid string.
+        let created: OpaquePointer? = "".withCString { ptr in
+            var cfg = subs_config_t(
+                model_dir: ptr,
+                num_threads: threads,
+                input_sample_rate: UInt32(format.sampleRate),
+                input_channels: UInt16(format.channels),
+                int8: useInt8 ? 1 : 0,
+                external_engine: 1)
+            return subs_create(&cfg)
+        }
+        guard let created else {
+            DispatchQueue.main.async { modelBusyMessage = nil; resumeCapture() }
+            return
+        }
+        subs_set_callback(created, onEvent, nil)
+        subs_set_audio_callback(created, onAudioFrames, nil)
+        let rc = subs_start(created)
+
+        // Model download on first run can take minutes; the status line carries
+        // progress via onStatus.
+        Task { await fluid.load() }
+
+        DispatchQueue.main.async {
+            engine = rc == 0 ? created : nil
+            if rc != 0 { subs_destroy(created) }
+            statusMenu?.updateHealthIndicator()
+            resumeCapture()
+            err("engine: \(variant.displayName)")
+        }
+    }
 }
 
 func shutdownCleanly() -> Never {
@@ -444,6 +555,8 @@ if useOverlay {
     menu.currentModelID = { currentModelSpec?.id ?? "" }
     menu.modelBusy = { modelBusyMessage }
     menu.onSelectModel = { applyModel($0) }
+    menu.onSelectFluid = { applyFluidVariant($0) }
+    menu.currentFluidID = { currentFluidVariant?.rawValue ?? "" }
     menu.statusLine = {
         if let busy = modelBusyMessage { return (busy, true) }
         if !renderer.audioHealthy { return ("No audio reaching Subtitles", false) }
@@ -491,6 +604,13 @@ if useOverlay {
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
 
     err("overlay on — click-through; hold ⌥ to drag it. ⌥⌘S pauses. Menu bar has settings.")
+}
+
+// Restore a FluidAudio selection. Done after the tap and menu exist, because
+// switching engines tears the capture down and back up.
+if let raw = UserDefaults.standard.string(forKey: Defaults.fluidVariant),
+   let variant = FluidVariant(rawValue: raw) {
+    applyFluidVariant(variant)
 }
 
 err("listening. ctrl-C to stop.\n")

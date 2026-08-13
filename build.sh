@@ -42,31 +42,25 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "==> compiling swift app"
-swiftc -O \
-  -o "$APP/Contents/MacOS/subtitles" \
-  -import-objc-header "$ROOT/core/include/subs.h" \
-  "$ROOT/app/macos/SystemAudioTap.swift" \
-  "$ROOT/app/macos/Overlay.swift" \
-  "$ROOT/app/macos/Hotkey.swift" \
-  "$ROOT/app/macos/MenuBar.swift" \
-  "$ROOT/app/macos/ModelCatalog.swift" \
-  "$ROOT/app/macos/main.swift" \
-  "$ROOT/core/target/release/libsubs_core.a" \
-  "$SHERPA/lib/libsherpa-onnx-c-api.a" \
-  "$SHERPA/lib/libsherpa-onnx-core.a" \
-  "$SHERPA/lib/libkaldi-native-fbank-core.a" \
-  "$SHERPA/lib/libkaldi-decoder-core.a" \
-  "$SHERPA/lib/libsherpa-onnx-kaldifst-core.a" \
-  "$SHERPA/lib/libsherpa-onnx-fst.a" \
-  "$SHERPA/lib/libsherpa-onnx-fstfar.a" \
-  "$SHERPA/lib/libssentencepiece_core.a" \
-  "$SHERPA/lib/libkissfft-float.a" \
-  "$SHERPA/lib/libonnxruntime.a" \
-  -lc++ \
-  -framework CoreAudio -framework AudioToolbox -framework Foundation \
-  -framework CoreML -framework Accelerate \
-  2>&1 | grep -vE "was built for newer 'macOS' version|ld: warning: object file" || true
+echo "==> compiling swift app (SwiftPM)"
+# SwiftPM rather than raw swiftc because FluidAudio is only distributed as a
+# Swift package. The Rust core and sherpa archives are linked via linkerSettings
+# in Package.swift; they must already be built, which is why cargo runs first.
+swift build -c release 2>&1 \
+  | grep -vE "was built for newer 'macOS' version|ld: warning: object file" || true
+
+BIN=".build/release/subtitles"
+[ -x "$BIN" ] || { echo "!! swift build produced no binary" >&2; exit 1; }
+cp "$BIN" "$APP/Contents/MacOS/subtitles"
+
+# SwiftPM emits resource bundles beside the binary; they must travel with the app
+# or anything depending on them fails only at runtime, on the code path that uses
+# them.
+for bundle in .build/release/*.bundle; do
+  [ -e "$bundle" ] || continue
+  cp -R "$bundle" "$APP/Contents/Resources/"
+  echo "    bundled $(basename "$bundle")"
+done
 
 if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   echo "!! swift link failed" >&2

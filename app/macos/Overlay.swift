@@ -14,6 +14,7 @@
 // permission, and asking for a second scary prompt to enable dragging is a bad
 // trade.
 
+import CSubs
 import AppKit
 
 // MARK: - Panel
@@ -261,6 +262,31 @@ final class OverlayController {
 
         view.committed = page
         view.tentative = tentative
+        layout()
+        show()
+    }
+
+    /// For engines that emit a whole transcript each update rather than deltas
+    /// (FluidAudio). Keeps the tail that fits, so the box still never exceeds
+    /// maxLines and the newest words are always the ones on screen.
+    func showFullText(_ text: String) {
+        if startFreshOnNextText, !text.isEmpty {
+            startFreshOnNextText = false
+        }
+        pendingCommit = ""
+        tentative = ""
+
+        var words = text.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        var candidate = words.joined(separator: " ")
+        while words.count > 1,
+              view.lineCount(committed: candidate, tentative: "", width: maxWidth) > view.maxLines {
+            words.removeFirst()
+            candidate = words.joined(separator: " ")
+        }
+        page = candidate
+
+        view.committed = page
+        view.tentative = ""
         layout()
         show()
     }

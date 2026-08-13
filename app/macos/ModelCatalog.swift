@@ -7,6 +7,7 @@
 // Notably absent: NVIDIA Parakeet. See the note at the bottom of this file; it is
 // a measurement result, not an oversight.
 
+import CSubs
 import AppKit
 import CryptoKit
 

@@ -1,0 +1,7 @@
+// Exposes the generated C ABI to SwiftPM as a clang module, so the Swift target
+// can `import CSubs` instead of relying on -import-objc-header with a path that
+// only resolves from the right working directory.
+module CSubs {
+    header "subs.h"
+    export *
+}

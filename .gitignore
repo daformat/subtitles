@@ -30,3 +30,7 @@ spike/tap/*.txt
 
 # ── macOS ──
 .DS_Store
+
+# SwiftPM
+.build/
+spike/fa-probe/.build/

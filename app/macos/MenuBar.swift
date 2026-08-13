@@ -8,6 +8,7 @@
 // are playing audio right now" is exactly the kind of thing that is stale a second
 // after you cache it.
 
+import CSubs
 import AppKit
 
 final class StatusMenuController: NSObject, NSMenuDelegate {
@@ -29,6 +30,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
     var onSelectModel: ((ModelSpec) -> Void)?
+    var onSelectFluid: ((FluidVariant) -> Void)?
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -37,6 +39,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var currentSource: () -> AudioSource = { .allSystemAudio }
     var currentFontSize: () -> CGFloat = { 30 }
     var currentModelID: () -> String = { "" }
+    var currentFluidID: () -> String = { "" }
     /// Non-nil while a model is downloading or loading; disables the picker.
     var modelBusy: () -> String? = { nil }
     /// (headline, isHealthy) — e.g. ("Listening · RTF 0.12", true)
@@ -238,8 +241,37 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                 attributes: [.font: NSFont.menuFont(ofSize: 0)])
             sub.addItem(entry)
         }
+        // FluidAudio runs Parakeet on the Neural Engine. Separate section
+        // because it is a different engine, not just a different checkpoint:
+        // it punctuates and cases its own output, and the core stops
+        // transcribing entirely.
+        sub.addItem(.separator())
+        let header = NSMenuItem(title: "FluidAudio · Apple Neural Engine",
+                                action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        sub.addItem(header)
+
+        let currentFluid = currentFluidID()
+        for variant in FluidVariant.allCases {
+            let entry = NSMenuItem(title: variant.displayName,
+                                   action: #selector(selectFluid(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = variant.rawValue
+            entry.state = variant.rawValue == currentFluid ? .on : .off
+            entry.attributedTitle = NSAttributedString(
+                string: "\(variant.displayName)\n\(variant.note)",
+                attributes: [.font: NSFont.menuFont(ofSize: 0)])
+            sub.addItem(entry)
+        }
+
         item.submenu = sub
         return item
+    }
+
+    @objc private func selectFluid(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let variant = FluidVariant(rawValue: raw) else { return }
+        onSelectFluid?(variant)
     }
 
     @objc private func selectModel(_ sender: NSMenuItem) {

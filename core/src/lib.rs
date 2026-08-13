@@ -55,6 +55,15 @@ pub struct subs_config_t {
     pub input_sample_rate: u32,
     pub input_channels: u16,
     pub int8: i32,
+    /// Non-zero: do not create a recognizer. The core still does capture,
+    /// resampling, gating and pre-roll, but hands the 16 kHz mono frames to
+    /// `subs_set_audio_callback` instead of transcribing them.
+    ///
+    /// This is the seam for engines that live outside the core — FluidAudio runs
+    /// Parakeet on the Apple Neural Engine from Swift, and cannot be driven from
+    /// Rust. The audio pipeline is measured and worth keeping either way; only
+    /// the recognizer is swapped.
+    pub external_engine: i32,
 }
 
 pub const SUBS_EVENT_COMMITTED: i32 = 0;
@@ -84,10 +93,20 @@ pub struct subs_event_t {
 
 pub type subs_event_cb = Option<unsafe extern "C" fn(*const subs_event_t, *mut c_void)>;
 
+/// Receives gated, pre-rolled 16 kHz mono frames when `external_engine` is set.
+/// Called on the worker thread, never the audio thread.
+pub type subs_audio_cb = Option<unsafe extern "C" fn(*const f32, usize, *mut c_void)>;
+
 struct Callback {
     cb: subs_event_cb,
     ctx: *mut c_void,
 }
+
+struct AudioSink {
+    cb: subs_audio_cb,
+    ctx: *mut c_void,
+}
+unsafe impl Send for AudioSink {}
 // Safety: the pointer is opaque to us; the caller guarantees it stays valid
 // between subs_set_callback and subs_destroy.
 unsafe impl Send for Callback {}
@@ -113,6 +132,7 @@ pub struct Engine {
     running: Arc<AtomicBool>,
     worker: Option<std::thread::JoinHandle<()>>,
     cb: Option<Callback>,
+    audio_sink: Option<AudioSink>,
     cfg: OwnedConfig,
 }
 
@@ -123,6 +143,7 @@ struct OwnedConfig {
     input_rate: u32,
     channels: u16,
     int8: bool,
+    external_engine: bool,
 }
 
 // ── C ABI ────────────────────────────────────────────────────────────────────
@@ -150,12 +171,14 @@ pub extern "C" fn subs_create(cfg: *const subs_config_t) -> *mut Engine {
         running: Arc::new(AtomicBool::new(false)),
         worker: None,
         cb: None,
+        audio_sink: None,
         cfg: OwnedConfig {
             model_dir: model_dir.to_string(),
             num_threads: cfg.num_threads,
             input_rate: cfg.input_sample_rate,
             channels: cfg.input_channels,
             int8: cfg.int8 != 0,
+            external_engine: cfg.external_engine != 0,
         },
     }))
 }
@@ -164,6 +187,13 @@ pub extern "C" fn subs_create(cfg: *const subs_config_t) -> *mut Engine {
 pub extern "C" fn subs_set_callback(e: *mut Engine, cb: subs_event_cb, ctx: *mut c_void) {
     let Some(e) = (unsafe { e.as_mut() }) else { return };
     e.cb = Some(Callback { cb, ctx });
+}
+
+/// Only meaningful with `external_engine`. Must be set before `subs_start`.
+#[no_mangle]
+pub extern "C" fn subs_set_audio_callback(e: *mut Engine, cb: subs_audio_cb, ctx: *mut c_void) {
+    let Some(e) = (unsafe { e.as_mut() }) else { return };
+    e.audio_sink = Some(AudioSink { cb, ctx });
 }
 
 /// Realtime-safe: copies into the ring and returns. Called from the audio thread.
@@ -186,15 +216,21 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
     }
     let Some(cb) = e.cb.take() else { return -2 };
 
-    let mut recognizer = match asr::Recognizer::new(&e.cfg.model_dir, e.cfg.num_threads, e.cfg.int8)
-    {
-        Ok(r) => r,
-        Err(msg) => {
-            cb.emit(SUBS_EVENT_STATUS, &format!("error: {msg}"), 0.0, 0.0, 0.0, 0);
-            e.cb = Some(cb);
-            return -3;
+    // With an external engine there is no recognizer to build: the core supplies
+    // gated, pre-rolled 16 kHz audio and someone else transcribes it.
+    let mut recognizer = if e.cfg.external_engine {
+        None
+    } else {
+        match asr::Recognizer::new(&e.cfg.model_dir, e.cfg.num_threads, e.cfg.int8) {
+            Ok(r) => Some(r),
+            Err(msg) => {
+                cb.emit(SUBS_EVENT_STATUS, &format!("error: {msg}"), 0.0, 0.0, 0.0, 0);
+                e.cb = Some(cb);
+                return -3;
+            }
         }
     };
+    let audio_sink = e.audio_sink.take();
 
     e.running.store(true, Ordering::SeqCst);
     let running = e.running.clone();
@@ -216,6 +252,11 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
         let mut endpointed = true;
         let mut peak_dbfs = -120.0f32;
         let mut was_gated = false;
+        // External engines keep their own rolling buffer across gate cycles, so
+        // replaying pre-roll on every gate open feeds them the same audio twice
+        // and they emit stutters ("play on play on play on"). Only prime after a
+        // reset, which is the one moment their context is genuinely empty.
+        let mut needs_preroll = true;
         // ~1 s of recent 16 kHz mono, replayed into the recognizer whenever the
         // gate opens so it never starts a word cold.
         let preroll_cap = OUT_RATE as usize;
@@ -301,6 +342,24 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
 
             if gated_on {
                 let t0 = Instant::now();
+
+                // External engine: hand over the frames and skip everything the
+                // core would otherwise do with them. Stabilisation and casing are
+                // the outside engine's problem — FluidAudio's Parakeet models
+                // already emit punctuation and true casing themselves.
+                if let Some(sink) = audio_sink.as_ref() {
+                    if let Some(f) = sink.cb {
+                        if needs_preroll {
+                            needs_preroll = false;
+                            let history: Vec<f32> = preroll.iter().copied().collect();
+                            if !history.is_empty() {
+                                unsafe { f(history.as_ptr(), history.len(), sink.ctx) }
+                            }
+                        }
+                        unsafe { f(mono.as_ptr(), mono.len(), sink.ctx) }
+                    }
+                    decode_cpu += t0.elapsed().as_secs_f64();
+                }
                 // Pre-roll on every gate opening.
                 //
                 // Two problems, one fix. (1) The gate only opens once a block
@@ -310,17 +369,18 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
                 // or more. Measured: without this the second utterance lost its
                 // first six words, while the same model decoding the same clip
                 // offline (one continuous stream, never reset) got them all.
-                if !was_gated {
-                    let history: Vec<f32> = preroll.iter().copied().collect();
-                    if !history.is_empty() {
-                        recognizer.accept(&history, OUT_RATE as i32);
+                else if let Some(rec) = recognizer.as_mut() {
+                    if !was_gated {
+                        let history: Vec<f32> = preroll.iter().copied().collect();
+                        if !history.is_empty() {
+                            rec.accept(&history, OUT_RATE as i32);
+                        }
                     }
-                }
-                recognizer.accept(&mono, OUT_RATE as i32);
-                recognizer.decode();
-                decode_cpu += t0.elapsed().as_secs_f64();
+                    rec.accept(&mono, OUT_RATE as i32);
+                    rec.decode();
+                    decode_cpu += t0.elapsed().as_secs_f64();
 
-                let update = stab.push(&recognizer.tokens());
+                let update = stab.push(&rec.tokens());
                 let rtf = if audio_seen > 0.0 {
                     (decode_cpu / audio_seen) as f32
                 } else {
@@ -360,6 +420,7 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
                         ring.dropped() as u64,
                     );
                 }
+                }
             }
 
             if was_gated && !gated_on {
@@ -381,7 +442,11 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
                 // Flush before resetting. Anything still tentative has been shown
                 // to the reader but never confirmed; dropping it on reset silently
                 // loses the tail of every utterance the model was unsure about.
-                let tail = textcase::natural_case(&stab.flush(), sentence_start);
+                let tail = if recognizer.is_some() {
+                    textcase::natural_case(&stab.flush(), sentence_start)
+                } else {
+                    String::new()
+                };
                 if !tail.is_empty() {
                     cb.emit(
                         SUBS_EVENT_COMMITTED,
@@ -392,7 +457,10 @@ pub extern "C" fn subs_start(e: *mut Engine) -> i32 {
                         ring.dropped() as u64,
                     );
                 }
-                recognizer.reset();
+                if let Some(rec) = recognizer.as_mut() {
+                    rec.reset();
+                }
+                needs_preroll = true;
                 stab.reset();
                 last_tentative.clear();
                 sentence_start = true;
@@ -468,6 +536,7 @@ mod tests {
             input_sample_rate: 48000,
             input_channels: 2,
             int8: 0,
+            external_engine: 0,
         };
         // creation succeeds (it is just bookkeeping); start is where the model loads
         let e = subs_create(&cfg);
@@ -487,6 +556,7 @@ mod tests {
             input_sample_rate: 48000,
             input_channels: 2,
             int8: 0,
+            external_engine: 0,
         };
         let e = subs_create(&cfg);
         let samples = vec![0.5f32; 960];

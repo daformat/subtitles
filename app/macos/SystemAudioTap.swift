@@ -4,6 +4,7 @@
 // so the user sees the lighter audio-capture permission rather than the Screen
 // Recording prompt. Validated in Spike 0B; see PLAN.md §8b.
 
+import CSubs
 import AppKit
 import AudioToolbox
 import CoreAudio

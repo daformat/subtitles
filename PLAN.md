@@ -781,6 +781,77 @@ different proposition and needs its own measurement.
 
 ---
 
+## 12. FluidAudio engine (DONE, 2026-08-13)
+
+Parakeet now runs, on the Apple Neural Engine, selectable from the menu bar
+alongside the sherpa models. Verified end to end: engine switches, models download
+from HuggingFace, and live transcription reaches the overlay.
+
+### The seam
+
+The Rust core keeps capture, resampling, gating and pre-roll — that pipeline is
+measured and worth keeping. Only the *recogniser* moves out, via a new
+`external_engine` config flag: the core then emits gated, pre-rolled 16 kHz mono
+frames through `subs_set_audio_callback` instead of transcribing them, and Swift
+drives FluidAudio and the overlay directly. The core's stabiliser and sentence
+casing sit idle, which is correct — Parakeet punctuates and cases its own output.
+
+### Configurations exposed
+
+| Manager | Variants |
+|---|---|
+| `StreamingEouAsrManager` (Parakeet EOU 120M) | 160 / 320 / 1280 ms |
+| `StreamingNemotronAsrManager` (0.6B) | 560 / 1120 / 2240 ms |
+
+### Findings
+
+**External engines must not be re-primed with pre-roll.** The core replays ~1 s of
+history whenever the gate opens, which is right for a recogniser that gets reset at
+endpoints. FluidAudio keeps its own rolling buffer across gate cycles, so the
+replay fed it the same audio twice and it stuttered — *"whose place was play on
+play on play on leonard for ever"* instead of *"whose place was on that same
+dishonoured bosom to connect her parent for ever"*. Pre-roll is now sent only after
+a reset, when the engine's context is genuinely empty.
+
+**Do not pass a bare `MLModelConfiguration()`.** FluidAudio's own source notes that
+its default is `.cpuAndNeuralEngine`, and that under `.all` CoreML routes the int8
+encoder to the GPU and runs ~10× slower — i.e. it would silently undo the entire
+reason for using it.
+
+**Loading is slow and was silently swallowing audio.** First run downloads ~440 MB
+from HuggingFace and then compiles CoreML models; `feed` dropped everything until
+`loaded` flipped, with nothing to show for it. There is now an explicit ready
+signal and a dropped-frame counter.
+
+### Build-system consequences
+
+FluidAudio is only distributed as a Swift package, so the app moved from raw
+`swiftc` to SwiftPM (`Package.swift`). Two traps worth recording:
+
+- **Never name the package directory after a dependency.** SPM derives the root
+  package's identity from its directory, so a `fluidaudio/` directory made it look
+  for FluidAudio's products *inside itself*, failing with the thoroughly confusing
+  `product 'FluidAudio' not found in package 'FluidAudio'`.
+- swift-tools-version 6 switches the target to the Swift 6 language mode, which
+  the existing AppKit code fails under (main-actor isolation). Pinned to
+  `.swiftLanguageMode(.v5)`; migrating properly is worth doing, but not as a side
+  effect of adding a dependency.
+- The C ABI is exposed as a clang module (`core/include/module.modulemap`) rather
+  than `-import-objc-header`, whose relative path only resolves from the right
+  working directory.
+
+### Not done
+
+- Not measured. The sherpa numbers in this document come from this repo's harness;
+  the FluidAudio variants have only been smoke-tested. A like-for-like latency/WER
+  comparison is the obvious next step, and the harness cannot currently drive them.
+- Only EOU 320 ms has actually been exercised; the other five variants are wired
+  but unverified.
+- `Parakeet Unified` (the variant with punctuation *and* casing) is not exposed
+  yet — it is a third manager with a different context-window contract.
+
+---
+
 ## 10. References
 
 - sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD
