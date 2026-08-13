@@ -4,9 +4,9 @@ Real-time transcription of system audio, rendered as an always-on-top subtitle o
 The product only works if the delay is small enough to feel live, so latency is the
 primary design constraint and everything below is subordinate to it.
 
-**Status:** FluidAudio only — sherpa-onnx removed (§13).
+**Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
 Phase 3 complete, published to a repo.
-Remaining before this is shippable: stable signing identity, real-world WER, Silero VAD.
+Remaining before this is shippable: stable signing identity, real-world WER.
 **Repo:** https://github.com/daformat/subtitles
 See §8a (ASR latency) and §8b (capture) for measured results.
 **Last updated:** 2026-08-13
@@ -1096,6 +1096,62 @@ outstanding item since Phase 1 and now has a concrete symptom attached to it.
 
 The lesson is the recurring one in this document: I twice guessed at an anchor
 arithmetic bug that did not exist. One `err()` line found it immediately.
+
+---
+
+## 17. Silero VAD (2026-08-13)
+
+The energy gate only knows loud from quiet, so a backing track was fed straight to
+the recogniser and poisoned its encoder context (§16). Silero VAD now decides what
+is speech before anything reaches Parakeet.
+
+### Wired as a parallel gate, never in the delay path
+
+Silero decides on 4096-sample chunks — **256 ms** at 16 kHz. Buffering audio until
+a verdict arrives would have added that to *every* subtitle. Instead the verdict
+only decides whether to keep feeding: audio is never held up, so 256 ms is decision
+*granularity*, not latency. At worst a quarter-second of music slips through, or
+the cut lands a quarter-second late.
+
+Gating on a detector can clip word onsets, so the engine keeps its own ~1 s
+pre-roll and replays it at each speech onset — the same mechanism that fixed cold
+starts in the core. Silero's own hysteresis (`state.triggered`) is used rather than
+thresholding a raw probability, so brief dips mid-word do not shred the audio.
+
+### Measured
+
+| | Value |
+|---|---|
+| Speech detected | **65 %** of gated-on audio |
+| Actual speech in the test file | 66 % (23.3 s of 35.3 s) |
+| RTF with VAD | 0.10–0.11 |
+| RTF without | 0.10 |
+
+It identified the 12 s tone as non-speech almost exactly, and costs about **0.01
+RTF** — the "another model must cost something" worry does not materialise, because
+Silero is ~200k parameters against Parakeet's 0.6B.
+
+### A measurement bug of my own making ⚠️
+
+The first comparison read **0.13 with VAD against 0.10 without**, and I nearly
+reported that the VAD cost 30 % more. It was an artefact: `processedSeconds`
+counted only audio that reached the recogniser, while `computeSeconds` included
+VAD work on *all* audio. Rejecting 35 % of the stream shrank the denominator and
+inflated RTF exactly when the pipeline was doing *less* work. RTF is now measured
+against all audio seen.
+
+Worth remembering as a class: when adding a stage that *removes* work, check that
+the health metric's denominator did not move with it.
+
+### Consequence
+
+§16's context reset is now belt-and-braces rather than the fix — with music never
+reaching the recogniser there is no polluted context to drop. It is kept because it
+costs nothing and covers non-speech the VAD lets through.
+
+Off/on from the menu (**Skip Non-Speech (VAD)**), default on. The status line now
+reports the speech fraction alongside RTF, so "how much of what I am hearing is
+actually speech" is visible.
 
 ---
 

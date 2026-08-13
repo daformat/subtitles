@@ -71,6 +71,12 @@ the only variant that emits punctuation and capitalisation itself — at the cos
 The overlay fades four seconds after the last *new* text, not after the audio goes
 quiet — so a backing track no longer pins a stale subtitle on screen.
 
+**Skip Non-Speech (VAD)** runs Silero ahead of the recogniser so music never
+reaches it — without this, a backing track fills the encoder's context and the
+first words after it are lost. Measured at ~0.01 RTF, and it identified a 12 s tone
+as non-speech to within one percent. On by default. The status line shows what
+fraction of the audio it considers speech.
+
 **New Box On Speaker Change** starts a fresh subtitle box when someone else starts
 talking, the same way a pause or end-of-utterance does. Off by default because it
 runs a second model (Sortformer) on the Neural Engine: measured RTF went from
@@ -151,6 +157,8 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   but barely tested.
 - English only as configured. Parakeet v3 and the multilingual Nemotron models
   exist in FluidAudio but are not exposed here yet.
+- Singing is speech as far as the VAD is concerned, so vocal music will be
+  transcribed as lyrics.
 - Speaker-change breaks are **retrospective**: diarization needs ~1 s of warmup and
   reports on a ~0.5 s cadence, so a word or two of the new speaker can land on the
   outgoing box before it clears. Waiting for the label instead would delay every

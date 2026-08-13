@@ -30,6 +30,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onSelectSource: ((AudioSource) -> Void)?
     var onSelectVariant: ((FluidVariant) -> Void)?
     var onToggleSpeakerBreaks: (() -> Void)?
+    var onToggleVAD: (() -> Void)?
+    var vadEnabled: () -> Bool = { true }
     var speakerBreaksEnabled: () -> Bool = { false }
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
@@ -138,6 +140,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(sourceMenuItem())
         menu.addItem(modelMenuItem())
         menu.addItem(textSizeMenuItem())
+
+        let vad = NSMenuItem(title: "Skip Non-Speech (VAD)",
+                             action: #selector(toggleVAD), keyEquivalent: "")
+        vad.target = self
+        vad.state = vadEnabled() ? .on : .off
+        vad.toolTip = "Stops music reaching the recogniser"
+        menu.addItem(vad)
 
         let speakers = NSMenuItem(title: "New Box On Speaker Change",
                                   action: #selector(toggleSpeakerBreaks), keyEquivalent: "")
@@ -303,6 +312,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: actions
 
     @objc private func togglePause() { onTogglePause?(); refreshIcon() }
+    @objc private func toggleVAD() { onToggleVAD?() }
     @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }

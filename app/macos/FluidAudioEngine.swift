@@ -155,6 +155,17 @@ actor FluidAudioEngine {
     private var unified: StreamingUnifiedAsrManager?
     /// Optional: breaks the page when the speaker changes. nil when disabled.
     private var speakers: SpeakerTracker?
+    /// Optional: decides what is speech, so music never reaches the recogniser.
+    private var vad: VoiceDetector?
+
+    // VAD gating state. `history` is a ~1 s pre-roll replayed at each speech
+    // onset, so gating on VAD cannot clip the first word — the same mechanism
+    // that fixed cold starts in the core.
+    private var vadPending: [Float] = []
+    private var asrPending: [Float] = []
+    private var history: [Float] = []
+    private var wasSpeech = false
+    private let historyCap = 16000
 
     /// Unified's `consumeWordTimings()` *drains*, so the running transcript has to
     /// be accumulated here. Cleared at each utterance boundary so an always-on
@@ -198,7 +209,8 @@ actor FluidAudioEngine {
          onFinal: @escaping @Sendable ([TimedWord]) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
          onRTF: @escaping @Sendable (Float) -> Void,
-         speakers: SpeakerTracker? = nil) {
+         speakers: SpeakerTracker? = nil,
+         vad: VoiceDetector? = nil) {
         self.variant = variant
         self.onWords = onWords
         self.onStatus = onStatus
@@ -206,6 +218,7 @@ actor FluidAudioEngine {
         self.onReady = onReady
         self.onRTF = onRTF
         self.speakers = speakers
+        self.vad = vad
     }
 
     private static var pcmFormat: AVAudioFormat {
@@ -256,6 +269,7 @@ actor FluidAudioEngine {
             // this way they start working while the second model is still coming
             // down.
             if let speakers { await speakers.load() }
+            if let vad { await vad.load() }
             loaded = true
             startPump()
             onStatus("")
@@ -292,10 +306,53 @@ actor FluidAudioEngine {
             droppedWhileLoading += samples.count
             return
         }
-        pending.append(contentsOf: samples)
+        // RTF is measured against *all* audio seen, not just what reaches the
+        // recogniser. Counting only the latter would shrink the denominator
+        // whenever the VAD rejects more, inflating RTF exactly when the pipeline
+        // is doing less work — which read as "VAD costs 30% more" on first
+        // measurement when total compute had actually gone down.
+        processedSeconds += Double(samples.count) / 16000.0
+
+        // Without a detector everything is speech and this is a straight pass.
+        guard let vad, await vad.isLoaded else {
+            pending.append(contentsOf: samples)
+            if pending.count > maxPending {
+                pending.removeFirst(pending.count - maxPending)
+            }
+            await drainToRecogniser()
+            return
+        }
+
+        vadPending.append(contentsOf: samples)
+        while vadPending.count >= VoiceDetector.chunkSamples {
+            let chunk = Array(vadPending.prefix(VoiceDetector.chunkSamples))
+            vadPending.removeFirst(VoiceDetector.chunkSamples)
+
+            let speech = await vad.isSpeech(chunk)
+            if speech {
+                // Onset: replay the pre-roll so the first word is not clipped by
+                // the detector's 256 ms decision granularity.
+                if !wasSpeech { asrPending.append(contentsOf: history) }
+                asrPending.append(contentsOf: chunk)
+            }
+            wasSpeech = speech
+
+            history.append(contentsOf: chunk)
+            if history.count > historyCap {
+                history.removeFirst(history.count - historyCap)
+            }
+        }
+
+        pending.append(contentsOf: asrPending)
+        asrPending.removeAll(keepingCapacity: true)
         if pending.count > maxPending {
             pending.removeFirst(pending.count - maxPending)
         }
+        await drainToRecogniser()
+    }
+
+    /// Feed whatever speech audio has accumulated to the recogniser.
+    private func drainToRecogniser() async {
 
         let chunk = variant.chunkSamples
         while pending.count >= chunk {
@@ -328,7 +385,7 @@ actor FluidAudioEngine {
 
             computeSeconds += Date().timeIntervalSince(started)
             if let speakers { computeSeconds += await speakers.takeComputeSeconds() }
-            processedSeconds += Double(chunk) / 16000.0
+            if let vad { computeSeconds += await vad.takeComputeSeconds() }
             // Report about once a second, over a rolling window so a bad moment
             // does not haunt the average.
             if Date().timeIntervalSince(lastRTFReport) >= 1.0, processedSeconds > 0 {
@@ -431,6 +488,9 @@ actor FluidAudioEngine {
             onStatus("reset failed: \(error.localizedDescription)")
         }
         if let speakers { await speakers.reset() }
+        if let vad { await vad.reset() }
+        vadPending.removeAll(); asrPending.removeAll(); history.removeAll()
+        wasSpeech = false
     }
 
     /// Called at the core's endpoint: flush and start a fresh utterance.
@@ -457,6 +517,13 @@ actor FluidAudioEngine {
         } catch {
             onStatus("finish failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Fraction of gated-on audio the detector called speech. Everything else is
+    /// what the recogniser used to process for nothing.
+    func speechFraction() async -> Double {
+        guard let vad else { return 1 }
+        return await vad.speechFraction()
     }
 
     func shutdown() async {

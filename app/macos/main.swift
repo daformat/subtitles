@@ -91,6 +91,7 @@ enum Defaults {
     static let sourceName = "source.name"
     static let variant = "engine.variant"
     static let speakerBreaks = "engine.speakerBreaks"
+    static let useVAD = "engine.vad"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -109,10 +110,17 @@ nonisolated(unsafe) var currentVariant: FluidVariant = .eou320
 nonisolated(unsafe) var engineBusyMessage: String?
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.
 nonisolated(unsafe) var lastRTF: Float = 0
+/// Fraction of gated-on audio the VAD called speech; -1 until known.
+nonisolated(unsafe) var lastSpeechFraction: Double = -1
 /// Break the subtitle page when the speaker changes. Off by default: it is a
 /// second model on the ANE, so it should be an opt-in cost.
 nonisolated(unsafe) var speakerBreaksEnabled =
     UserDefaults.standard.bool(forKey: Defaults.speakerBreaks)
+/// Skip non-speech before it reaches the recogniser. Defaults ON: it fixes a real
+/// bug (music poisoning the encoder context) and should *reduce* load, since the
+/// recogniser stops chewing through backing tracks.
+nonisolated(unsafe) var useVAD =
+    UserDefaults.standard.object(forKey: Defaults.useVAD) as? Bool ?? true
 
 if let saved = UserDefaults.standard.object(forKey: Defaults.fontSize) as? Double {
     fontSize = CGFloat(saved)
@@ -201,6 +209,9 @@ final class Renderer {
         let rtfColor = lastRTF > 0.8 ? red : (lastRTF > 0.5 ? yellow : green)
         var s = "[\(text) \(String(format: "%.0f", peak))dB  "
         s += "rtf \(rtfColor)\(String(format: "%.2f", lastRTF))\(reset)"
+        if useVAD, lastSpeechFraction >= 0 {
+            s += "  speech \(Int(lastSpeechFraction * 100))%"
+        }
         if dropped > 0 { s += "  \(red)dropped \(dropped)\(reset)" }
         s += "]"
         if s != lastStatus {
@@ -305,6 +316,10 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
             onStatus: { message in DispatchQueue.main.async { err(message) } })
         : nil
 
+    let detector: VoiceDetector? = useVAD
+        ? VoiceDetector(onStatus: { message in DispatchQueue.main.async { err(message) } })
+        : nil
+
     let fluid = FluidAudioEngine(
         variant: variant,
         onWords: { words in
@@ -333,8 +348,15 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         },
         onRTF: { rtf in
             DispatchQueue.main.async { lastRTF = rtf }
+            // Sampled alongside RTF so the two health numbers stay in step.
+            Task {
+                if let f = await fluidEngine?.speechFraction() {
+                    DispatchQueue.main.async { lastSpeechFraction = f }
+                }
+            }
         },
-        speakers: tracker)
+        speakers: tracker,
+        vad: detector)
     fluidEngine = fluid
 
     DispatchQueue.global(qos: .userInitiated).async {
@@ -407,6 +429,12 @@ if useOverlay {
     menu.onQuit = { shutdownCleanly() }
     menu.onSelectVariant = { applyVariant($0) }
     menu.speakerBreaksEnabled = { speakerBreaksEnabled }
+    menu.vadEnabled = { useVAD }
+    menu.onToggleVAD = {
+        useVAD.toggle()
+        UserDefaults.standard.set(useVAD, forKey: Defaults.useVAD)
+        applyVariant(currentVariant)   // detector is built with the engine
+    }
     menu.onToggleSpeakerBreaks = {
         speakerBreaksEnabled.toggle()
         UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
