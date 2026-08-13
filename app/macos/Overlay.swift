@@ -217,6 +217,10 @@ final class OverlayController {
     /// Latest word end seen, so "start fresh" means "from here on in the audio".
     private var latestWordEnd: TimeInterval = 0
 
+    /// Fired once the overlay has faded because no new text arrived. The engine
+    /// uses it to drop a context that may be full of music.
+    var onFaded: (() -> Void)?
+
     /// Remembered across launches once the user drags the panel somewhere.
     ///
     /// Stored as (centre x, bottom y) rather than the frame origin: the box now
@@ -310,6 +314,13 @@ final class OverlayController {
 
         if startFreshOnNextText {
             startFreshOnNextText = false
+            if ProcessInfo.processInfo.environment["SUBS_DEBUG_PAGING"] != nil {
+                let first = words.first.map { "\($0.text)@\(String(format: "%.2f", $0.start))" } ?? "-"
+                let msg = "[page] fresh: anchor=\(String(format: "%.2f", latestWordEnd)) "
+                    + "words=\(words.count) first=\(first) "
+                    + "newest=\(newest.text)@\(String(format: "%.2f", newest.end))\n"
+                FileHandle.standardError.write(msg.data(using: .utf8)!)
+            }
             // Everything already spoken belongs to the page just closed; the new
             // one begins with whatever comes after it. Anchoring on *time* is what
             // stops words arriving in this same update from being skipped.
@@ -318,6 +329,12 @@ final class OverlayController {
         latestWordEnd = max(latestWordEnd, newest.end)
 
         var visible = words.filter { $0.start >= pageStartTime }
+        if ProcessInfo.processInfo.environment["SUBS_DEBUG_PAGING"] != nil, !words.isEmpty {
+            let msg = "[page] anchor=\(String(format: "%.2f", pageStartTime)) "
+                + "total=\(words.count) visible=\(visible.count) "
+                + "firstVisible=\(visible.first?.text ?? "-")\n"
+            FileHandle.standardError.write(msg.data(using: .utf8)!)
+        }
         guard !visible.isEmpty else { return }
 
         // Advance the page while the visible text overflows.
@@ -452,6 +469,7 @@ final class OverlayController {
             // growing one transcript, so "fresh" must mean "the words after this
             // moment in the audio", not "replay everything from the beginning".
             self.startFreshOnNextText = true
+            self.onFaded?()
         })
     }
 

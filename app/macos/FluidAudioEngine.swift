@@ -404,6 +404,35 @@ actor FluidAudioEngine {
         return out.filter { !$0.text.isEmpty }
     }
 
+    /// Drop the recogniser's context without emitting anything.
+    ///
+    /// Called when the overlay concludes speech has stopped even though audio is
+    /// still flowing — i.e. music. The energy gate cannot tell a backing track
+    /// from a voice, so the encoder keeps ingesting it, and when someone speaks
+    /// again the first words are lost to a context still full of music. Measured:
+    /// after 12 s of tone the recogniser silently dropped "god as a direct
+    /// consequence" and resumed mid-sentence.
+    ///
+    /// The proper fix is a real VAD (Silero) so non-speech never reaches the
+    /// recogniser at all; this is the cheap version using a signal we already have.
+    func resetContext() async {
+        guard loaded else { return }
+        pending.removeAll()
+        accumulated.removeAll()
+        do {
+            if let unified {
+                try await unified.reset()
+            } else if let eou {
+                await eou.reset()
+            } else if let nemotron {
+                await nemotron.reset()
+            }
+        } catch {
+            onStatus("reset failed: \(error.localizedDescription)")
+        }
+        if let speakers { await speakers.reset() }
+    }
+
     /// Called at the core's endpoint: flush and start a fresh utterance.
     func endUtterance() async {
         guard loaded else { return }

@@ -1067,12 +1067,35 @@ tokens with a literal U+2581 prefix — the C API translated it to a space, the 
 accessor does not — so subtitles rendered as `▁after ▁early ▁nightfall`. Both forms
 are stripped now.
 
-### Still imperfect
+### The missing words were not a paging bug at all
 
-On EOU the new page can still start a few words into the sentence. The trim is
-smaller than the word-count anchor gave, but not gone. EOU exposes only token
-*start* times (no end), so `latestWordEnd` is coarser there; Unified, with real
-word start/end pairs, should be exact. Not yet isolated.
+The new page still started several words into the second utterance, and I had
+guessed at the anchor arithmetic. Instrumenting it (`SUBS_DEBUG_PAGING=1`, still in
+the code) settled it in one run:
+
+```
+[page] anchor=12.80 total=61 visible=43 firstVisible=of
+```
+
+Paging was correct — it filtered exactly the 18 words of the first utterance and
+showed all 43 the engine produced. **The recogniser never transcribed the missing
+words.** Its own output ran `…the squalid quarter of the brothels of the sin which
+man thus punished…`, skipping "god as a direct consequence" entirely.
+
+Cause: the recogniser had just been fed **12 seconds of tone**. The energy gate
+cannot tell music from speech, so the encoder ingests it, and when someone speaks
+again the opening words are lost to a context still full of music.
+
+Fix: when the overlay concludes speech has stopped — text went idle, even though
+audio is still flowing — the engine's context is dropped (`resetContext()`). The
+second utterance now transcribes in full, from "god".
+
+**This is the cheap version of the right fix.** The proper one is a real VAD
+(Silero) so non-speech never reaches the recogniser at all, which has been an
+outstanding item since Phase 1 and now has a concrete symptom attached to it.
+
+The lesson is the recurring one in this document: I twice guessed at an anchor
+arithmetic bug that did not exist. One `err()` line found it immediately.
 
 ---
 

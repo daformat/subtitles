@@ -435,6 +435,11 @@ if useOverlay {
             err("\(red)could not switch source:\(reset) \(error)")
         }
     }
+    // Speech has stopped even if audio has not. Drop the recogniser's context so
+    // a backing track cannot swallow the first words of whoever speaks next.
+    controller.onFaded = {
+        if let fluid = fluidEngine { Task { await fluid.resetContext() } }
+    }
     renderer.onStatusRefresh = { [weak menu] in menu?.updateHealthIndicator() }
     statusMenu = menu
 
