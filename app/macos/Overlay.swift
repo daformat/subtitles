@@ -187,6 +187,10 @@ final class OverlayController {
     private let view: SubtitleView
     private var idleTimer: Timer?
     private var modifierTimer: Timer?
+    private var moveObserver: NSObjectProtocol?
+    /// True only while `layout()` is moving the panel itself, so the move
+    /// observer can tell our repositioning apart from the user's dragging.
+    private var isRepositioning = false
 
     // Fade on *text* inactivity, not audio inactivity.
     //
@@ -230,6 +234,15 @@ final class OverlayController {
     /// rightwards off its position instead of expanding evenly about its centre.
     private static let anchorKey = "overlay.anchor"
 
+    /// Where the box sits, and the *only* source of truth for it while running —
+    /// `UserDefaults` is persistence, read once here and written on release.
+    /// `layout()` used to re-read the defaults on every text update, so a word
+    /// arriving mid-drag snapped the panel back to the last saved position.
+    ///
+    /// nil until the user drags: the fallback is derived from the screen on every
+    /// layout, so an untouched overlay follows a resolution or display change.
+    private var anchor: NSPoint?
+
     private var maxWidth: CGFloat {
         guard let screen = NSScreen.main else { return 900 }
         return min(screen.frame.width * 0.7, 1100)
@@ -243,6 +256,26 @@ final class OverlayController {
         panel.contentView = view
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+
+        if let saved = UserDefaults.standard.string(forKey: Self.anchorKey) {
+            anchor = NSPointFromString(saved)
+        }
+
+        // While the user drags, the panel's own position is the truth — this is
+        // what feeds it back into `anchor` so the next word lays out where the box
+        // now is.
+        //
+        // `queue: nil` on purpose: the block then runs synchronously inside the
+        // posting call, so `isRepositioning` is still true for the moves layout()
+        // makes itself. Re-deriving the anchor from a frame we just computed would
+        // creep it half a pixel sideways on every word, because the origin is
+        // rounded and half a text width is not.
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: panel, queue: nil
+        ) { [weak self] _ in
+            guard let self, !self.isRepositioning else { return }
+            self.anchor = NSPoint(x: self.panel.frame.midX, y: self.panel.frame.minY)
+        }
 
         // Polled rather than armed per update: a one-shot timer must be cancelled
         // and re-armed on every text change, and anything that forgets to re-arm
@@ -265,6 +298,12 @@ final class OverlayController {
                 if !wantsDrag { self.saveAnchor() }
             }
         }
+    }
+
+    deinit {
+        if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+        idleTimer?.invalidate()
+        modifierTimer?.invalidate()
     }
 
     // MARK: text
@@ -422,13 +461,8 @@ final class OverlayController {
         let size = view.fittingSize(maxWidth: maxWidth)
         guard size.height > 0, let screen = NSScreen.main else { return }
 
-        let anchor: NSPoint
-        if let saved = UserDefaults.standard.string(forKey: Self.anchorKey) {
-            anchor = NSPointFromString(saved)
-        } else {
-            anchor = NSPoint(x: screen.frame.midX,
-                             y: screen.frame.minY + screen.frame.height * 0.12)
-        }
+        let anchor = self.anchor ?? NSPoint(x: screen.frame.midX,
+                                            y: screen.frame.minY + screen.frame.height * 0.12)
 
         // Round the origin: a half-pixel x makes the text render soft as the box
         // resizes on every word.
@@ -438,11 +472,13 @@ final class OverlayController {
         // immediately, so a manual assignment afterwards means that paint happens
         // with the view still at its previous, smaller size and the text is drawn
         // clipped for a frame.
+        isRepositioning = true
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        isRepositioning = false
     }
 
     private func saveAnchor() {
-        let anchor = NSPoint(x: panel.frame.midX, y: panel.frame.minY)
+        guard let anchor else { return }
         UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
     }
 
@@ -485,6 +521,7 @@ final class OverlayController {
     }
 
     func resetPosition() {
+        anchor = nil
         UserDefaults.standard.removeObject(forKey: Self.anchorKey)
         layout()
     }
