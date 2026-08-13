@@ -155,3 +155,12 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of
 the things that turned out to be wrong.
+
+## Licence
+
+[0BSD](LICENSE) — do whatever you like with it, no attribution required.
+
+That covers the code in this repository. Everything fetched at build or run time
+keeps its own terms: sherpa-onnx and FluidAudio are Apache-2.0, and the ASR models
+are third-party weights with their own licences (check the model card before
+shipping anything built on them).
