@@ -6,10 +6,12 @@
 // works and regresses between versions.
 //
 // Interaction model: click-through by default, so the overlay never intercepts a
-// click meant for the app underneath. Hold ⌥ to make it grabbable and drag it
-// somewhere else; the position is remembered.
+// click meant for the app underneath. Hold ⇧ to make it grabbable and drag it
+// somewhere else; the position is remembered. ⇧ rather than ⌥ because holding ⌥
+// while dragging a window puts macOS into its tiling preview, which fights the
+// drag.
 //
-// ⌥ is detected by polling `NSEvent.modifierFlags` rather than installing a
+// ⇧ is detected by polling `NSEvent.modifierFlags` rather than installing a
 // global event monitor — a keyboard monitor would demand Accessibility
 // permission, and asking for a second scary prompt to enable dragging is a bad
 // trade.
@@ -250,10 +252,10 @@ final class OverlayController {
             self?.fadeIfTextIdle()
         }
 
-        // ⌥ toggles grabbable. Polled, not monitored — see the file header.
+        // ⇧ toggles grabbable. Polled, not monitored — see the file header.
         modifierTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             guard let self else { return }
-            let wantsDrag = NSEvent.modifierFlags.contains(.option)
+            let wantsDrag = NSEvent.modifierFlags.contains(.shift)
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
                 self.panel.ignoresMouseEvents = !wantsDrag

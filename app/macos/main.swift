@@ -59,7 +59,7 @@ while i < args.count {
           --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
-        The overlay is click-through; hold ⌥ to drag it, and its position is
+        The overlay is click-through; hold ⇧ to drag it, and its position is
         remembered.
 
         Launch via run.sh, not directly — TCC attributes the audio-capture grant
@@ -475,7 +475,7 @@ if useOverlay {
     hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
 
-    err("overlay on — click-through; hold ⌥ to drag it. ⌥⌘S pauses.")
+    err("overlay on — click-through; hold ⇧ to drag it. ⌥⌘S pauses.")
 }
 
 applyVariant(currentVariant, initial: true)

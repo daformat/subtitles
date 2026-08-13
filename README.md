@@ -59,7 +59,7 @@ The app lives in the menu bar (no Dock icon).
 | | |
 |---|---|
 | **⌥⌘S** | pause / resume |
-| **Hold ⌥** | make the overlay draggable — it is click-through otherwise |
+| **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
 | Menu bar | model, source, text size, overlay position, permission state |
 
 **Model** switches between Parakeet variants at runtime and remembers your choice.

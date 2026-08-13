@@ -370,9 +370,10 @@ makes a *revising* engine survivable if the model is ever swapped.
 #### Design notes
 
 - **Click-through by default** (`ignoresMouseEvents`), so the overlay never
-  swallows a click meant for the app underneath. Hold **⌥** to make it grabbable;
-  position is remembered in `UserDefaults`.
-- **⌥ is detected by polling `NSEvent.modifierFlags`**, not a global event
+  swallows a click meant for the app underneath. Hold **⇧** to make it grabbable;
+  position is remembered in `UserDefaults`. **⇧ and not ⌥** — holding ⌥ during a
+  window drag arms the macOS tiling preview, which fights the drag.
+- **⇧ is detected by polling `NSEvent.modifierFlags`**, not a global event
   monitor. A keyboard monitor would require Accessibility permission, and asking
   for a second scary prompt just to enable dragging is a bad trade.
 - `.nonactivatingPanel` + `canBecomeKey/Main = false` + `.accessory` activation
