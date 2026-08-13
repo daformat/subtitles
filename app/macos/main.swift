@@ -112,6 +112,8 @@ nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
 nonisolated(unsafe) var currentVariant: FluidVariant = .nemotron560
 /// Non-nil while a model is downloading or loading.
 nonisolated(unsafe) var engineBusyMessage: String?
+/// How far that load has got, 0…1. Only read while `engineBusyMessage` is set.
+nonisolated(unsafe) var engineBusyProgress: Double = 0
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.
 nonisolated(unsafe) var lastRTF: Float = 0
 /// Fraction of gated-on audio the VAD called speech; -1 until known.
@@ -301,6 +303,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     UserDefaults.standard.set(variant.rawValue, forKey: Defaults.variant)
 
     engineBusyMessage = "Loading \(variant.displayName)…"
+    engineBusyProgress = 0
     statusMenu?.updateHealthIndicator()
     renderer.overlay?.clearAndHide()
 
@@ -332,8 +335,17 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         onStatus: { message in
             DispatchQueue.main.async {
                 engineBusyMessage = message.isEmpty ? nil : message
+                if message.isEmpty { engineBusyProgress = 0 }
                 statusMenu?.updateHealthIndicator()
                 if !message.isEmpty { err(message) }
+            }
+        },
+        onProgress: { fraction, headline in
+            DispatchQueue.main.async {
+                engineBusyMessage = headline
+                engineBusyProgress = fraction
+                statusMenu?.updateHealthIndicator()
+                err(headline)
             }
         },
         onFinal: { words in
@@ -347,6 +359,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 err(ok ? "engine ready: \(variant.displayName)"
                        : "\(red)engine failed to load\(reset)")
                 engineBusyMessage = nil
+                engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
             }
         },
@@ -370,7 +383,11 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         subs_destroy(old)
 
         guard let created = makeCore() else {
-            DispatchQueue.main.async { engineBusyMessage = nil; resumeCapture() }
+            DispatchQueue.main.async {
+                engineBusyMessage = nil
+                engineBusyProgress = 0
+                resumeCapture()
+            }
             return
         }
         subs_set_callback(created, onEvent, nil)
@@ -421,6 +438,7 @@ if useOverlay {
     menu.currentFontSize = { fontSize }
     menu.currentVariantID = { currentVariant.rawValue }
     menu.engineBusy = { engineBusyMessage }
+    menu.engineProgress = { engineBusyProgress }
     menu.statusLine = {
         if let busy = engineBusyMessage { return (busy, true) }
         if !renderer.audioHealthy { return ("No audio reaching Subtitles", false) }

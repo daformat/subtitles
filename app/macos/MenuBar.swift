@@ -25,6 +25,51 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return dot
     }()
 
+    /// Shown while a model is downloading or loading — same size and corner as
+    /// `alertDot`, blue because this is work in progress rather than a fault. A
+    /// first-run download is minutes long; without something moving in the menu
+    /// bar the app is indistinguishable from hung.
+    ///
+    /// A pulsing dot rather than an `NSProgressIndicator`: at 6pt a spinner
+    /// renders as an illegible grey smudge against the menu bar, while a pulse
+    /// reads as "working" at any size.
+    private lazy var busyDot: NSView = {
+        let dot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = NSColor.systemBlue.cgColor
+        dot.layer?.cornerRadius = 3
+        return dot
+    }()
+
+    private func startPulse() {
+        guard busyDot.layer?.animation(forKey: "pulse") == nil else { return }
+        let pulse = CABasicAnimation(keyPath: "opacity")
+        pulse.fromValue = 1.0
+        pulse.toValue = 0.25
+        pulse.duration = 0.7
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        busyDot.layer?.add(pulse, forKey: "pulse")
+    }
+
+    /// Live while the menu is open during a load, because a menu's contents are
+    /// otherwise frozen for as long as it is on screen.
+    private var progressTimer: Timer?
+    private weak var progressView: ProgressMenuView?
+    /// The item holding that view, so it can be swapped out in place when the
+    /// load finishes with the menu still open.
+    private weak var progressItem: NSMenuItem?
+
+    /// When the current load started, and how long it has to run before it is
+    /// worth badging.
+    ///
+    /// A cached model loads in a couple of seconds, so without the delay every
+    /// single launch flashed the badge on and straight back off — which reads as
+    /// a glitch rather than as progress. Work that finishes inside the delay is
+    /// never announced at all.
+    private var busySince: Date?
+    private let busyBadgeDelay: TimeInterval = 1.5
+
     // Wired up by main.swift.
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
@@ -43,6 +88,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var currentVariantID: () -> String = { "" }
     /// Non-nil while a model is downloading or loading; disables the picker.
     var engineBusy: () -> String? = { nil }
+    /// Fraction of the current model load, 0…1. Only meaningful while
+    /// `engineBusy()` is non-nil.
+    var engineProgress: () -> Double = { 0 }
     /// (headline, isHealthy) — e.g. ("Listening · RTF 0.12", true)
     var statusLine: () -> (String, Bool) = { ("", true) }
 
@@ -86,17 +134,41 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// point of moving this out of the overlay.
     func updateHealthIndicator() {
         guard let button = statusItem.button else { return }
+
+        // A load in flight outranks the health dot: the two would badge the same
+        // corner, and "no audio reaching Subtitles" is not a useful thing to
+        // shout while the recogniser demonstrably is not up yet.
+        if let busy = engineBusy() {
+            let since = busySince ?? Date()
+            busySince = since
+            button.toolTip = busy
+            guard Date().timeIntervalSince(since) >= busyBadgeDelay else { return }
+            if alertDot.superview != nil { alertDot.removeFromSuperview() }
+            if busyDot.superview == nil { button.addSubview(busyDot) }
+            busyDot.frame = badgeRect(in: button, size: 6)
+            startPulse()
+            return
+        }
+        busySince = nil
+        if busyDot.superview != nil {
+            busyDot.layer?.removeAnimation(forKey: "pulse")
+            busyDot.removeFromSuperview()
+        }
+
         let (_, healthy) = statusLine()
         if healthy {
             if alertDot.superview != nil { alertDot.removeFromSuperview() }
             return
         }
         if alertDot.superview == nil { button.addSubview(alertDot) }
+        alertDot.frame = badgeRect(in: button, size: 6)
+        button.toolTip = "No audio reaching Subtitles — check audio permission"
+    }
 
-        // Badge the glyph's top-right corner, not the button's. The button is
-        // wider and taller than the icon it draws, so positioning against its
-        // bounds parks the dot in the padding instead of on the icon.
-        let size: CGFloat = 6
+    /// Top-right corner of the *glyph*, not the button. The button is wider and
+    /// taller than the icon it draws, so positioning against its bounds parks the
+    /// badge in the padding instead of on the icon.
+    private func badgeRect(in button: NSStatusBarButton, size: CGFloat) -> NSRect {
         let glyph = button.image?.size ?? NSSize(width: 16, height: 16)
         let glyphRect = NSRect(x: (button.bounds.width - glyph.width) / 2,
                                y: (button.bounds.height - glyph.height) / 2,
@@ -105,8 +177,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // NSStatusBarButton is not flipped, but do not assume it: getting this
         // wrong silently puts the badge on the opposite corner.
         let y = button.isFlipped ? glyphRect.minY - 1 : glyphRect.maxY - size + 1
-        alertDot.frame = NSRect(x: x, y: y, width: size, height: size)
-        button.toolTip = "No audio reaching Subtitles — check audio permission"
+        return NSRect(x: x, y: y, width: size, height: size)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -115,9 +186,59 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         updateHealthIndicator()
     }
 
-    private func rebuild() {
-        menu.removeAllItems()
+    // A menu's contents are frozen for as long as it is open, so without this the
+    // bar shows whatever percentage it happened to be at when the menu was pulled
+    // down.
+    //
+    // Started from `rebuild()` rather than `menuWillOpen`: the item and the timer
+    // that drives it then come from one place, and there is no ordering to get
+    // wrong between the two delegate callbacks.
+    private func startProgressTimer() {
+        guard progressTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard let busy = self.engineBusy() else {
+                // Finished with the menu still open. The menu only rebuilds when
+                // it is opened, so left alone the bar just sits there — a load
+                // that visibly completed, parked at whatever percentage it last
+                // reached. Swap it for the status line in place instead.
+                self.finishProgressItem()
+                return
+            }
+            self.progressView?.update(text: busy, fraction: self.engineProgress())
+        }
+        // Menu tracking runs the main run loop in `.eventTracking`, so name that
+        // mode explicitly — `.common` alone was silent for exactly as long as the
+        // menu was on screen, which is the only time this timer is worth having.
+        RunLoop.main.add(timer, forMode: .eventTracking)
+        RunLoop.main.add(timer, forMode: .default)
+        progressTimer = timer
+    }
 
+    private func stopProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+    }
+
+    /// Retire the bar the moment the load finishes, swapping it for the status
+    /// line at the same position.
+    ///
+    /// An open `NSMenu` can be mutated, so this replaces the one item rather than
+    /// calling `rebuild()` — tearing every item out from under a menu the user is
+    /// reading is a good way to make it flicker or close.
+    private func finishProgressItem() {
+        stopProgressTimer()
+        defer {
+            progressView = nil
+            progressItem = nil
+        }
+        guard let item = progressItem, let index = menu.index(of: item) as Int?, index >= 0
+        else { return }
+        menu.removeItem(at: index)
+        menu.insertItem(statusLineItem(), at: index)
+    }
+
+    private func statusLineItem() -> NSMenuItem {
         let (text, healthy) = statusLine()
         let status = NSMenuItem(title: text, action: nil, keyEquivalent: "")
         status.isEnabled = false
@@ -126,7 +247,33 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                 string: text,
                 attributes: [.foregroundColor: NSColor.systemRed])
         }
-        menu.addItem(status)
+        return status
+    }
+
+    func menuDidClose(_ menu: NSMenu) { stopProgressTimer() }
+
+    private func rebuild() {
+        menu.removeAllItems()
+
+        if let busy = engineBusy() {
+            // A bar rather than the plain status line: the first-run download is
+            // ~600 MB, and "42% (12/28 files)" is the difference between waiting
+            // and wondering whether to force-quit.
+            let view = ProgressMenuView()
+            view.update(text: busy, fraction: engineProgress())
+            let item = NSMenuItem()
+            item.view = view
+            item.isEnabled = false
+            menu.addItem(item)
+            progressView = view
+            progressItem = item
+            startProgressTimer()
+        } else {
+            progressView = nil
+            progressItem = nil
+            stopProgressTimer()
+            menu.addItem(statusLineItem())
+        }
         menu.addItem(.separator())
 
         let toggle = NSMenuItem(
@@ -229,14 +376,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: model
 
     private func modelMenuItem() -> NSMenuItem {
-        // While a model is downloading or loading, replace the picker with its
-        // progress rather than letting a second switch start underneath it.
-        if let busy = engineBusy() {
-            let item = NSMenuItem(title: busy, action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            return item
-        }
-
+        // The picker stays put and stays live during a load. `applyVariant`
+        // already ignores a switch while one is in flight, and the progress bar
+        // above says why — so neither replacing the submenu nor greying it out
+        // buys anything the user cannot already see.
         let item = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentVariantID()
@@ -316,4 +459,47 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }
+}
+
+// MARK: - Progress item
+
+/// The headline and bar shown in place of the status line while a model loads.
+///
+/// A custom view rather than two menu items: `NSMenuItem` has no progress bar,
+/// and a text-only percentage in a disabled item is easy to mistake for a stuck
+/// app on a download this long.
+final class ProgressMenuView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let bar = NSProgressIndicator()
+
+    init() {
+        // Matches the width AppKit gives a typical menu; the menu sizes itself to
+        // the widest item, so this sets the floor rather than fighting anything.
+        super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 46))
+
+        label.font = .menuFont(ofSize: 13)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.frame = NSRect(x: 20, y: 24, width: 244, height: 16)
+        addSubview(label)
+
+        bar.style = .bar
+        bar.isIndeterminate = false
+        bar.minValue = 0
+        bar.maxValue = 1
+        bar.controlSize = .small
+        bar.frame = NSRect(x: 20, y: 8, width: 244, height: 12)
+        addSubview(bar)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    func update(text: String, fraction: Double) {
+        label.stringValue = text
+        bar.doubleValue = fraction
+        // Paint synchronously. Marking the view dirty defers the redraw to the
+        // run loop's display cycle, which an open menu is not reliably running —
+        // the values updated underneath while the pixels stayed put.
+        displayIfNeeded()
+    }
 }

@@ -148,6 +148,22 @@ final class FrameQueue: @unchecked Sendable {
     }
 }
 
+/// De-duplicates download progress so the menu bar is repainted only when the
+/// rendered line actually changes. `@unchecked Sendable` for the same reason as
+/// `FrameQueue`: FluidAudio calls the handler on an unspecified queue.
+final class LastProgress: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = ""
+
+    func shouldReport(_ headline: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard headline != last else { return false }
+        last = headline
+        return true
+    }
+}
+
 actor FluidAudioEngine {
     private let variant: FluidVariant
     private var eou: StreamingEouAsrManager?
@@ -183,6 +199,10 @@ actor FluidAudioEngine {
     /// Timed words for the current transcript, delivered on the main thread.
     private let onWords: @Sendable ([TimedWord]) -> Void
     private let onStatus: @Sendable (String) -> Void
+    /// First-run model download, as (fraction complete, what to show). The models
+    /// are ~600 MB from HuggingFace, so without this the app looks hung for
+    /// minutes on a cold cache.
+    private let onProgress: @Sendable (Double, String) -> Void
     /// Fires once the models are actually usable. Without it, audio fed during
     /// the (minutes-long, first-run) load is dropped with nothing to show for it.
     private let onFinal: @Sendable ([TimedWord]) -> Void
@@ -206,6 +226,7 @@ actor FluidAudioEngine {
     init(variant: FluidVariant,
          onWords: @escaping @Sendable ([TimedWord]) -> Void,
          onStatus: @escaping @Sendable (String) -> Void,
+         onProgress: @escaping @Sendable (Double, String) -> Void = { _, _ in },
          onFinal: @escaping @Sendable ([TimedWord]) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
          onRTF: @escaping @Sendable (Float) -> Void,
@@ -214,6 +235,7 @@ actor FluidAudioEngine {
         self.variant = variant
         self.onWords = onWords
         self.onStatus = onStatus
+        self.onProgress = onProgress
         self.onFinal = onFinal
         self.onReady = onReady
         self.onRTF = onRTF
@@ -238,21 +260,75 @@ actor FluidAudioEngine {
         return buf
     }
 
+    /// Renders FluidAudio's progress callbacks into something worth showing, and
+    /// drops the rest.
+    ///
+    /// The handler fires per downloaded chunk. Repainting the menu bar at that
+    /// rate is pure waste, so a report only escapes when the *text a user would
+    /// read* changes — which folds the percentage and the phase into one test.
+    /// How much of FluidAudio's 0…1 scale the download occupies; the rest is
+    /// reserved for compiling CoreML models.
+    ///
+    /// Mirrors `downloadPhaseWeight` upstream. It matters because our bundles
+    /// arrive precompiled, so the compile phase never fires and the raw fraction
+    /// stops dead at 0.5 — a finished, loaded model still reporting "50%".
+    private static let downloadPhaseWeight = 0.5
+
+    private func makeProgressHandler() -> ProgressHandler {
+        let last = LastProgress()
+        let name = variant.displayName
+        let report = onProgress
+        return { progress in
+            // Rescale so each phase fills the bar on its own. Nothing is lost by
+            // not sharing it: the headline already says which phase is running.
+            let raw = progress.fractionCompleted
+            let weight = Self.downloadPhaseWeight
+            let displayed: Double
+            switch progress.phase {
+            case .listing:
+                displayed = 0
+            case .downloading:
+                displayed = min(1, raw / weight)
+            case .compiling:
+                displayed = min(1, max(0, (raw - weight) / (1 - weight)))
+            }
+
+            let percent = Int((displayed * 100).rounded())
+            let headline: String
+            switch progress.phase {
+            case .listing:
+                headline = "Finding \(name) files…"
+            case let .downloading(done, total):
+                headline = total > 0
+                    ? "Downloading \(name) — \(percent)% (\(done)/\(total) files)"
+                    : "Downloading \(name) — \(percent)%"
+            case let .compiling(model):
+                // `finished()` upstream emits an empty name at 1.0.
+                headline = model.isEmpty
+                    ? "Preparing \(name) — \(percent)%"
+                    : "Compiling \(model) — \(percent)%"
+            }
+            guard last.shouldReport(headline) else { return }
+            report(displayed, headline)
+        }
+    }
+
     /// Downloads (first run) and loads the CoreML bundles. Slow — minutes on a
     /// cold cache, since the models come from HuggingFace.
     func load() async {
         guard !loaded else { return }
         onStatus("Loading \(variant.displayName)…")
         do {
+            let progress = makeProgressHandler()
             if variant.isUnified {
                 // The only variant that punctuates and capitalises. Costs latency:
                 // its [70,13,13] window is 2.08 s against EOU's 320 ms.
                 let manager = StreamingUnifiedAsrManager()
-                try await manager.loadModels()
+                try await manager.loadModels(progressHandler: progress)
                 unified = manager
             } else if variant.isEou {
                 let manager = StreamingEouAsrManager(chunkSize: variant.eouChunkSize)
-                try await manager.loadModels()
+                try await manager.loadModels(progressHandler: progress)
                 eou = manager
             } else {
                 // Leave `configuration` nil: FluidAudio then picks
@@ -262,14 +338,24 @@ actor FluidAudioEngine {
                 // engine exists to avoid.
                 let manager = StreamingNemotronAsrManager(
                     requestedChunkSize: variant.nemotronChunkSize)
-                try await manager.loadModels()
+                try await manager.loadModels(progressHandler: progress)
                 nemotron = manager
             }
             // Load the diarizer after the recogniser: subtitles are the point, and
             // this way they start working while the second model is still coming
             // down.
-            if let speakers { await speakers.load() }
-            if let vad { await vad.load() }
+            //
+            // Both get their own status line. Sortformer is another 229 MB, and
+            // leaving the recogniser's headline up while it downloads reads as a
+            // stall on a load that has actually moved on.
+            if let speakers {
+                onStatus("Loading speaker detection…")
+                await speakers.load()
+            }
+            if let vad {
+                onStatus("Loading voice detection…")
+                await vad.load()
+            }
             loaded = true
             startPump()
             onStatus("")
