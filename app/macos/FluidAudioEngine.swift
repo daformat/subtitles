@@ -52,21 +52,33 @@ enum FluidVariant: String, CaseIterable {
         }
     }
 
-    /// Upstream's own characterisation — not numbers this project has measured.
+    /// Download size, then whatever most distinguishes this variant.
+    ///
+    /// Size rather than the parameter count the model cards lead with (120M /
+    /// 0.6B): those two track each other under int8 — roughly a byte per
+    /// parameter — so the count adds nothing the size does not, and the size is
+    /// the number being decided about. Switching model is minutes of download.
+    ///
+    /// Measured from the HuggingFace repos, compiled `.mlmodelc` only, which is
+    /// all the downloader fetches. Multilingual is a range because its pack
+    /// follows the language: 583 MB Latin-script, 633 MB full vocab.
+    ///
+    /// The rest is upstream's characterisation, not numbers this project has
+    /// measured — except EOU 160's RTF, which is ours.
     var note: String {
         switch self {
         // Upstream calls this the lowest-latency tier, and in principle it is —
         // but measured here it runs at RTF 0.63–2.22, i.e. at or past real time,
         // because 160 ms chunks double the model invocations per second. eou320
         // manages 0.13–0.15 on the same machine.
-        case .eou160: return "120M · no punctuation · ⚠︎ RTF 0.6–2.2 here"
-        case .eou320: return "120M · no punctuation · RTF 0.13–0.15"
-        case .eou1280: return "120M · no punctuation · highest throughput"
-        case .nemotron560: return "0.6B · punctuated · default, lowest latency"
-        case .nemotron1120: return "0.6B · punctuated · the trained chunk size"
-        case .nemotron2240: return "0.6B · punctuated · highest throughput"
-        case .unified: return "0.6B · punctuated · 2.08 s · Nemotron is faster"
-        case .multilingual: return "0.6B · 9 languages · punctuated"
+        case .eou160: return "215 MB · no punctuation · ⚠︎ RTF 0.6–2.2 here"
+        case .eou320: return "215 MB · no punctuation · RTF 0.13–0.15"
+        case .eou1280: return "215 MB · no punctuation · highest throughput"
+        case .nemotron560: return "612 MB · punctuated · default, lowest latency"
+        case .nemotron1120: return "612 MB · punctuated · the trained chunk size"
+        case .nemotron2240: return "612 MB · punctuated · highest throughput"
+        case .unified: return "595 MB · punctuated · 2.08 s · Nemotron is faster"
+        case .multilingual: return "583–633 MB · 9 languages · punctuated"
         }
     }
 

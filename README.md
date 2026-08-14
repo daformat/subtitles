@@ -192,8 +192,9 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   outgoing box before it clears. Waiting for the label instead would delay every
   subtitle by the diarizer's cadence.
 - First launch downloads ~613 MB, which takes minutes. Switching model downloads
-  that variant too — 583 MB to 1.3 GB each — though anything already fetched is
-  kept and skipped. Changing language within one Multilingual pack costs nothing.
+  that variant too — 215 MB for an EOU tier, ~600 MB for the others; each entry
+  shows its size. Anything already fetched is kept and skipped, and changing
+  language within one Multilingual pack costs nothing.
 - Single display; the overlay uses the main screen.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of
