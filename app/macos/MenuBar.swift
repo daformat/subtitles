@@ -74,6 +74,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
     var onSelectVariant: ((FluidVariant) -> Void)?
+    var onSelectLanguage: ((FluidLanguage) -> Void)?
+    var currentLanguageID: () -> String = { FluidLanguage.auto.rawValue }
     var onToggleSpeakerBreaks: (() -> Void)?
     var onToggleVAD: (() -> Void)?
     var vadEnabled: () -> Bool = { true }
@@ -387,6 +389,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // Every variant is Parakeet on the Neural Engine; they differ in chunk
         // size, which is the latency/accuracy dial worth exposing.
         for variant in FluidVariant.allCases {
+            // The multilingual entry is a submenu instead of a plain choice:
+            // picking it without saying which language is not a complete request,
+            // and the language decides which pack gets downloaded.
+            if variant.isMultilingual {
+                sub.addItem(.separator())
+                sub.addItem(languageMenuItem(selected: variant.rawValue == current))
+                continue
+            }
             let entry = NSMenuItem(title: variant.displayName,
                                    action: #selector(selectVariant(_:)), keyEquivalent: "")
             entry.target = self
@@ -399,6 +409,48 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         item.submenu = sub
         return item
+    }
+
+    /// The multilingual model, with its language as the actual choice.
+    ///
+    /// Selecting a language selects the model too — one click for the whole
+    /// intent, and no way to end up with a language set that the running model
+    /// cannot honour. The parent carries the current language so the state reads
+    /// without opening the third level.
+    private func languageMenuItem(selected: Bool) -> NSMenuItem {
+        let current = currentLanguageID()
+        let language = FluidLanguage(rawValue: current) ?? .auto
+        let variant = FluidVariant.multilingual
+        let title = selected
+            ? "\(variant.displayName) · \(language.displayName)"
+            : variant.displayName
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.attributedTitle = NSAttributedString(
+            string: "\(title)\n\(variant.note)",
+            attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        item.state = selected ? .on : .off
+
+        let sub = NSMenu()
+        for lang in FluidLanguage.allCases {
+            // The Latin-script six share one download; auto and zh/ja need the
+            // bigger pack. Separated so the boundary that costs a download is at
+            // least visible.
+            if lang == .en || lang == .zh { sub.addItem(.separator()) }
+            let entry = NSMenuItem(title: lang.displayName,
+                                   action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = lang.rawValue
+            entry.state = (selected && lang.rawValue == current) ? .on : .off
+            sub.addItem(entry)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let lang = FluidLanguage(rawValue: raw) else { return }
+        onSelectLanguage?(lang)
     }
 
     @objc private func selectVariant(_ sender: NSMenuItem) {

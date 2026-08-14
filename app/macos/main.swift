@@ -90,6 +90,7 @@ enum Defaults {
     static let sourceID = "source.id"
     static let sourceName = "source.name"
     static let variant = "engine.variant"
+    static let language = "engine.language"
     static let speakerBreaks = "engine.speakerBreaks"
     static let useVAD = "engine.vad"
 }
@@ -110,6 +111,9 @@ nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
 /// avoids downloading a *second* family that never gets used — a genuinely fresh
 /// machine still fetches this one from HuggingFace on first launch.
 nonisolated(unsafe) var currentVariant: FluidVariant = .nemotron560
+/// Only read by the multilingual variant. Kept even while an English-only model
+/// is selected, so switching back does not lose the choice.
+nonisolated(unsafe) var currentLanguage: FluidLanguage = .auto
 /// Non-nil while a model is downloading or loading.
 nonisolated(unsafe) var engineBusyMessage: String?
 /// How far that load has got, 0…1. Only read while `engineBusyMessage` is set.
@@ -136,6 +140,10 @@ if let override = variantOverride {
 } else if let raw = UserDefaults.standard.string(forKey: Defaults.variant),
           let v = FluidVariant(rawValue: raw) {
     currentVariant = v
+}
+if let raw = UserDefaults.standard.string(forKey: Defaults.language),
+   let l = FluidLanguage(rawValue: raw) {
+    currentLanguage = l
 }
 
 /// Gated, pre-rolled 16 kHz frames from the core. Runs on the core's worker
@@ -360,6 +368,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 
     let fluid = FluidAudioEngine(
         variant: variant,
+        language: currentLanguage,
         onWords: { words in
             DispatchQueue.main.async {
                 guard generation == loadGeneration else { return }
@@ -454,6 +463,18 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     }
 }
 
+/// Switch the multilingual model to another language.
+///
+/// A full engine rebuild rather than a live `setLanguage`: crossing between the
+/// Latin-script pack and the full one is a different model download, and even
+/// within a pack the decoder's prompt seeds its state at reset. Rebuilding is the
+/// one path already known to handle a download, a cancel and a clean swap.
+func applyLanguage(_ language: FluidLanguage) {
+    currentLanguage = language
+    UserDefaults.standard.set(language.rawValue, forKey: Defaults.language)
+    applyVariant(.multilingual)
+}
+
 /// Point the tap at a different source. One path, shared by the menu and by
 /// SIGUSR2, so what a test exercises is what the menu does.
 func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
@@ -519,6 +540,8 @@ if useOverlay {
     menu.onResetPosition = { controller.resetPosition() }
     menu.onQuit = { shutdownCleanly() }
     menu.onSelectVariant = { applyVariant($0) }
+    menu.onSelectLanguage = { applyLanguage($0) }
+    menu.currentLanguageID = { currentLanguage.rawValue }
     menu.speakerBreaksEnabled = { speakerBreaksEnabled }
     menu.vadEnabled = { useVAD }
     menu.onToggleVAD = {

@@ -35,6 +35,9 @@ enum FluidVariant: String, CaseIterable {
     case eou160, eou320, eou1280
     case nemotron560, nemotron1120, nemotron2240
     case unified
+    /// The only variant that is not English-only. Which language it recognises is
+    /// a separate setting — see `FluidLanguage`.
+    case multilingual
 
     var displayName: String {
         switch self {
@@ -45,6 +48,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron1120: return "Nemotron · 1120 ms"
         case .nemotron2240: return "Nemotron · 2240 ms"
         case .unified: return "Parakeet Unified · punctuated"
+        case .multilingual: return "Multilingual · 560 ms"
         }
     }
 
@@ -55,13 +59,14 @@ enum FluidVariant: String, CaseIterable {
         // but measured here it runs at RTF 0.63–2.22, i.e. at or past real time,
         // because 160 ms chunks double the model invocations per second. eou320
         // manages 0.13–0.15 on the same machine.
-        case .eou160: return "120M · ⚠︎ RTF 0.6–2.2 here · often too slow"
-        case .eou320: return "120M · RTF 0.13–0.15 · fast and light"
-        case .eou1280: return "120M · highest throughput"
-        case .nemotron560: return "0.6B · default · lowest latency tier"
-        case .nemotron1120: return "0.6B · the trained chunk size"
-        case .nemotron2240: return "0.6B · upstream default · highest throughput"
-        case .unified: return "0.6B · punctuation + capitals · 2.08 s latency"
+        case .eou160: return "120M · no punctuation · ⚠︎ RTF 0.6–2.2 here"
+        case .eou320: return "120M · no punctuation · RTF 0.13–0.15"
+        case .eou1280: return "120M · no punctuation · highest throughput"
+        case .nemotron560: return "0.6B · punctuated · default, lowest latency"
+        case .nemotron1120: return "0.6B · punctuated · the trained chunk size"
+        case .nemotron2240: return "0.6B · punctuated · highest throughput"
+        case .unified: return "0.6B · punctuated · 2.08 s · Nemotron is faster"
+        case .multilingual: return "0.6B · 9 languages · punctuated"
         }
     }
 
@@ -72,11 +77,18 @@ enum FluidVariant: String, CaseIterable {
         }
     }
 
-    /// True for the one variant that emits punctuation and capitalisation itself.
+    /// True for the variant with its own context-window contract — one
+    /// checkpoint serving both offline and streaming, over a [70,13,13] window.
+    ///
+    /// Not "the one that punctuates": every family except EOU emits punctuation
+    /// and capitals itself.
     var isUnified: Bool { self == .unified }
+
+    var isMultilingual: Bool { self == .multilingual }
 
     var chunkSamples: Int {
         switch self {
+        case .multilingual: return 16000 * 560 / 1000
         case .unified: return UnifiedConfig().chunkSamples
         case .eou160: return 16000 * 160 / 1000
         case .eou320: return 16000 * 320 / 1000
@@ -100,6 +112,58 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron560: return .ms560
         case .nemotron1120: return .ms1120
         default: return .ms2240
+        }
+    }
+}
+
+/// A language the multilingual model can be pinned to, plus `auto`.
+///
+/// The repo ships two vocabularies and the download follows the language, not the
+/// user: the six Latin-script languages share a pruned 2828-token pack (583 MB),
+/// while zh/ja — and `auto`, which must be able to decode anything — need the full
+/// 13087-token pack (633 MB). Switching within a pack is free; crossing between
+/// them is another download, which is why the two groups are kept visibly apart in
+/// the menu.
+enum FluidLanguage: String, CaseIterable {
+    case auto
+    case en, es, fr, it, pt, de
+    case zh, ja
+
+    /// FLEURS-style code the model's prompt dictionary is keyed on.
+    var code: String {
+        switch self {
+        case .auto: return "auto"
+        case .en: return "en-US"
+        case .es: return "es-ES"
+        case .fr: return "fr-FR"
+        case .it: return "it-IT"
+        case .pt: return "pt-BR"
+        case .de: return "de-DE"
+        case .zh: return "zh-CN"
+        case .ja: return "ja-JP"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto-detect"
+        case .en: return "English"
+        case .es: return "Español"
+        case .fr: return "Français"
+        case .it: return "Italiano"
+        case .pt: return "Português"
+        case .de: return "Deutsch"
+        case .zh: return "中文"
+        case .ja: return "日本語"
+        }
+    }
+
+    /// True when this language is served by the smaller Latin-script pack.
+    /// Mirrors `StreamingNemotronMultilingualAsrManager.languageDirectory`.
+    var usesLatinPack: Bool {
+        switch self {
+        case .en, .es, .fr, .it, .pt, .de: return true
+        case .auto, .zh, .ja: return false
         }
     }
 }
@@ -169,6 +233,10 @@ actor FluidAudioEngine {
     private var eou: StreamingEouAsrManager?
     private var nemotron: StreamingNemotronAsrManager?
     private var unified: StreamingUnifiedAsrManager?
+    private var multilingual: StreamingNemotronMultilingualAsrManager?
+    /// Which language the multilingual variant is pinned to. Ignored by the
+    /// English-only variants.
+    private let language: FluidLanguage
     /// Optional: breaks the page when the speaker changes. nil when disabled.
     private var speakers: SpeakerTracker?
     /// Optional: decides what is speech, so music never reaches the recogniser.
@@ -224,6 +292,7 @@ actor FluidAudioEngine {
     private let maxPending = 16000 * 3
 
     init(variant: FluidVariant,
+         language: FluidLanguage = .auto,
          onWords: @escaping @Sendable ([TimedWord]) -> Void,
          onStatus: @escaping @Sendable (String) -> Void,
          onProgress: @escaping @Sendable (Double, String) -> Void = { _, _ in },
@@ -233,6 +302,7 @@ actor FluidAudioEngine {
          speakers: SpeakerTracker? = nil,
          vad: VoiceDetector? = nil) {
         self.variant = variant
+        self.language = language
         self.onWords = onWords
         self.onStatus = onStatus
         self.onProgress = onProgress
@@ -320,7 +390,20 @@ actor FluidAudioEngine {
         onStatus("Loading \(variant.displayName)…")
         do {
             let progress = makeProgressHandler()
-            if variant.isUnified {
+            if variant.isMultilingual {
+                // Two steps rather than one: the download has to be told which
+                // language it is for, because that decides which vocabulary pack
+                // is fetched. `setLanguage` afterwards is the decode-time hint —
+                // the prompt embedding — and is what "auto" leaves unset.
+                let dir = try await StreamingNemotronMultilingualAsrManager.downloadVariant(
+                    languageCode: language.code,
+                    chunkMs: 560,
+                    progressHandler: progress)
+                let manager = StreamingNemotronMultilingualAsrManager()
+                try await manager.loadModels(from: dir)
+                await manager.setLanguage(language == .auto ? nil : language.code)
+                multilingual = manager
+            } else if variant.isUnified {
                 // The only variant that punctuates and capitalises. Costs latency:
                 // its [70,13,13] window is 2.08 s against EOU's 320 ms.
                 let manager = StreamingUnifiedAsrManager()
@@ -461,6 +544,8 @@ actor FluidAudioEngine {
                     _ = try await eou.process(audioBuffer: buf)
                 } else if let nemotron {
                     _ = try await nemotron.process(audioBuffer: buf)
+                } else if let multilingual {
+                    _ = try await multilingual.process(audioBuffer: buf)
                 }
             } catch {
                 onStatus("transcription error: \(error.localizedDescription)")
@@ -503,6 +588,12 @@ actor FluidAudioEngine {
         }
         if let nemotron {
             return Self.assemble(await nemotron.getTokenTimings())
+        }
+        // Same token-timing shape as Nemotron, and the language-tag token is
+        // already excluded from these — upstream strips it from both the text and
+        // the timings, so the word/time alignment paging relies on stays intact.
+        if let multilingual {
+            return Self.assemble(await multilingual.getTokenTimings())
         }
         if let eou {
             let tokens = await eou.getRawTokenStrings()
@@ -574,6 +665,8 @@ actor FluidAudioEngine {
                 await eou.reset()
             } else if let nemotron {
                 await nemotron.reset()
+            } else if let multilingual {
+                await multilingual.reset()
             }
         } catch {
             onStatus("reset failed: \(error.localizedDescription)")
@@ -603,6 +696,9 @@ actor FluidAudioEngine {
             } else if let nemotron {
                 _ = try await nemotron.finish()
                 await nemotron.reset()
+            } else if let multilingual {
+                _ = try await multilingual.finish()
+                await multilingual.reset()
             }
             onFinal(final)
         } catch {
@@ -624,9 +720,11 @@ actor FluidAudioEngine {
         if let unified { await unified.cleanup() }
         if let eou { await eou.cleanup() }
         if let nemotron { await nemotron.cleanup() }
+        if let multilingual { await multilingual.cleanup() }
         unified = nil
         eou = nil
         nemotron = nil
+        multilingual = nil
         loaded = false
     }
 }

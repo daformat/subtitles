@@ -67,8 +67,23 @@ The app lives in the menu bar (no Dock icon).
 **Model** switches between Parakeet variants at runtime and remembers your choice.
 They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
 160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms (**560 is the default**),
-plus **Parakeet Unified**, the only variant that emits punctuation and
-capitalisation itself — at the cost of 2.08 s latency against EOU's 320 ms.
+plus **Parakeet Unified** and **Multilingual**.
+
+Punctuation splits the families: the EOU variants emit none, so their output is
+unpunctuated lowercase. Nemotron, Unified and Multilingual all punctuate and
+capitalise themselves. Unified costs 2.08 s of latency for no advantage over
+Nemotron 560 that this project has been able to identify.
+
+**Multilingual** is the one variant that is not English-only, so its language is
+the choice — pick a language from its submenu and you get the model with it.
+Auto-detect, or pin one of English, Español, Français, Italiano, Português,
+Deutsch, 中文, 日本語. Measured here at RTF 0.08–0.11 on French, the same as
+Nemotron 560 on English.
+
+The submenu is grouped by download, because the model ships as two vocabularies:
+the six Latin-script languages share a pruned 583 MB pack, while zh/ja — and
+Auto-detect, which has to be able to decode anything — need the full 633 MB one.
+Moving within a group is instant; crossing between them fetches the other pack.
 
 Picking a variant that has not been downloaded starts its download there and then.
 Changing your mind mid-download cancels it and starts the new one immediately;
@@ -100,7 +115,8 @@ rather than continuing the last one.
 ### Command line
 
 ```
---variant NAME     eou160 | eou320 | eou1280 | nemotron560 | nemotron1120 | nemotron2240 | unified
+--variant NAME     eou160 | eou320 | eou1280 | nemotron560 | nemotron1120 | nemotron2240
+                   | unified | multilingual
 --headless         no overlay, terminal output only
 --font-size N      overlay text size
 --reset-position   recentre the overlay
@@ -165,8 +181,10 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   there is no like-for-like latency/WER comparison yet.
 - **Nemotron 560 ms** is the default and the tier in daily use; the EOU variants
   are the ones measured. Nemotron 1120 / 2240 are wired but barely tested.
-- English only as configured. Parakeet v3 and the multilingual Nemotron models
-  exist in FluidAudio but are not exposed here yet.
+- Non-English needs the **Multilingual** variant; the other six are English-only
+  checkpoints. Its nine languages are the ones exposed here — the model itself
+  reaches ~40 via `prompt_id`, and adding one is a menu entry plus a FLEURS-style
+  code.
 - Singing is speech as far as the VAD is concerned, so vocal music will be
   transcribed as lyrics.
 - Speaker-change breaks are **retrospective**: diarization needs ~1 s of warmup and
@@ -174,8 +192,8 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   outgoing box before it clears. Waiting for the label instead would delay every
   subtitle by the diarizer's cadence.
 - First launch downloads ~613 MB, which takes minutes. Switching model downloads
-  that variant too — 595 MB to 1.3 GB each — though anything already fetched is
-  kept and skipped.
+  that variant too — 583 MB to 1.3 GB each — though anything already fetched is
+  kept and skipped. Changing language within one Multilingual pack costs nothing.
 - Single display; the overlay uses the main screen.
 
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of

@@ -6,7 +6,7 @@ primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
 First-run download is visible and interruptible (§18); default is Nemotron 560.
-Per-app capture actually switches as of §19.
+Per-app capture actually switches as of §19. Nine languages as of §20.
 Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER,
 download integrity check and failure handling.
@@ -720,9 +720,12 @@ creating the tap (a stale ID returns `'!obj'`).
 
 ## 9. Open questions
 
-- **Which languages** does the audio actually need to cover? English is excellent;
-  French is usable but slower and less accurate (§8a Finding 4). Still the biggest
-  product-shaping unknown.
+- **Which languages** does the audio actually need to cover? Nine are now
+  selectable (§20) and French measures at the same RTF as English, so this no
+  longer blocks anything — but it still shapes the product, because the answer
+  decides whether the 633 MB full-vocab pack is needed at all or whether the
+  583 MB Latin one covers every real user. The §8a Finding 4 numbers are sherpa-on-
+  CPU and no longer apply.
 - ~~Exact TCC prompt for process taps~~ — answered in §8b. Requires bundle +
   `NSAudioCaptureUsageDescription` + launch via `open`.
 - Model distribution — **partly settled** (§18). The sherpa figure below is dead;
@@ -1314,6 +1317,71 @@ carried across the switch and the new app's first words arrived appended to a
 sentence nobody was saying any more. `resetContext()` runs on switch too, and the
 terminal line is *discarded* rather than committed — `endpoint()` prints what it
 has before clearing, which is right at an utterance boundary and wrong here.
+
+---
+
+## 20. Multilingual (2026-08-14)
+
+`FluidInference/Nemotron-3.5-ASR-Streaming-Multilingual-0.6b-CoreML`, exposed as a
+single **Multilingual · 560 ms** entry whose submenu is the language picker. This
+answers §9's "which languages" question with "whichever you pick" rather than
+settling it.
+
+Measured here: **RTF 0.08–0.11 on French**, indistinguishable from Nemotron 560 on
+English, and nowhere near the ~0.8 line. Real French transcription, punctuated and
+accented, first try. Errors cluster on technical vocabulary ("des canta" for *des
+quanta*), consistent with the model card's 9.68 % FLEURS WER for French.
+
+### Two packs, and the menu has to show it
+
+The repo ships two vocabularies and the download follows the language:
+
+| pack | vocab | languages | download |
+|---|---|---|---|
+| `latin` | 2828 | en · es · fr · it · pt · de | **583 MB** |
+| `multilingual` | 13087 | zh · ja (+~40 via `prompt_id`), and `auto` | **633 MB** |
+
+`auto` routes to the full pack — it has to be able to decode anything. So the
+worst case is a user trying Auto-detect and then pinning French: two downloads,
+1.2 GB, for what feels like one decision.
+
+Always pulling the full pack would avoid that, since its vocab covers the Latin
+languages too and `setLanguage` is only a decode hint. **Rejected deliberately**:
+the pruned pack is smaller and its joint is faster, and the download UI already
+explains itself. The menu instead separates the two groups with a rule, so the
+boundary that costs 633 MB is at least visible before it is crossed.
+
+### Language belongs to the model entry, not beside it
+
+A top-level Language menu would allow a state the app cannot honour — French
+selected while an English-only model is running — and representing that needs
+either a greyed control or a Model list that changes behind your back. Hanging the
+languages off the one entry that supports them makes a language *be* a model
+choice: one click, one complete request, no invalid states. The parent shows the
+active language so it reads without opening the third level.
+
+This is also why only one chunk tier is exposed. Four tiers would repeat the whole
+language submenu four times.
+
+**560 ms over the card's recommended 2240 ms.** The card's tier scores marginally
+better (English 8.96 % vs 9.43 % WER) for 1.7 s more latency, which is the trade
+this project exists to refuse.
+
+### Two claims that turned out to be wrong ⚠️
+
+**"Unified is the only variant that emits punctuation and capitalisation itself"**
+— stated in the README and in `isUnified`'s own doc comment, and false. This
+session's transcripts settle it: EOU 1280 produced *"blue checks because they pay
+me for it the pro tier"*, while Nemotron 560 produced *"Good Lord, what have I
+done?"* and *"…the likelihood that the output is better too is much, much
+higher."* Punctuation splits **EOU (none) against everything else**, not Unified
+against the rest. Every menu note now states its punctuation status, and Unified —
+2.08 s of latency with no remaining differentiator — says so.
+
+**FluidAudio's own docs say the model is local-path-only**: *"no HuggingFace repo
+yet. Convert it yourself … (Linux + CUDA required)"*. The repo exists and
+`downloadVariant` fetches from it happily. Vendored documentation is a snapshot;
+the code and the registry were the truth here.
 
 ---
 
