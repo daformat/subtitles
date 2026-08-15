@@ -36,9 +36,12 @@ fi
 # build.sh falls back to ad-hoc signing when the certificate is missing, and says
 # so — but it says so in the middle of a lot of other output. Notarization would
 # fail anyway; failing here explains why.
-# -dvv, not -dv: the Authority lines only appear at the second v, and the guard
-# silently never matches without it.
-if ! codesign -dvv "$APP" 2>&1 | grep -q "Authority=Developer ID Application"; then
+# Two traps here, both of which make a correctly signed app look unsigned:
+#   -dvv, not -dv — the Authority lines only appear at the second v.
+#   Captured, not piped — `grep -q` exits at the first match, codesign takes
+#   SIGPIPE still writing, and `set -o pipefail` fails the whole pipeline.
+SIG_INFO=$(codesign -dvv "$APP" 2>&1 || true)
+if ! grep -q "Authority=Developer ID Application" <<<"$SIG_INFO"; then
   echo "!! $APP is not signed with a Developer ID — cannot notarize" >&2
   echo "   check: security find-identity -v -p codesigning" >&2
   exit 1

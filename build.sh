@@ -180,7 +180,13 @@ echo "==> signing"
 IDENTITY="${SUBTITLES_SIGN_IDENTITY:-Developer ID Application}"
 ENTS="app/macos/Subtitles.entitlements"
 
-if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
+# Captured rather than piped: `grep -q` exits at the first match and the writer
+# takes SIGPIPE, which `set -o pipefail` turns into a failed pipeline. Piped, this
+# test loses a race some fraction of the time and quietly signs ad-hoc instead —
+# which is worse than failing, because the build succeeds and the reason it will
+# not notarize is buried mid-log.
+IDENTITIES=$(security find-identity -v -p codesigning 2>/dev/null || true)
+if grep -q "$IDENTITY" <<<"$IDENTITIES"; then
   # --options runtime is the hardened runtime, required by notarization.
   # --timestamp binds a trusted timestamp, so signatures stay valid after the
   # certificate expires; it needs the network and fails loudly without it.
