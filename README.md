@@ -204,7 +204,19 @@ the things that turned out to be wrong.
 
 [0BSD](LICENSE) — do whatever you like with it, no attribution required.
 
-That covers the code in this repository. Everything fetched at build or run time
-keeps its own terms: sherpa-onnx and FluidAudio are Apache-2.0, and the ASR models
-are third-party weights with their own licences (check the model card before
-shipping anything built on them).
+That covers the code in this repository. Everything fetched at run time keeps its
+own terms — FluidAudio is Apache-2.0, and the models are third-party weights:
+
+| fetched | licence |
+|---|---|
+| FluidAudio | Apache-2.0 |
+| Parakeet EOU 120M, Nemotron Streaming EN | NVIDIA Open Model License |
+| Parakeet Unified, Sortformer (speaker change) | CC-BY-4.0 |
+| Nemotron 3.5 Multilingual | OpenMDW-1.1 |
+| Silero VAD | MIT |
+
+All of them permit commercial use. None is copyleft, and none restricts the field
+of use. They do carry conditions — attribution and notice retention, NVIDIA's
+requirement not to strip safety guardrails, and defensive patent-termination
+clauses in the NVIDIA and OpenMDW terms. Read the model card for whichever
+variants you actually ship; this table is a summary, not advice.
