@@ -16,6 +16,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 PROFILE="${SUBTITLES_NOTARY_PROFILE:-subtitles-notary}"
 
+# --no-notarize builds the DMG and stops. Notarization is a three-minute round
+# trip to Apple and irrelevant to how the window looks, which is the thing that
+# actually needs iterating on. The result is NOT shippable.
+NOTARIZE=yes
+if [ "${1:-}" = "--no-notarize" ]; then NOTARIZE=no; fi
+
 VERSION=$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)
 APP="build/Subtitles.app"
 STAGE="build/dmg"
@@ -26,7 +32,7 @@ echo "==> release $VERSION"
 
 # Refuse to ship a dirty tree. The DMG is going to strangers who paid for it;
 # "which commit was that build from" needs an answer.
-if [ -n "$(git status --porcelain)" ]; then
+if [ "$NOTARIZE" = yes ] && [ -n "$(git status --porcelain)" ]; then
   echo "!! working tree is dirty — commit or stash before releasing" >&2
   git status --short >&2
   exit 1
@@ -80,7 +86,9 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set the bounds of container window to {240, 130, 880, 530}
+    -- 428, not 400: `bounds` covers the whole window including the title bar,
+    -- so asking for the image's height crops the bottom of it by ~28pt.
+    set the bounds of container window to {240, 130, 880, 558}
     set opts to the icon view options of container window
     set arrangement of opts to not arranged
     set icon size of opts to 128
@@ -88,10 +96,16 @@ tell application "Finder"
     set background picture of opts to file ".background:background.tiff"
     set position of item "Subtitles.app" of container window to {170, 180}
     set position of item "Applications" of container window to {470, 180}
-    close
-    open
+    -- Re-asserted after the contents change. Setting it once and then
+    -- reopening the window loses the width, and Finder falls back to its
+    -- default ~900pt — the image then sits in the corner of an oversized
+    -- window with a bare white strip beside it.
+    set the bounds of container window to {240, 130, 880, 558}
     update without registering applications
     delay 1
+    -- Closing is what commits .DS_Store. Reopening afterwards only gives
+    -- Finder another chance to resize the window before it is written.
+    close
   end tell
 end tell
 APPLESCRIPT
@@ -120,6 +134,14 @@ echo "    $(du -h "$DMG" | cut -f1)"
 # The DMG is signed too. Otherwise Gatekeeper has nothing to check before the
 # user has mounted anything, and the download looks unsigned at the worst moment.
 codesign --force --sign "Developer ID Application" --timestamp "$DMG"
+
+if [ "$NOTARIZE" = no ]; then
+  rm -rf "$STAGE"
+  echo
+  echo "built $DMG — NOT notarized, do not ship this one"
+  echo "open it to check the window:  open $DMG"
+  exit 0
+fi
 
 echo "==> notarizing (a few minutes)"
 # --wait blocks until Apple returns a verdict. Without it the script exits while
