@@ -104,29 +104,48 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             // A status item whose button has neither image nor title renders as
             // zero-width — i.e. invisible, with no error. Always keep a textual
             // fallback so the item cannot silently vanish.
-            if let image = NSImage(systemSymbolName: "captions.bubble",
-                                   accessibilityDescription: "Subtitles") {
-                image.isTemplate = true
+            if let image = Self.statusIcon() {
                 button.image = image
             } else {
                 button.title = "CC"
                 FileHandle.standardError.write(
-                    "status icon symbol unavailable; using text fallback\n".data(using: .utf8)!)
+                    "status icon unavailable; using text fallback\n".data(using: .utf8)!)
             }
         }
         menu.delegate = self
         statusItem.menu = menu
     }
 
+    /// The bundled caption-bubble mark, falling back to the SF Symbol.
+    ///
+    /// `NSImage` reads SVG directly (macOS 13+, `_NSSVGImageRep`), so the file
+    /// ships as-is with no conversion step. `isTemplate` is what matters: it
+    /// makes AppKit use the alpha channel only and tint to suit a light or dark
+    /// menu bar, which is why the fill colour in the file is irrelevant.
+    ///
+    /// The fallback is not decoration — a binary run straight from `.build` has
+    /// no bundle to read the file out of.
+    private static func statusIcon() -> NSImage? {
+        if let url = Bundle.main.url(forResource: "StatusIcon", withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            image.isTemplate = true
+            image.accessibilityDescription = "Subtitles"
+            return image
+        }
+        guard let image = NSImage(systemSymbolName: "captions.bubble",
+                                  accessibilityDescription: "Subtitles") else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
     /// Reflect paused state in the menu bar itself, so the state is visible
     /// without opening anything.
+    ///
+    /// Dimming only. The icon used to swap between the outline and filled SF
+    /// Symbols, which the custom mark has no counterpart for — and the dimming
+    /// was carrying that signal anyway.
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
-        let name = isPaused() ? "captions.bubble" : "captions.bubble.fill"
-        if let image = NSImage(systemSymbolName: name, accessibilityDescription: "Subtitles") {
-            image.isTemplate = true
-            button.image = image
-        }
         button.alphaValue = isPaused() ? 0.45 : 1.0
         if statusLine().1 { button.toolTip = nil }
     }

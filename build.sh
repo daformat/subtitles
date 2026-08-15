@@ -74,6 +74,10 @@ if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   exit 1
 fi
 
+# The status icon. Copied rather than declared as a SwiftPM resource because the
+# bundle here is assembled by hand, not by SwiftPM.
+cp app/macos/StatusIcon.svg "$APP/Contents/Resources/"
+
 echo "==> third-party notices"
 # Apache-2.0 §4(a) requires giving recipients a copy of the licence, so it has to
 # travel inside the bundle rather than living only in the repo.
