@@ -47,7 +47,12 @@ So:
 - `./probe.sh` plays a known tone and reports whether real samples arrive. Run it
   after any rebuild.
 - The app carries a watchdog: if it receives only digital silence while other apps
-  are playing audio, the menu bar icon gets a yellow dot.
+  are playing audio, it says so in the log. It cannot badge the icon over it —
+  a denied grant and an idle machine look identical from inside, and the check it
+  relies on misfires at roughly one launch in four.
+- **Check Audio Permission…** in the menu is always there, and opens Privacy &
+  Security. There is no API for "is capture granted", so the app does not pretend
+  to know.
 - **Always launch via `./run.sh`.** Running the binary directly makes your terminal
   the TCC-responsible process, and the grant will not apply — you get the silent
   all-zero behaviour above.

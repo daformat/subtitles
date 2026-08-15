@@ -174,14 +174,13 @@ final class Renderer {
     private var line = ""
     private var warnedAboutSilence = false
     private var lastStatus = ""
-    private(set) var audioHealthy = true
 
     /// Whether audio is actually arriving right now, as opposed to no fault
     /// having been detected.
     ///
-    /// Starts false, which is the whole point: `audioHealthy` begins true because
-    /// nothing has gone wrong yet, and reading that as "listening" lit the live
-    /// badge at launch whether or not anything was playing.
+    /// Starts false, which is the whole point. The flag this replaced began true —
+    /// nothing having gone wrong yet — and reading that as "listening" lit the
+    /// live badge at launch whether or not anything was playing.
     ///
     /// Tolerates a couple of seconds of quiet so the badge does not blink out
     /// between sentences; it is reporting "something is playing", not "someone is
@@ -214,12 +213,12 @@ final class Renderer {
         line = ""
     }
 
-    /// Forget any silence warning. Called when pausing, so a warning raised before
-    /// the pause does not outlive it — the tap it was complaining about is gone,
-    /// and the judgement has to be made afresh once audio is flowing again.
+    /// Let the silence warning fire again. Called when pausing, so a warning
+    /// raised before the pause does not suppress a later one — the tap it was
+    /// complaining about is gone, and the judgement has to be made afresh once
+    /// audio is flowing again.
     func clearHealthWarning() {
         warnedAboutSilence = false
-        audioHealthy = true
         // Nothing is arriving with the tap down, and no status event will come to
         // say so — leaving this set would light the live badge on resume before a
         // single sample had been seen.
@@ -244,7 +243,6 @@ final class Renderer {
             let playing = SystemAudioTap.processesOutputtingAudio()
             if !playing.isEmpty {
                 warnedAboutSilence = true
-                audioHealthy = false
                 err("""
 
                 \(red)\(bold)Receiving only silence while audio is playing.\(reset)
@@ -260,7 +258,6 @@ final class Renderer {
             }
         } else if silentSeconds == 0 {
             warnedAboutSilence = false
-            audioHealthy = true
         }
 
         onStatusRefresh?()
@@ -590,7 +587,6 @@ if useOverlay {
     menu.currentSource = { tap.source }
     menu.currentFontSize = { fontSize }
     menu.currentVariantID = { currentVariant.rawValue }
-    menu.audioFault = { !renderer.audioHealthy }
     menu.engineBusy = { engineBusyMessage }
     menu.engineProgress = { engineBusyProgress }
     menu.statusLine = {

@@ -478,13 +478,11 @@ the same clip transcribed in full.
 
 #### Post-Phase-3 refinements
 
-- **Permission failure moved off the overlay.** It now shows as a yellow dot
-  badging the menu bar icon — yellow because red reads as "recording" up there,
-  and orange and green are already taken by the system's microphone and camera
-  indicators. Covering the subtitles with a diagnostic is exactly when the
-  user is least able to tell what is wrong. The dot is a subview, not composited
-  into the icon — compositing would force `isTemplate = false` and the icon would
-  stop adapting to light/dark menu bars.
+- **Permission failure moved off the overlay**, first onto a badge and eventually
+  off the icon entirely (§21) — covering the subtitles with a diagnostic is
+  exactly when the user is least able to tell what is wrong. The badge that
+  remains is a subview, not composited into the icon: compositing would force
+  `isTemplate = false` and the icon would stop adapting to light/dark menu bars.
 - **Pages break at pauses.** A new `SUBS_EVENT_PAUSE` fires at `GATE_HANGOVER`
   (400 ms), and the overlay starts a fresh page on the next words. Display-only:
   the recognizer keeps running, so unlike an endpoint this costs no accuracy —
@@ -1453,15 +1451,32 @@ missing grant needs `processesOutputtingAudio()`, and that is not trustworthy
 enough to accuse anyone with: browsers hold the audio device open with
 `IsRunningOutput` true long after they go quiet.
 
-So the line is grey now and phrases the permission as a conditional hint — honest
-whichever case it is in — and **Fix audio permission…** is keyed to the watchdog's
-positive evidence instead. `StatusSeverity` replaced the old `(String, Bool)`,
+So the line is grey now and phrases the permission as a conditional hint, honest
+whichever case it is in. `StatusSeverity` replaced the old `(String, Bool)`,
 because a bool cannot express "nothing to report" once idle stops being a fault.
 
-**Still open:** the watchdog fires spuriously at launch when audio is already
-playing, since four seconds of startup silence looks exactly like a denied grant.
-The naive fix — arm it only after the first sample — would disable it for the case
-it exists to catch (§8b Finding 1), where you never receive anything at all.
+### The app stopped guessing about the grant
+
+Measured over one session: the watchdog fired on **15 of 67 launches** — audio
+already playing, and more than four seconds of zeros before the tap started
+delivering, which is indistinguishable from a denial. It was arming a menu item on
+that.
+
+Both states that item ever had were inferences, and both were wrong in one
+direction. "Audio access: OK" asserted a grant that had never been demonstrated,
+usually before a single sample had arrived. "Fix audio permission…" appeared on a
+heuristic wrong a quarter of the time.
+
+There is no API for "is audio capture granted" — §8b Finding 1 is precisely that a
+denial is silent and looks like quiet. So the item is now permanent and neutral:
+**Check Audio Permission…**, always present, opening Privacy & Security, claiming
+nothing. The watchdog keeps its log message, which is genuinely useful with a
+terminal open, and `audioHealthy` went with the guessing: after `receivingAudio`
+took over the badge, it was written in three places and read in none.
+
+The lesson worth keeping is the one that recurred all session: a flag meaning "no
+fault detected yet" is not a flag meaning "working", and every place the two were
+conflated produced a confident false claim.
 
 ### Multilingual is the default, and the picker is grouped by language
 

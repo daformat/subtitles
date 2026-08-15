@@ -165,14 +165,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var engineProgress: () -> Double = { 0 }
     /// (headline, how loudly to say it) — e.g. ("Nemotron · 560 ms · RTF 0.12", .normal)
     var statusLine: () -> (String, StatusSeverity) = { ("", .normal) }
-    /// True once the watchdog has positive evidence of a fault: other apps
-    /// demonstrably playing while every sample we receive is zero.
-    ///
-    /// Kept apart from the status line's severity because it is the stronger and
-    /// rarer signal. The status line stays calm about silence, since it cannot
-    /// tell an idle machine from a broken grant; this can, well enough to be worth
-    /// offering the fix for.
-    var audioFault: () -> Bool = { false }
 
     override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -636,16 +628,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     // MARK: permission
 
+    /// Always present, never conditional.
+    ///
+    /// There is no API for "is audio capture granted" — a denied grant is
+    /// indistinguishable from silence, which is the whole of §8b Finding 1. Every
+    /// attempt to infer it has been wrong in one direction or the other: the old
+    /// "Audio access: OK" asserted a grant that had never been demonstrated, often
+    /// before a single sample had arrived, while "Fix audio permission…" appeared
+    /// on a heuristic that misfired at launch about one start in four.
+    ///
+    /// A permanent entry claims nothing and is there whenever it is wanted, which
+    /// is the honest shape for a question the app cannot answer.
     private func permissionMenuItem() -> NSMenuItem {
-        // Only positive evidence offers the fix. Silence on its own says nothing
-        // about whether the grant is in place, and inviting the user into Privacy
-        // & Security over it would send them chasing a non-problem.
-        if !audioFault() {
-            let ok = NSMenuItem(title: "Audio access: OK", action: nil, keyEquivalent: "")
-            ok.isEnabled = false
-            return ok
-        }
-        let item = NSMenuItem(title: "Fix audio permission…",
+        let item = NSMenuItem(title: "Check Audio Permission…",
                               action: #selector(openPrivacySettings), keyEquivalent: "")
         item.target = self
         return item
