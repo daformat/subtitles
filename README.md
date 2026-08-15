@@ -225,7 +225,15 @@ the things that turned out to be wrong.
 
 ## Licence
 
-[0BSD](LICENSE) — do whatever you like with it, no attribution required.
+[FSL-1.1-ALv2](LICENSE) — the [Functional Source License](https://fsl.software).
+Read it, build it, modify it, run it for whatever you like. The one thing it
+withholds is *competing use*: shipping it as a commercial product that
+substitutes for this one. Every release converts to **Apache-2.0 two years after
+it is published**, irrevocably — so this is open source on a delay, not a
+trapdoor.
+
+Commits up to `dfe4b08` were published under 0BSD and remain so; that grant
+cannot be withdrawn, and this is not an attempt to.
 
 That covers the code in this repository. Everything fetched at run time keeps its
 own terms — FluidAudio is Apache-2.0, and the models are third-party weights:

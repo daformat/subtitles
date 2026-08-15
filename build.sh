@@ -132,7 +132,8 @@ NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 {
   echo "Subtitles — third-party notices"
   echo
-  echo "Subtitles itself is 0BSD (see LICENSE); it asks nothing of you."
+  echo "Subtitles itself is FSL-1.1-ALv2 (see LICENSE), which converts to"
+  echo "Apache-2.0 two years after each release."
   echo "The components below are compiled into this application."
   echo
   echo "The speech models are NOT included in this application. They are"
