@@ -71,27 +71,37 @@ while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), 
 nothing at all when paused, where the icon dims instead. Deliberately never red —
 red means recording, and nothing is ever written anywhere.
 
-**Model** switches between Parakeet variants at runtime and remembers your choice.
-They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
-160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms, plus **Parakeet Unified**.
-Those seven are English checkpoints and live behind an **English** submenu;
-**Multilingual** sits above it and is the default.
+**Language / Models** is the one setting most people will touch, and language is
+the top level of it, because that is the first thing that rules a model in or out:
+
+```
+Multilingual                      ← default; detects the language itself
+──────────────
+English ▸                         ← the only language with a choice of models
+──────────────
+Latin-script pack · 583 MB
+Español  Français  Italiano  Português  Deutsch
+──────────────
+Full vocabulary · 633 MB
+中文  日本語
+```
+
+The groups are the downloads. The multilingual model ships as two vocabularies —
+a pruned Latin-script pack and the full one, which zh/ja need and which
+auto-detect also takes, having to decode anything. Moving within a group is
+instant; crossing between them fetches the other pack. Measured here at RTF
+0.08–0.11 on French, the same as Nemotron 560 on English.
+
+**English** opens onto the seven English-only checkpoints, which differ in chunk
+size — the latency/accuracy dial. Nemotron at 560 / 1120 / 2240 ms comes first,
+then Parakeet EOU at 320 / 1280 / 160 ms, then Parakeet Unified. Each entry
+carries its own download size, none of them the packs above: an EOU tier is
+215 MB, Nemotron 612 MB, Unified 595 MB.
 
 Punctuation splits the families: the EOU variants emit none, so their output is
 unpunctuated lowercase. Nemotron, Unified and Multilingual all punctuate and
 capitalise themselves. Unified costs 2.08 s of latency for no advantage over
 Nemotron 560 that this project has been able to identify.
-
-**Multilingual** is the one variant that is not English-only, so its language is
-the choice — pick a language from its submenu and you get the model with it.
-Auto-detect, or pin one of English, Español, Français, Italiano, Português,
-Deutsch, 中文, 日本語. Measured here at RTF 0.08–0.11 on French, the same as
-Nemotron 560 on English.
-
-The submenu is grouped by download, because the model ships as two vocabularies:
-the six Latin-script languages share a pruned 583 MB pack, while zh/ja — and
-Auto-detect, which has to be able to decode anything — need the full 633 MB one.
-Moving within a group is instant; crossing between them fetches the other pack.
 
 Picking a variant that has not been downloaded starts its download there and then.
 Changing your mind mid-download cancels it and starts the new one immediately;

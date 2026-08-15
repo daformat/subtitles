@@ -1471,9 +1471,37 @@ measurable — RTF 0.08–0.11 on French, indistinguishable from Nemotron 560 on
 English — and `auto` routes the first download to the full-vocab pack (633 MB),
 since it has to be able to decode anything.
 
-The seven English variants moved behind an **English** submenu. Listing them flat
-with an `English · ` prefix each said the same word seven times; the submenu says
-it once and leaves the entries free to be about what separates them.
+The picker became **Language / Models**, with language at the top level, since it
+is the first decision and for most people the only one:
+
+```
+Multilingual                      default; detects the language itself
+──────────────
+English ▸                         the only language with a choice of models
+──────────────
+Latin-script pack · 583 MB
+Español  Français  Italiano  Português  Deutsch
+──────────────
+Full vocabulary · 633 MB
+中文  日本語
+```
+
+The groups are the downloads, named in disabled headers of the kind the source
+picker already uses. Crossing a group boundary is another ~600 MB, which is worth
+knowing before the click rather than after.
+
+**English sits outside both groups on purpose.** Choosing it loads an English-only
+checkpoint rather than either multilingual pack, so neither header's size applies
+to it — its own sizes live on its own entries. It is also the only language with
+models to choose between, Nemotron first: it punctuates, it is the fastest tier,
+and it is what someone picking an English model most likely wants. EOU 160 is last
+of the EOU tiers despite being the lowest-latency on paper, because it is the one
+measured here at RTF 0.6–2.2.
+
+One thing the flattening gives up: multilingual-pinned-to-English is no longer
+reachable from the menu, English there meaning the English-only checkpoints. They
+are the better choice for English anyway, and the code path survives for a saved
+preference or `--variant`.
 
 ---
 

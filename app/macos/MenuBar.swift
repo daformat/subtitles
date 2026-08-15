@@ -496,18 +496,68 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // already ignores a switch while one is in flight, and the progress bar
         // above says why — so neither replacing the submenu nor greying it out
         // buys anything the user cannot already see.
-        let item = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "Language / Models", action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentVariantID()
+        let onMultilingual = current == FluidVariant.multilingual.rawValue
+        let language = FluidLanguage(rawValue: currentLanguageID()) ?? .auto
 
-        // Two branches, by language, because that is the first decision. The
-        // multilingual entry leads: it is the default, and it is the one that
-        // works whatever the audio turns out to be.
-        sub.addItem(languageMenuItem(selected: FluidVariant.multilingual.rawValue == current))
+        // Language is the top level, because it is the first decision and for most
+        // people the only one. Auto-detect leads as the default; English is the one
+        // language with a choice of models behind it, the other seven being served
+        // by the multilingual checkpoint alone.
+        sub.addItem(autoDetectItem(checked: onMultilingual && language == .auto))
+
+        // English stands apart from both packs: choosing it loads an English-only
+        // checkpoint, not the multilingual model, so neither pack header applies
+        // to it and its sizes live on its own entries.
         sub.addItem(.separator())
         sub.addItem(englishMenuItem(current: current))
 
+        // Grouped by the download each one triggers, with the size named. Moving
+        // within a group is instant; crossing between them is another ~600 MB, and
+        // that is worth knowing before clicking rather than after.
+        sub.addItem(.separator())
+        sub.addItem(groupHeader("Latin-script pack · 583 MB"))
+        for entry in [FluidLanguage.es, .fr, .it, .pt, .de] {
+            sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
+        }
+        sub.addItem(.separator())
+        sub.addItem(groupHeader("Full vocabulary · 633 MB"))
+        for entry in [FluidLanguage.zh, .ja] {
+            sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
+        }
+
         item.submenu = sub
+        return item
+    }
+
+    private func autoDetectItem(checked: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: "Multilingual",
+                              action: #selector(selectLanguage(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = FluidLanguage.auto.rawValue
+        item.state = checked ? .on : .off
+        item.attributedTitle = NSAttributedString(
+            string: "Multilingual\n633 MB · default · detects the language itself",
+            attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        return item
+    }
+
+    /// A disabled label over a group, matching the "Playing now" headers the
+    /// source picker already uses.
+    private func groupHeader(_ title: String) -> NSMenuItem {
+        let header = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        return header
+    }
+
+    private func languageItem(_ language: FluidLanguage, checked: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: language.displayName,
+                              action: #selector(selectLanguage(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = language.rawValue
+        item.state = checked ? .on : .off
         return item
     }
 
@@ -519,7 +569,15 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// chunk size, which is the latency/accuracy dial this whole app is an
     /// argument about.
     private func englishMenuItem(current: String) -> NSMenuItem {
-        let variants = FluidVariant.allCases.filter { !$0.isMultilingual }
+        // Nemotron first: it punctuates, it is the fastest tier on offer, and it
+        // is what someone picking an English model most likely wants. The Parakeet
+        // family follows — the EOU tiers, which emit no punctuation at all, then
+        // Unified, which costs 2 s of latency for nothing Nemotron lacks.
+        let variants: [FluidVariant] = [
+            .nemotron560, .nemotron1120, .nemotron2240,
+            .eou320, .eou1280, .eou160,
+            .unified,
+        ]
         let selected = variants.first { $0.rawValue == current }
         let item = NSMenuItem(
             title: selected.map { "English · \($0.displayName)" } ?? "English",
@@ -536,42 +594,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             entry.attributedTitle = NSAttributedString(
                 string: "\(variant.displayName)\n\(variant.note)",
                 attributes: [.font: NSFont.menuFont(ofSize: 0)])
-            sub.addItem(entry)
-        }
-        item.submenu = sub
-        return item
-    }
-
-    /// The multilingual model, with its language as the actual choice.
-    ///
-    /// Selecting a language selects the model too — one click for the whole
-    /// intent, and no way to end up with a language set that the running model
-    /// cannot honour. The parent carries the current language so the state reads
-    /// without opening the third level.
-    private func languageMenuItem(selected: Bool) -> NSMenuItem {
-        let current = currentLanguageID()
-        let language = FluidLanguage(rawValue: current) ?? .auto
-        let variant = FluidVariant.multilingual
-        let title = selected
-            ? "\(variant.displayName) · \(language.displayName)"
-            : variant.displayName
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.attributedTitle = NSAttributedString(
-            string: "\(title)\n\(variant.note)",
-            attributes: [.font: NSFont.menuFont(ofSize: 0)])
-        item.state = selected ? .on : .off
-
-        let sub = NSMenu()
-        for lang in FluidLanguage.allCases {
-            // The Latin-script six share one download; auto and zh/ja need the
-            // bigger pack. Separated so the boundary that costs a download is at
-            // least visible.
-            if lang == .en || lang == .zh { sub.addItem(.separator()) }
-            let entry = NSMenuItem(title: lang.displayName,
-                                   action: #selector(selectLanguage(_:)), keyEquivalent: "")
-            entry.target = self
-            entry.representedObject = lang.rawValue
-            entry.state = (selected && lang.rawValue == current) ? .on : .off
             sub.addItem(entry)
         }
         item.submenu = sub
