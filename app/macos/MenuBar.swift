@@ -500,24 +500,41 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let sub = NSMenu()
         let current = currentVariantID()
 
-        // Every variant is Parakeet on the Neural Engine; they differ in chunk
-        // size, which is the latency/accuracy dial worth exposing.
-        for variant in FluidVariant.allCases {
-            // The multilingual entry is a submenu instead of a plain choice:
-            // picking it without saying which language is not a complete request,
-            // and the language decides which pack gets downloaded.
-            if variant.isMultilingual {
-                sub.addItem(.separator())
-                sub.addItem(languageMenuItem(selected: variant.rawValue == current))
-                continue
-            }
-            let entry = NSMenuItem(title: variant.menuTitle,
+        // Two branches, by language, because that is the first decision. The
+        // multilingual entry leads: it is the default, and it is the one that
+        // works whatever the audio turns out to be.
+        sub.addItem(languageMenuItem(selected: FluidVariant.multilingual.rawValue == current))
+        sub.addItem(.separator())
+        sub.addItem(englishMenuItem(current: current))
+
+        item.submenu = sub
+        return item
+    }
+
+    /// The English-only variants, behind one entry.
+    ///
+    /// Seven of the eight models are English checkpoints, and listing them flat
+    /// meant seven lines each opening with the same word. A submenu says it once
+    /// and leaves the entries free to be about what actually separates them —
+    /// chunk size, which is the latency/accuracy dial this whole app is an
+    /// argument about.
+    private func englishMenuItem(current: String) -> NSMenuItem {
+        let variants = FluidVariant.allCases.filter { !$0.isMultilingual }
+        let selected = variants.first { $0.rawValue == current }
+        let item = NSMenuItem(
+            title: selected.map { "English · \($0.displayName)" } ?? "English",
+            action: nil, keyEquivalent: "")
+        item.state = selected == nil ? .off : .on
+
+        let sub = NSMenu()
+        for variant in variants {
+            let entry = NSMenuItem(title: variant.displayName,
                                    action: #selector(selectVariant(_:)), keyEquivalent: "")
             entry.target = self
             entry.representedObject = variant.rawValue
             entry.state = variant.rawValue == current ? .on : .off
             entry.attributedTitle = NSAttributedString(
-                string: "\(variant.menuTitle)\n\(variant.note)",
+                string: "\(variant.displayName)\n\(variant.note)",
                 attributes: [.font: NSFont.menuFont(ofSize: 0)])
             sub.addItem(entry)
         }

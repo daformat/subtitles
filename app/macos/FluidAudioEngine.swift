@@ -74,11 +74,11 @@ enum FluidVariant: String, CaseIterable {
         case .eou160: return "215 MB · no punctuation · ⚠︎ RTF 0.6–2.2 here"
         case .eou320: return "215 MB · no punctuation · RTF 0.13–0.15"
         case .eou1280: return "215 MB · no punctuation · highest throughput"
-        case .nemotron560: return "612 MB · punctuated · default, lowest latency"
+        case .nemotron560: return "612 MB · punctuated · lowest latency"
         case .nemotron1120: return "612 MB · punctuated · the trained chunk size"
         case .nemotron2240: return "612 MB · punctuated · highest throughput"
         case .unified: return "595 MB · punctuated · 2.08 s · Nemotron is faster"
-        case .multilingual: return "583–633 MB · 9 languages · punctuated"
+        case .multilingual: return "583–633 MB · default · 9 languages · punctuated"
         }
     }
 
@@ -98,16 +98,6 @@ enum FluidVariant: String, CaseIterable {
 
     var isMultilingual: Bool { self == .multilingual }
 
-    /// How the picker lists it: language first, because that is what rules a
-    /// model in or out before latency or size are worth reading.
-    ///
-    /// Only for the menu. `displayName` stays unprefixed because it also goes
-    /// into the status line and every download headline, where "English · " is
-    /// noise in front of a percentage. The multilingual entry needs no prefix —
-    /// its name already is one.
-    var menuTitle: String {
-        isMultilingual ? displayName : "English · \(displayName)"
-    }
 
     var chunkSamples: Int {
         switch self {

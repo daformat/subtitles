@@ -106,11 +106,15 @@ let app = NSApplication.shared
 // Globals rather than captures: the audio callback must not touch ARC.
 nonisolated(unsafe) var engine: OpaquePointer?
 nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
-/// Nemotron 560 rather than EOU 320: it is the tier actually in use here, so the
-/// bundle a cold cache pulls is the one the app will go on running. Note this
-/// avoids downloading a *second* family that never gets used — a genuinely fresh
-/// machine still fetches this one from HuggingFace on first launch.
-nonisolated(unsafe) var currentVariant: FluidVariant = .nemotron560
+/// Multilingual on auto-detect, because a default should work before it is
+/// configured and the English-only checkpoints simply do not, for most of the
+/// world's audio. It costs nothing measurable: RTF 0.08–0.11 on French here,
+/// indistinguishable from Nemotron 560 on English.
+///
+/// Paired with `currentLanguage` defaulting to `.auto`, which routes the first
+/// download to the full-vocab pack (633 MB) rather than the Latin-script one —
+/// auto has to be able to decode anything.
+nonisolated(unsafe) var currentVariant: FluidVariant = .multilingual
 /// Only read by the multilingual variant. Kept even while an English-only model
 /// is selected, so switching back does not lose the choice.
 nonisolated(unsafe) var currentLanguage: FluidLanguage = .auto

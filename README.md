@@ -28,10 +28,10 @@ at roughly 0.15 real-time factor.
 ./run.sh     # go
 ```
 
-Models download themselves on first run — ~613 MB from HuggingFace for the default
-Nemotron 560, so the first launch takes minutes before `engine ready` appears. The
-menu bar shows the progress: a pulsing blue dot on the icon, and a bar with the
-percentage and file count in the menu.
+Models download themselves on first run — ~633 MB from HuggingFace for the
+default, Multilingual on auto-detect — so the first launch takes minutes before
+`engine ready` appears. The menu bar shows the progress: a pulsing blue dot on the
+icon, and a bar with the percentage and file count in the menu.
 
 `probe.sh` is not ceremony — see below.
 
@@ -66,10 +66,16 @@ The app lives in the menu bar (no Dock icon).
 | **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
 | Menu bar | model, source, text size, overlay position, permission state |
 
+The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
+while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and
+nothing at all when paused, where the icon dims instead. Deliberately never red —
+red means recording, and nothing is ever written anywhere.
+
 **Model** switches between Parakeet variants at runtime and remembers your choice.
 They differ in chunk size, which is the latency/accuracy dial: Parakeet EOU at
-160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms (**560 is the default**),
-plus **Parakeet Unified** and **Multilingual**.
+160 / 320 / 1280 ms, Nemotron at 560 / 1120 / 2240 ms, plus **Parakeet Unified**.
+Those seven are English checkpoints and live behind an **English** submenu;
+**Multilingual** sits above it and is the default.
 
 Punctuation splits the families: the EOU variants emit none, so their output is
 unpunctuated lowercase. Nemotron, Unified and Multilingual all punctuate and
@@ -181,8 +187,8 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 - The shipped variants are **not measured by this project** — the numbers in the
   menu are upstream's. The harness in `spike/latency` cannot drive FluidAudio, so
   there is no like-for-like latency/WER comparison yet.
-- **Nemotron 560 ms** is the default and the tier in daily use; the EOU variants
-  are the ones measured. Nemotron 1120 / 2240 are wired but barely tested.
+- **Multilingual on auto-detect** is the default. The EOU variants are the ones
+  measured; Nemotron 1120 / 2240 are wired but barely tested.
 - Non-English needs the **Multilingual** variant; the other six are English-only
   checkpoints. Its nine languages are the ones exposed here — the model itself
   reaches ~40 via `prompt_id`, and adding one is a menu entry plus a FLEURS-style
@@ -193,7 +199,7 @@ is close to falling behind permanently, since a live stream cannot be caught up.
   reports on a ~0.5 s cadence, so a word or two of the new speaker can land on the
   outgoing box before it clears. Waiting for the label instead would delay every
   subtitle by the diarizer's cadence.
-- First launch downloads ~613 MB, which takes minutes. Switching model downloads
+- First launch downloads ~633 MB, which takes minutes. Switching model downloads
   that variant too — 215 MB for an EOU tier, ~600 MB for the others; each entry
   shows its size. Anything already fetched is kept and skipped, and changing
   language within one Multilingual pack costs nothing.

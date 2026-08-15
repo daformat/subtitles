@@ -5,8 +5,9 @@ The product only works if the delay is small enough to feel live, so latency is 
 primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
-First-run download is visible and interruptible (§18); default is Nemotron 560.
-Per-app capture actually switches as of §19. Nine languages as of §20.
+First-run download is visible and interruptible (§18); default is Multilingual,
+auto-detecting. Per-app capture actually switches as of §19; nine languages, §20.
+The menu bar badge says what is actually happening (§21).
 Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER,
 download integrity check and failure handling.
@@ -1384,6 +1385,95 @@ against the rest. Every menu note now states its punctuation status, and Unified
 yet. Convert it yourself … (Linux + CUDA required)"*. The repo exists and
 `downloadVariant` fetches from it happily. Vendored documentation is a snapshot;
 the code and the registry were the truth here.
+
+---
+
+## 21. Making the menu bar tell the truth (2026-08-15)
+
+The badge had one honest state and several that were actively misleading. Sorting
+that out took five passes, and the interesting part is that four of them were bugs
+rather than taste.
+
+### The states, and the colours left over
+
+| state | colour | motion |
+|---|---|---|
+| loading a model | blue | 0.7 s pulse |
+| listening | **indigo** | 1.8 s pulse |
+| falling behind, RTF ≥ 0.8 | yellow | still |
+| paused | none | the icon dims |
+
+**Never red.** Red in a menu bar means recording, and this app never records —
+audio is transcribed as it passes and nothing is written anywhere. Red was in fact
+used twice before landing here: first for the *fault* state, where it read as the
+exact opposite of its meaning, then briefly for listening, where it promised a
+file that does not exist. The comment defending that second use claimed red was
+"accurate: the app is capturing system audio at this moment", which conflates
+capturing to transcribe with capturing to keep.
+
+**Orange and green were never available** — macOS uses them for microphone and
+camera in use. That leaves yellow for caution, and indigo, which is the blue-purple
+Control Center already uses, so the badge looks like something the system put
+there. Indigo is the closest of the candidates to the loading blue (#5856D6 against
+#007AFF), tolerable only because a load is brief and listening is the steady state.
+
+One dot with four states, not a view per state: they are mutually exclusive by
+definition, and separate views meant hand-written code to keep two from showing at
+once.
+
+### Four bugs behind the states ⚠️
+
+**The live badge lit at launch regardless of whether anything was playing.**
+`audioHealthy` starts true because nothing has gone wrong *yet*, and that was being
+read as "audio is arriving". They are not the same claim. A separate
+`receivingAudio`, starting false and driven by the core's `silentSeconds`, says
+what was meant — with a two-second grace so the badge does not blink out between
+sentences.
+
+**⌥⌘S appeared to do nothing when no audio was playing.** The icon was refreshed
+only by opening the menu and by audio-driven status events — and pausing stops the
+tap, which stops the events. The pause worked; nothing told the menu bar. With
+audio playing you saw subtitles stop and assumed it had; with none, the shortcut
+looked dead.
+
+**Pause did not actually stop capture.** It discarded samples while the aggregate
+device and IOProc stayed alive, so macOS reported the app as capturing for the
+whole time it claimed to be paused. Verified by polling
+`kAudioProcessPropertyIsRunningInput` across a toggle.
+
+**Pause did not empty the buffers either**, so resuming replayed the seconds
+before it — from the frame queue, the recogniser's context, and the core's ring,
+which keeps draining after the tap stops and would have refilled the queue behind
+any flush.
+
+### "No audio reaching Subtitles" was crying wolf
+
+It appeared, in red, the moment playback stopped. Telling idleness apart from a
+missing grant needs `processesOutputtingAudio()`, and that is not trustworthy
+enough to accuse anyone with: browsers hold the audio device open with
+`IsRunningOutput` true long after they go quiet.
+
+So the line is grey now and phrases the permission as a conditional hint — honest
+whichever case it is in — and **Fix audio permission…** is keyed to the watchdog's
+positive evidence instead. `StatusSeverity` replaced the old `(String, Bool)`,
+because a bool cannot express "nothing to report" once idle stops being a fault.
+
+**Still open:** the watchdog fires spuriously at launch when audio is already
+playing, since four seconds of startup silence looks exactly like a denied grant.
+The naive fix — arm it only after the first sample — would disable it for the case
+it exists to catch (§8b Finding 1), where you never receive anything at all.
+
+### Multilingual is the default, and the picker is grouped by language
+
+A default should work before it is configured, and the English-only checkpoints do
+not for most of the world's audio. Multilingual on auto-detect costs nothing
+measurable — RTF 0.08–0.11 on French, indistinguishable from Nemotron 560 on
+English — and `auto` routes the first download to the full-vocab pack (633 MB),
+since it has to be able to decode anything.
+
+The seven English variants moved behind an **English** submenu. Listing them flat
+with an `English · ` prefix each said the same word seven times; the submenu says
+it once and leaves the entries free to be about what separates them.
 
 ---
 
