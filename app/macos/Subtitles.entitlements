@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The hardened runtime is mandatory for notarization, and it blocks
+         audio-input class access unless this is present. The Core Audio process
+         tap falls under that class, so without this the tap fails at runtime in
+         a signed build while continuing to work in an ad-hoc one — a difference
+         that only shows up after notarization, which is the worst time to find
+         it.
+
+         Deliberately nothing else. disable-library-validation and the JIT
+         entitlements are the usual reflex for a CoreML app, and neither is
+         needed: FluidAudio is linked statically, and the models CoreML compiles
+         at run time are data, not loadable code. Apple also scrutinises those
+         two at review time. Add one only if a real failure demands it. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

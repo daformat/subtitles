@@ -45,7 +45,7 @@ and every sample is zero. There is no error anywhere in the stack.
 So:
 
 - `./probe.sh` plays a known tone and reports whether real samples arrive. Run it
-  after any rebuild.
+  after granting permission, and any time the output looks suspiciously empty.
 - The app carries a watchdog: if it receives only digital silence while other apps
   are playing audio, it says so in the log. It cannot badge the icon over it —
   a denied grant and an idle machine look identical from inside, and the check it
@@ -56,10 +56,13 @@ So:
 - **Always launch via `./run.sh`.** Running the binary directly makes your terminal
   the TCC-responsible process, and the grant will not apply — you get the silent
   all-zero behaviour above.
-- Each `./build.sh` re-signs ad-hoc, which changes the binary's cdhash. macOS
-  identifies ad-hoc-signed apps by that hash, so **every rebuild prompts again**.
-  Signing with a stable self-signed identity fixes this permanently; see
-  [PLAN.md](PLAN.md).
+- **The grant now survives rebuilds.** `build.sh` signs with a Developer ID
+  certificate, so the app keeps one stable identity and TCC keeps its answer.
+  This used to be the reverse: ad-hoc signing gave every build a new cdhash,
+  which is what macOS identifies an ad-hoc app by, so every single rebuild
+  prompted again. Expect one last prompt on the first Developer ID build.
+  Machines without the certificate fall back to ad-hoc and get the old
+  behaviour — `build.sh` says so when it happens.
 
 ## Using it
 
@@ -196,6 +199,28 @@ tail -f build/subtitles.log
 `--headless` gives a terminal renderer that is often easier to debug than the
 overlay. The status line shows RTF; sustained values above ~0.8 mean the pipeline
 is close to falling behind permanently, since a live stream cannot be caught up.
+
+## Releasing
+
+```bash
+./release.sh
+```
+
+Builds, packages a DMG, notarizes it with Apple, staples the ticket and verifies
+the result the way Gatekeeper will. It stops at the first thing that is wrong
+rather than producing a file that fails on someone else's machine — a dirty
+working tree, an ad-hoc signature, a rejected notarization.
+
+Needs a `Developer ID Application` certificate in the login keychain, and
+notarization credentials stored once:
+
+```bash
+xcrun notarytool store-credentials "subtitles-notary" \
+  --apple-id you@example.com --team-id TEAMID --password APP_SPECIFIC_PASSWORD
+```
+
+Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
+`build.sh` before releasing.
 
 ## Known limits
 

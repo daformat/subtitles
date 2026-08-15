@@ -13,6 +13,12 @@ OUT="$ROOT/build"
 APP="$OUT/Subtitles.app"
 export MACOSX_DEPLOYMENT_TARGET=14.2
 
+# VERSION is what people see. BUILD is the monotonic one and must never go
+# backwards or repeat: macOS caches bundle metadata by identifier, and a version
+# that reappears with different contents makes it serve the stale one.
+VERSION="1.0"
+BUILD="1"
+
 echo "==> building rust core"
 (cd core && cargo build --release)
 
@@ -20,7 +26,7 @@ echo "==> assembling bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+> "$APP/Contents/Info.plist" cat <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -30,7 +36,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>         <string>dev.mat.subtitles</string>
     <key>CFBundleName</key>               <string>Subtitles</string>
     <key>CFBundlePackageType</key>        <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>0.1</string>
+    <key>CFBundleShortVersionString</key> <string>$VERSION</string>
+    <key>CFBundleVersion</key>            <string>$BUILD</string>
     <key>LSMinimumSystemVersion</key>     <string>14.2</string>
     <!-- Required for the audio-capture TCC grant. Without it the tap returns
          all-zero samples and reports no error whatsoever. -->
@@ -161,12 +168,55 @@ NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 echo "    $(wc -l < "$NOTICES" | tr -d ' ') lines from $(ls "$FA/ThirdPartyLicenses" | wc -l | tr -d ' ') vendored licences + FluidAudio"
 
 echo "==> signing"
-# Ad-hoc is enough for local dev; what matters is that the Info.plist is bound
-# into the signature so TCC can identify the app.
-codesign --force --sign - --identifier dev.mat.subtitles "$APP"
+# Developer ID rather than ad-hoc, for two reasons. Notarization refuses
+# anything else — but the one that shows up daily is that the cdhash is now
+# stable across rebuilds, so the TCC audio grant survives one instead of being
+# reissued against a new identity every time. That is the whole "every rebuild
+# prompts again" problem in the README, and it goes away here.
+#
+# Falls back to ad-hoc when the certificate is absent (a fresh clone, another
+# machine). The app still builds and runs; it just re-prompts for permission
+# after every build, exactly as it always did.
+IDENTITY="${SUBTITLES_SIGN_IDENTITY:-Developer ID Application}"
+ENTS="app/macos/Subtitles.entitlements"
+
+if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
+  # --options runtime is the hardened runtime, required by notarization.
+  # --timestamp binds a trusted timestamp, so signatures stay valid after the
+  # certificate expires; it needs the network and fails loudly without it.
+  SIGN=(--force --sign "$IDENTITY" --options runtime --timestamp)
+  REAL_IDENTITY=yes
+  echo "    $IDENTITY"
+  echo "    hardened runtime, timestamped, entitlements from $ENTS"
+else
+  SIGN=(--force --sign -)
+  REAL_IDENTITY=no
+  echo "    !! no '$IDENTITY' certificate on this machine — signing ad-hoc"
+  echo "    !! macOS will re-prompt for audio permission after every build,"
+  echo "    !! and this bundle cannot be notarized. Fine for local work."
+fi
+
+# Inside out. A signature seals the bundle's contents, so signing the app first
+# and something inside it second silently invalidates the outer seal — codesign
+# reports success both times and notarization rejects the result. Entitlements
+# go on the app alone; a resource bundle carrying them is a review flag.
+for bundle in "$APP/Contents/Resources/"*.bundle; do
+  [ -e "$bundle" ] || continue
+  codesign "${SIGN[@]}" "$bundle"
+  echo "    signed $(basename "$bundle")"
+done
+
+if [ "$REAL_IDENTITY" = yes ]; then
+  codesign "${SIGN[@]}" --entitlements "$ENTS" --identifier dev.mat.subtitles "$APP"
+else
+  codesign "${SIGN[@]}" --identifier dev.mat.subtitles "$APP"
+fi
+
+# --strict catches the sealing mistake above; the plain verify does not.
+codesign --verify --strict --deep "$APP"
 
 echo
-echo "built $APP"
-codesign -dv "$APP" 2>&1 | grep -E "Identifier|Info.plist"
+echo "built $APP  ($VERSION, build $BUILD)"
+codesign -dvv "$APP" 2>&1 | grep -E "Identifier=|Authority=Developer ID Application|TeamIdentifier|flags=" || true
 echo
 echo "run it with:  ./run.sh"
