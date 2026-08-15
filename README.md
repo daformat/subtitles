@@ -220,3 +220,9 @@ of use. They do carry conditions — attribution and notice retention, NVIDIA's
 requirement not to strip safety guardrails, and defensive patent-termination
 clauses in the NVIDIA and OpenMDW terms. Read the model card for whichever
 variants you actually ship; this table is a summary, not advice.
+
+Only FluidAudio is compiled in, so it is the only one whose licence has to travel
+with the app: `build.sh` assembles `THIRD-PARTY-NOTICES.txt` into the bundle from
+the checkout itself — a copy kept here would go stale the next time the dependency
+is bumped — and **Acknowledgements…** in the menu opens it. The models are not
+distributed with the app; your machine fetches them on first use.

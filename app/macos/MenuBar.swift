@@ -311,6 +311,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(permissionMenuItem())
+        menu.addItem(acknowledgementsMenuItem())
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Subtitles", action: #selector(quit), keyEquivalent: "q")
@@ -494,6 +495,31 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                               action: #selector(openPrivacySettings), keyEquivalent: "")
         item.target = self
         return item
+    }
+
+    /// Opens the notices file `build.sh` puts in the bundle.
+    ///
+    /// Apache-2.0 is satisfied by the file being *in* the bundle; this only makes
+    /// it findable, which is worth one menu item and no window. Hidden when the
+    /// file is absent rather than offering a dead item — a dev build run straight
+    /// from `.build` has no bundle around it.
+    private func acknowledgementsMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Acknowledgements…",
+                              action: #selector(openAcknowledgements), keyEquivalent: "")
+        item.target = self
+        item.isHidden = Self.noticesURL == nil
+        return item
+    }
+
+    private static var noticesURL: URL? {
+        guard let url = Bundle.main.url(forResource: "THIRD-PARTY-NOTICES",
+                                        withExtension: "txt") else { return nil }
+        return url
+    }
+
+    @objc private func openAcknowledgements() {
+        guard let url = Self.noticesURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func openPrivacySettings() {
