@@ -26,6 +26,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>         <string>subtitles</string>
+    <key>CFBundleIconFile</key>           <string>AppIcon</string>
     <key>CFBundleIdentifier</key>         <string>dev.mat.subtitles</string>
     <key>CFBundleName</key>               <string>Subtitles</string>
     <key>CFBundlePackageType</key>        <string>APPL</string>
@@ -77,6 +78,36 @@ fi
 # The status icon. Copied rather than declared as a SwiftPM resource because the
 # bundle here is assembled by hand, not by SwiftPM.
 cp app/macos/StatusIcon.svg "$APP/Contents/Resources/"
+
+# The app icon. Built from the one PNG rather than committing an .icns, so there
+# is a single source of truth to edit. Cached against the source's timestamp:
+# ten sips resizes is a couple of seconds, which is real money on a rebuild loop
+# that otherwise takes ten.
+#
+# The app is LSUIElement and has no Dock icon, so this is for Finder, Get Info,
+# notifications, and — the one that matters — the audio entry in System Settings
+# ▸ Privacy & Security.
+ICNS="$OUT/AppIcon.icns"
+if [ ! -f "$ICNS" ] || [ app/macos/AppIcon.png -nt "$ICNS" ] \
+   || [ tools/makeappicon.swift -nt "$ICNS" ]; then
+  echo "==> app icon"
+  # Shape it first. The source is a full-bleed square; macOS will not round it,
+  # so without this step the icon is a hard-edged tile beside every other app.
+  MASTER="$OUT/AppIcon-shaped.png"
+  swift tools/makeappicon.swift app/macos/AppIcon.png "$MASTER"
+  ICONSET="$OUT/AppIcon.iconset"
+  rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+  for size in 16 32 128 256 512; do
+    sips -z $size $size "$MASTER" \
+      --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    sips -z $((size*2)) $((size*2)) "$MASTER" \
+      --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$ICNS"
+  rm -rf "$ICONSET"
+  echo "    $(du -h "$ICNS" | cut -f1) from app/macos/AppIcon.png"
+fi
+cp "$ICNS" "$APP/Contents/Resources/"
 
 echo "==> third-party notices"
 # Apache-2.0 §4(a) requires giving recipients a copy of the licence, so it has to
