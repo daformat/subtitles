@@ -63,6 +63,16 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 swift tools/makedmgbg.swift "$STAGE/.background/background.tiff"
 
+# A volume of this name already mounted — a previous run that died before
+# detaching — makes hdiutil name the new one "Subtitles 1". The layout script
+# would then configure the stale volume instead, and produce an unstyled DMG
+# without failing. Seen once already; it is not hypothetical.
+while read -r stale; do
+  [ -n "$stale" ] || continue
+  echo "    detaching stale volume: $stale"
+  hdiutil detach "$stale" -quiet -force 2>/dev/null || true
+done < <(mount | awk -F' on | \\(' '/\/Volumes\/Subtitles/ {print $2}')
+
 # Read-write first. The window layout — size, icon positions, background — lives
 # in the volume's .DS_Store, which only Finder writes, and only on a mounted
 # writable image. The compressed read-only image people download is converted
@@ -79,9 +89,14 @@ trap 'hdiutil detach "$MOUNT" -quiet -force 2>/dev/null || true' EXIT
 # Coordinates match tools/makedmgbg.swift. Both are in AppleScript's space:
 # points, origin at the window's top left. Changing one without the other points
 # the arrow at empty space.
-if ! osascript <<'APPLESCRIPT'
+# Whatever name the volume actually got, rather than the one asked for — see
+# the stale-volume guard above. Unquoted heredoc so it interpolates; the script
+# below contains no $ or backslashes of its own.
+VOLNAME=$(basename "$MOUNT")
+
+if ! osascript <<APPLESCRIPT
 tell application "Finder"
-  tell disk "Subtitles"
+  tell disk "$VOLNAME"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
