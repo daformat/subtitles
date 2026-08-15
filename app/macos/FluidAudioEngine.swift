@@ -98,6 +98,17 @@ enum FluidVariant: String, CaseIterable {
 
     var isMultilingual: Bool { self == .multilingual }
 
+    /// How the picker lists it: language first, because that is what rules a
+    /// model in or out before latency or size are worth reading.
+    ///
+    /// Only for the menu. `displayName` stays unprefixed because it also goes
+    /// into the status line and every download headline, where "English · " is
+    /// noise in front of a percentage. The multilingual entry needs no prefix —
+    /// its name already is one.
+    var menuTitle: String {
+        isMultilingual ? displayName : "English · \(displayName)"
+    }
+
     var chunkSamples: Int {
         switch self {
         case .multilingual: return 16000 * 560 / 1000

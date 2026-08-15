@@ -511,13 +511,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                 sub.addItem(languageMenuItem(selected: variant.rawValue == current))
                 continue
             }
-            let entry = NSMenuItem(title: variant.displayName,
+            let entry = NSMenuItem(title: variant.menuTitle,
                                    action: #selector(selectVariant(_:)), keyEquivalent: "")
             entry.target = self
             entry.representedObject = variant.rawValue
             entry.state = variant.rawValue == current ? .on : .off
             entry.attributedTitle = NSAttributedString(
-                string: "\(variant.displayName)\n\(variant.note)",
+                string: "\(variant.menuTitle)\n\(variant.note)",
                 attributes: [.font: NSFont.menuFont(ofSize: 0)])
             sub.addItem(entry)
         }
