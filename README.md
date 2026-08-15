@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="Subtitles" width="128">
+
 # Subtitles
 
 Live captions for whatever your Mac is playing — videos, calls, podcasts —

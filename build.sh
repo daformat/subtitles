@@ -105,7 +105,12 @@ if [ ! -f "$ICNS" ] || [ app/macos/AppIcon.png -nt "$ICNS" ] \
   done
   iconutil -c icns "$ICONSET" -o "$ICNS"
   rm -rf "$ICONSET"
-  echo "    $(du -h "$ICNS" | cut -f1) from app/macos/AppIcon.png"
+  # The README's copy, which has to be a tracked file for GitHub to serve it.
+  # Written here so it cannot drift from the icon it claims to show; this whole
+  # block only runs when the source actually changes, so an ordinary rebuild
+  # never touches the working tree.
+  sips -z 256 256 "$MASTER" --out docs/icon.png >/dev/null
+  echo "    $(du -h "$ICNS" | cut -f1) from app/macos/AppIcon.png, plus docs/icon.png"
 fi
 cp "$ICNS" "$APP/Contents/Resources/"
 
