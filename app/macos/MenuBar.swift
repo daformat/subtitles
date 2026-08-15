@@ -45,13 +45,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         var colour: NSColor {
             switch self {
-            // Red is the recording convention, and here it is accurate: the app
-            // is capturing system audio at this moment.
-            case .live: return .systemRed
-            // Yellow, not red — a red dot for a *fault* reads as "recording",
-            // which is the opposite of what it means. Not orange either: macOS
-            // already uses orange for microphone-in-use and green for camera, so
-            // yellow is the one caution colour up there not already spoken for.
+            // Purple, and deliberately not red. Red means recording, and this app
+            // never records: audio is transcribed as it passes and nothing is
+            // written anywhere. Orange and green are out too — macOS uses them
+            // for microphone and camera in use — and purple beats teal on the one
+            // axis that matters at 6pt, being unmistakable against the blue of a
+            // load in progress.
+            case .live: return .systemPurple
+            // Yellow for the one condition that is unambiguously wrong and
+            // reliably detectable. Not red — in a menu bar that says recording,
+            // which this app never does — and not orange or green, which macOS
+            // uses for microphone and camera in use.
             case .warning: return .systemYellow
             case .loading: return .systemBlue
             case .none: return .clear
@@ -248,8 +252,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         busySince = nil
 
         // Paused is the deliberate absence of capture, so it says nothing at all —
-        // the dimmed icon is the signal. A red dot here would claim the app is
-        // recording when it has just been told to stop.
+        // the dimmed icon is the signal. A live badge here would claim the app is
+        // listening when it has just been told to stop.
         if isPaused() {
             button.toolTip = nil
             setBadge(.none, in: button)
