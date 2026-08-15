@@ -172,6 +172,19 @@ final class Renderer {
     private var lastStatus = ""
     private(set) var audioHealthy = true
 
+    /// Whether audio is actually arriving right now, as opposed to no fault
+    /// having been detected.
+    ///
+    /// Starts false, which is the whole point: `audioHealthy` begins true because
+    /// nothing has gone wrong yet, and reading that as "listening" lit the live
+    /// badge at launch whether or not anything was playing.
+    ///
+    /// Tolerates a couple of seconds of quiet so the badge does not blink out
+    /// between sentences; it is reporting "something is playing", not "someone is
+    /// talking".
+    private(set) var receivingAudio = false
+    private let silenceGrace: Float = 2
+
     /// FluidAudio reports the whole transcript each update rather than deltas,
     /// with the audio time of every word — which is what the overlay pages on.
     func setWords(_ words: [TimedWord]) {
@@ -197,15 +210,33 @@ final class Renderer {
         line = ""
     }
 
+    /// Forget any silence warning. Called when pausing, so a warning raised before
+    /// the pause does not outlive it — the tap it was complaining about is gone,
+    /// and the judgement has to be made afresh once audio is flowing again.
+    func clearHealthWarning() {
+        warnedAboutSilence = false
+        audioHealthy = true
+        // Nothing is arriving with the tap down, and no status event will come to
+        // say so — leaving this set would light the live badge on resume before a
+        // single sample had been seen.
+        receivingAudio = false
+    }
+
     func pause() {
         overlay?.markPause()
     }
 
     func status(_ text: String, peak: Float, silentSeconds: Float, dropped: UInt64) {
+        receivingAudio = silentSeconds < silenceGrace
+
         // A missing audio-capture grant yields perfectly timed, correctly sized,
         // all-zero buffers with noErr everywhere. The only way to tell that apart
         // from genuine quiet is to ask whether anything is actually playing.
-        if silentSeconds > 4, !warnedAboutSilence {
+        // `!isPaused` because the watchdog exists to catch a *missing permission*,
+        // which looks identical to a pause from in here: perfectly timed all-zero
+        // buffers. Letting it fire while paused turns our own teardown into a
+        // scary permission warning in the log.
+        if !isPaused, silentSeconds > 4, !warnedAboutSilence {
             let playing = SystemAudioTap.processesOutputtingAudio()
             if !playing.isEmpty {
                 warnedAboutSilence = true
@@ -521,10 +552,16 @@ func togglePause() {
         // nothing refills it while paused, so resuming starts from silence
         // instead of replaying the seconds before the pause.
         renderer.discardLine()
+        renderer.clearHealthWarning()
         if let fluid = fluidEngine { Task { await fluid.flush() } }
     } else {
         resumeCapture()
     }
+    // Say so immediately. This used to wait on the next status event from the
+    // core, which never arrives when no audio is reaching the app — and never
+    // arrives at all once paused, since the tap is now stopped. Via ⌥⌘S the
+    // result was a shortcut that looked like it had done nothing.
+    statusMenu?.updateHealthIndicator()
     err(isPaused ? "paused" : "resumed")
 }
 
@@ -549,14 +586,29 @@ if useOverlay {
     menu.currentSource = { tap.source }
     menu.currentFontSize = { fontSize }
     menu.currentVariantID = { currentVariant.rawValue }
+    menu.audioFault = { !renderer.audioHealthy }
     menu.engineBusy = { engineBusyMessage }
     menu.engineProgress = { engineBusyProgress }
     menu.statusLine = {
-        if let busy = engineBusyMessage { return (busy, true) }
-        if !renderer.audioHealthy { return ("No audio reaching Subtitles", false) }
-        if isPaused { return ("Paused", true) }
+        if let busy = engineBusyMessage { return (busy, .normal) }
+        // Paused outranks the rest. Receiving no audio while paused is the tap
+        // being stopped on purpose, not a fault, and it is certainly not the app
+        // listening. A model load still shows through above: that carries on
+        // regardless of capture.
+        if isPaused { return ("Paused", .idle) }
+        // One message, and not a red one. Distinguishing "nothing is playing" from
+        // "the grant is missing" needs `processesOutputtingAudio()`, and that is
+        // not trustworthy enough to accuse anyone with: browsers hold the audio
+        // device open with IsRunningOutput true long after playback stops, so the
+        // fault case fires the moment a video is paused. Phrasing the permission
+        // as a conditional hint is honest in both cases, and stays quiet in the
+        // one that is overwhelmingly more common.
+        if !renderer.receivingAudio {
+            return ("No audio reaching Subtitles — check permission if audio is playing",
+                    .idle)
+        }
         return (String(format: "%@ · RTF %.2f", currentVariant.displayName, lastRTF),
-                lastRTF < 0.8)
+                lastRTF < 0.8 ? .normal : .warning)
     }
     menu.onTogglePause = { togglePause() }
     menu.onResetPosition = { controller.resetPosition() }

@@ -45,7 +45,7 @@ So:
 - `./probe.sh` plays a known tone and reports whether real samples arrive. Run it
   after any rebuild.
 - The app carries a watchdog: if it receives only digital silence while other apps
-  are playing audio, the menu bar icon gets a red dot.
+  are playing audio, the menu bar icon gets a yellow dot.
 - **Always launch via `./run.sh`.** Running the binary directly makes your terminal
   the TCC-responsible process, and the grant will not apply — you get the silent
   all-zero behaviour above.

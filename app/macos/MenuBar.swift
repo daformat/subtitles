@@ -10,46 +10,108 @@
 
 import AppKit
 
+/// How loudly the status line is speaking.
+///
+/// A bool was not enough once "nothing is playing" stopped being a fault. Idle is
+/// the common case — the app sits waiting all day — and dressing it as an error
+/// trains the user to ignore the one state that is genuinely worth reading.
+enum StatusSeverity {
+    /// Working normally.
+    case normal
+    /// Nothing to do: paused, or no audio playing anywhere. Not a problem.
+    case idle
+    /// Something is actually wrong and the user may need to act.
+    case warning
+}
+
 final class StatusMenuController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
 
-    /// Health badge, drawn as a subview rather than composited into the icon.
+    /// What the badge on the icon is saying.
+    ///
+    /// One dot with four states rather than a view per state: they are mutually
+    /// exclusive by definition — all four badge the same corner — and separate
+    /// views meant hand-written code to make sure two never showed at once.
+    private enum Badge: Equatable {
+        /// Paused, or nothing worth saying.
+        case none
+        /// A model is downloading or loading.
+        case loading
+        /// Capturing, and audio is arriving.
+        case live
+        /// Capturing, but only digital silence is arriving.
+        case warning
+
+        var colour: NSColor {
+            switch self {
+            // Red is the recording convention, and here it is accurate: the app
+            // is capturing system audio at this moment.
+            case .live: return .systemRed
+            // Yellow, not red — a red dot for a *fault* reads as "recording",
+            // which is the opposite of what it means. Not orange either: macOS
+            // already uses orange for microphone-in-use and green for camera, so
+            // yellow is the one caution colour up there not already spoken for.
+            case .warning: return .systemYellow
+            case .loading: return .systemBlue
+            case .none: return .clear
+            }
+        }
+
+        /// Seconds per pulse, or nil to sit still. A warning is not in progress,
+        /// so it does not move; loading is brisker than listening, because one is
+        /// working through something finite and the other is a steady state you
+        /// may watch all day.
+        var pulse: TimeInterval? {
+            switch self {
+            case .loading: return 0.7
+            case .live: return 1.8
+            case .warning, .none: return nil
+            }
+        }
+    }
+
+    /// Badge, drawn as a subview rather than composited into the icon.
     /// Compositing would force `isTemplate = false`, and the icon would then stop
     /// adapting to light/dark menu bars; a subview keeps the template intact.
-    private lazy var alertDot: NSView = {
-        let dot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
-        dot.wantsLayer = true
-        dot.layer?.backgroundColor = NSColor.systemRed.cgColor
-        dot.layer?.cornerRadius = 3
-        return dot
-    }()
-
-    /// Shown while a model is downloading or loading — same size and corner as
-    /// `alertDot`, blue because this is work in progress rather than a fault. A
-    /// first-run download is minutes long; without something moving in the menu
-    /// bar the app is indistinguishable from hung.
     ///
-    /// A pulsing dot rather than an `NSProgressIndicator`: at 6pt a spinner
-    /// renders as an illegible grey smudge against the menu bar, while a pulse
-    /// reads as "working" at any size.
-    private lazy var busyDot: NSView = {
+    /// A dot rather than an `NSProgressIndicator` for the loading case: at 6pt a
+    /// spinner renders as an illegible grey smudge against the menu bar, while a
+    /// pulse reads as "working" at any size.
+    private lazy var badgeDot: NSView = {
         let dot = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
         dot.wantsLayer = true
-        dot.layer?.backgroundColor = NSColor.systemBlue.cgColor
         dot.layer?.cornerRadius = 3
         return dot
     }()
 
-    private func startPulse() {
-        guard busyDot.layer?.animation(forKey: "pulse") == nil else { return }
-        let pulse = CABasicAnimation(keyPath: "opacity")
-        pulse.fromValue = 1.0
-        pulse.toValue = 0.25
-        pulse.duration = 0.7
-        pulse.autoreverses = true
-        pulse.repeatCount = .infinity
-        busyDot.layer?.add(pulse, forKey: "pulse")
+    private var badge: Badge = .none
+
+    private func setBadge(_ next: Badge, in button: NSStatusBarButton) {
+        defer {
+            // Always re-place it: the button's bounds change with the icon.
+            if next != .none { badgeDot.frame = badgeRect(in: button, size: 6) }
+        }
+        guard next != badge else { return }
+        badge = next
+
+        guard next != .none else {
+            badgeDot.layer?.removeAnimation(forKey: "pulse")
+            badgeDot.removeFromSuperview()
+            return
+        }
+        badgeDot.layer?.backgroundColor = next.colour.cgColor
+        if badgeDot.superview == nil { button.addSubview(badgeDot) }
+
+        badgeDot.layer?.removeAnimation(forKey: "pulse")
+        guard let duration = next.pulse else { return }
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 1.0
+        animation.toValue = 0.25
+        animation.duration = duration
+        animation.autoreverses = true
+        animation.repeatCount = .infinity
+        badgeDot.layer?.add(animation, forKey: "pulse")
     }
 
     /// Live while the menu is open during a load, because a menu's contents are
@@ -93,8 +155,16 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// Fraction of the current model load, 0…1. Only meaningful while
     /// `engineBusy()` is non-nil.
     var engineProgress: () -> Double = { 0 }
-    /// (headline, isHealthy) — e.g. ("Listening · RTF 0.12", true)
-    var statusLine: () -> (String, Bool) = { ("", true) }
+    /// (headline, how loudly to say it) — e.g. ("Nemotron · 560 ms · RTF 0.12", .normal)
+    var statusLine: () -> (String, StatusSeverity) = { ("", .normal) }
+    /// True once the watchdog has positive evidence of a fault: other apps
+    /// demonstrably playing while every sample we receive is zero.
+    ///
+    /// Kept apart from the status line's severity because it is the stronger and
+    /// rarer signal. The status line stays calm about silence, since it cannot
+    /// tell an idle machine from a broken grant; this can, well enough to be worth
+    /// offering the fix for.
+    var audioFault: () -> Bool = { false }
 
     override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -147,43 +217,54 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
         button.alphaValue = isPaused() ? 0.45 : 1.0
-        if statusLine().1 { button.toolTip = nil }
+        // Tooltip deliberately not touched here: `updateHealthIndicator` sets it
+        // on every branch, and two owners meant it depended on call order.
     }
 
-    /// Show or hide the red dot. Called on every status update from the core, so
+    /// Show or hide the warning dot. Called on every status update from the core, so
     /// the badge appears without the user having to open the menu — the whole
     /// point of moving this out of the overlay.
     func updateHealthIndicator() {
         guard let button = statusItem.button else { return }
+        // Dimming belongs to every refresh, not just to opening the menu. The
+        // ⌥⌘S hotkey calls straight through to the app's togglePause, so this is
+        // the only thing that tells the menu bar a pause happened — and pausing
+        // stops the tap, which stops the status events that used to drive it.
+        refreshIcon()
 
-        // A load in flight outranks the health dot: the two would badge the same
-        // corner, and "no audio reaching Subtitles" is not a useful thing to
-        // shout while the recogniser demonstrably is not up yet.
+        // A load in flight outranks everything else: it badges the same corner,
+        // and neither "listening" nor "no audio reaching Subtitles" is a useful
+        // thing to claim while the recogniser demonstrably is not up yet.
         if let busy = engineBusy() {
             let since = busySince ?? Date()
             busySince = since
             button.toolTip = busy
+            // Below the delay the load is too short to be worth announcing, so
+            // hold whatever was showing rather than flashing a badge on and off.
             guard Date().timeIntervalSince(since) >= busyBadgeDelay else { return }
-            if alertDot.superview != nil { alertDot.removeFromSuperview() }
-            if busyDot.superview == nil { button.addSubview(busyDot) }
-            busyDot.frame = badgeRect(in: button, size: 6)
-            startPulse()
+            setBadge(.loading, in: button)
             return
         }
         busySince = nil
-        if busyDot.superview != nil {
-            busyDot.layer?.removeAnimation(forKey: "pulse")
-            busyDot.removeFromSuperview()
-        }
 
-        let (_, healthy) = statusLine()
-        if healthy {
-            if alertDot.superview != nil { alertDot.removeFromSuperview() }
+        // Paused is the deliberate absence of capture, so it says nothing at all —
+        // the dimmed icon is the signal. A red dot here would claim the app is
+        // recording when it has just been told to stop.
+        if isPaused() {
+            button.toolTip = nil
+            setBadge(.none, in: button)
             return
         }
-        if alertDot.superview == nil { button.addSubview(alertDot) }
-        alertDot.frame = badgeRect(in: button, size: 6)
-        button.toolTip = "No audio reaching Subtitles — check audio permission"
+
+        // Idle shows nothing rather than a dot: waiting for something to play is
+        // the resting state, and a badge for it would be lit most of the day.
+        let (text, severity) = statusLine()
+        button.toolTip = severity == .warning ? text : nil
+        switch severity {
+        case .normal: setBadge(.live, in: button)
+        case .idle: setBadge(.none, in: button)
+        case .warning: setBadge(.warning, in: button)
+        }
     }
 
     /// Top-right corner of the *glyph*, not the button. The button is wider and
@@ -203,7 +284,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         rebuild()
-        refreshIcon()
         updateHealthIndicator()
     }
 
@@ -260,13 +340,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func statusLineItem() -> NSMenuItem {
-        let (text, healthy) = statusLine()
+        let (text, severity) = statusLine()
         let status = NSMenuItem(title: text, action: nil, keyEquivalent: "")
         status.isEnabled = false
-        if !healthy {
+        // Idle is greyed rather than left in the default colour: it reads as
+        // "nothing to report", which is exactly what it means.
+        let colour: NSColor? = switch severity {
+        case .normal: nil
+        case .idle: .secondaryLabelColor
+        case .warning: .systemRed
+        }
+        if let colour {
             status.attributedTitle = NSAttributedString(
-                string: text,
-                attributes: [.foregroundColor: NSColor.systemRed])
+                string: text, attributes: [.foregroundColor: colour])
         }
         return status
     }
@@ -504,8 +590,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: permission
 
     private func permissionMenuItem() -> NSMenuItem {
-        let (_, healthy) = statusLine()
-        if healthy {
+        // Only positive evidence offers the fix. Silence on its own says nothing
+        // about whether the grant is in place, and inviting the user into Privacy
+        // & Security over it would send them chasing a non-problem.
+        if !audioFault() {
             let ok = NSMenuItem(title: "Audio access: OK", action: nil, keyEquivalent: "")
             ok.isEnabled = false
             return ok
@@ -551,7 +639,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     // MARK: actions
 
-    @objc private func togglePause() { onTogglePause?(); refreshIcon() }
+    @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleVAD() { onToggleVAD?() }
     @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }

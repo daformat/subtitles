@@ -477,8 +477,10 @@ the same clip transcribed in full.
 
 #### Post-Phase-3 refinements
 
-- **Permission failure moved off the overlay.** It now shows as a red dot badging
-  the menu bar icon. Covering the subtitles with a diagnostic is exactly when the
+- **Permission failure moved off the overlay.** It now shows as a yellow dot
+  badging the menu bar icon — yellow because red reads as "recording" up there,
+  and orange and green are already taken by the system's microphone and camera
+  indicators. Covering the subtitles with a diagnostic is exactly when the
   user is least able to tell what is wrong. The dot is a subview, not composited
   into the icon — compositing would force `isTemplate = false` and the icon would
   stop adapting to light/dark menu bars.
