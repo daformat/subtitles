@@ -45,13 +45,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         var colour: NSColor {
             switch self {
-            // Purple, and deliberately not red. Red means recording, and this app
-            // never records: audio is transcribed as it passes and nothing is
-            // written anywhere. Orange and green are out too — macOS uses them
-            // for microphone and camera in use — and purple beats teal on the one
-            // axis that matters at 6pt, being unmistakable against the blue of a
-            // load in progress.
-            case .live: return .systemPurple
+            // Indigo — the blue-purple Control Center uses — and deliberately not
+            // red. Red means recording, and this app never records: audio is
+            // transcribed as it passes and nothing is written anywhere. Orange and
+            // green are out too, being the system's microphone and camera
+            // indicators.
+            //
+            // It is the closest of the candidates to the loading blue (#5856D6
+            // against #007AFF), which is tolerable only because a load is brief
+            // and this is the steady state — the two are rarely on screen near
+            // each other in time.
+            case .live: return .systemIndigo
             // Yellow for the one condition that is unambiguously wrong and
             // reliably detectable. Not red — in a menu bar that says recording,
             // which this app never does — and not orange or green, which macOS
