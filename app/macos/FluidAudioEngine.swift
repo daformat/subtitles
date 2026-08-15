@@ -214,6 +214,14 @@ final class FrameQueue: @unchecked Sendable {
         }
     }
 
+    /// Throw away whatever is queued. Used when the audio in flight has stopped
+    /// being worth transcribing at all, rather than merely being late.
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        buffer.removeAll(keepingCapacity: true)
+    }
+
     func drain() -> [Float] {
         lock.lock()
         defer { lock.unlock() }
@@ -687,6 +695,17 @@ actor FluidAudioEngine {
         if let vad { await vad.reset() }
         vadPending.removeAll(); asrPending.removeAll(); history.removeAll()
         wasSpeech = false
+    }
+
+    /// Everything in flight, gone: queued audio as well as the recogniser's state.
+    ///
+    /// `resetContext()` above deliberately leaves the queue alone — it fires when
+    /// text goes idle mid-session, and dropping audio there would clip the next
+    /// word. Pausing is the opposite case: none of what is buffered will ever be
+    /// worth showing, and leaving it queued means resuming replays it.
+    func flush() async {
+        queue.clear()
+        await resetContext()
     }
 
     /// Called at the core's endpoint: flush and start a fresh utterance.

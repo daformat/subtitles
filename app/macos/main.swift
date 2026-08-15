@@ -150,7 +150,11 @@ if let raw = UserDefaults.standard.string(forKey: Defaults.language),
 /// thread, not the audio thread, so hopping into the actor here is safe.
 let onAudioFrames: @convention(c) (UnsafePointer<Float>?, UInt, UnsafeMutableRawPointer?) -> Void = {
     ptr, count, _ in
-    guard let ptr, count > 0, let fluid = fluidEngine else { return }
+    // Paused check here as well as at the tap: stopping the tap does not empty
+    // the core's ring, and its worker goes on draining what was already captured
+    // for a moment afterwards. Without this the engine keeps being fed — and
+    // keeps transcribing — audio from before the pause.
+    guard !isPaused, let ptr, count > 0, let fluid = fluidEngine else { return }
     // Hand off to a bounded queue rather than spawning a task per callback: an
     // engine that falls behind must drop audio, not accumulate tasks.
     fluid.queue.push(UnsafeBufferPointer(start: ptr, count: Int(count)))
@@ -302,6 +306,10 @@ func makeCore() -> OpaquePointer? {
 }
 
 func resumeCapture() {
+    // Paused means the tap stays down, whoever is asking. Variant and source
+    // switches both end by calling this, and without the guard a model change
+    // while paused would quietly put the app back to capturing.
+    guard !isPaused else { return }
     do {
         try tap.prepare(source: tap.source)
         try tap.start()
@@ -503,6 +511,20 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
 func togglePause() {
     isPaused.toggle()
     renderer.overlay?.setPaused(isPaused)
+    // Tear the tap down rather than discarding the samples it delivers.
+    // Discarding kept the aggregate device and its IOProc alive, so macOS went on
+    // reporting the app as capturing audio for as long as it was "paused" — which
+    // is both untrue and exactly the thing a pause button is supposed to settle.
+    if isPaused {
+        tap.stop()
+        // Then drop what is already buffered. With `onAudioFrames` gated above,
+        // nothing refills it while paused, so resuming starts from silence
+        // instead of replaying the seconds before the pause.
+        renderer.discardLine()
+        if let fluid = fluidEngine { Task { await fluid.flush() } }
+    } else {
+        resumeCapture()
+    }
     err(isPaused ? "paused" : "resumed")
 }
 
