@@ -16,8 +16,8 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.0.1"
-BUILD="2"
+VERSION="1.0.2"
+BUILD="3"
 
 echo "==> building rust core"
 (cd core && cargo build --release)
@@ -39,11 +39,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>
     <key>CFBundleVersion</key>            <string>$BUILD</string>
     <key>LSMinimumSystemVersion</key>     <string>14.2</string>
-    <!-- NSHumanReadableCopyright is deliberately absent. The About panel draws
-         that key as a line of its own, always below the credits and always last,
-         and the copyright needs to sit above the author links there. Setting it
-         here as well would show it twice, so MenuBar.swift owns the string —
-         which does mean Finder's Get Info no longer has one to show. -->
+    <!-- NSHumanReadableCopyright is deliberately absent. It was dropped when the
+         About panel drew it as a line of its own, always last, below the author
+         links that belong under it. The About window is ours now and could read
+         it again — but the string lives in About.swift beside the rest of the
+         credits, and Finder's Get Info is the only thing that misses it. -->
     <!-- Required for the audio-capture TCC grant. Without it the tap returns
          all-zero samples and reports no error whatsoever. -->
     <key>NSAudioCaptureUsageDescription</key>
@@ -87,14 +87,14 @@ if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   exit 1
 fi
 
-# The status icon, and the two marks the About panel puts beside its links.
+# The status icon, and the two marks the About window puts beside its links.
 # Copied rather than declared as SwiftPM resources because the bundle here is
 # assembled by hand, not by SwiftPM. NSImage reads SVG directly on macOS 13+,
 # so there is no conversion step.
 cp app/macos/StatusIcon.svg app/macos/LogoMat.svg app/macos/LogoTwitter.svg \
    "$APP/Contents/Resources/"
 
-# The About window's demo, vendored from the website by tools/vendor-demo.sh.
+# The welcome window's demo, vendored from the website by tools/vendor-demo.sh.
 # demo.shell.html is the template that script splices demo.html out of, and has
 # no business in the bundle.
 mkdir -p "$APP/Contents/Resources/Demo"
