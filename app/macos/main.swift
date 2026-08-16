@@ -120,7 +120,9 @@ nonisolated(unsafe) var currentVariant: FluidVariant = .multilingual
 nonisolated(unsafe) var currentLanguage: FluidLanguage = .auto
 /// Non-nil while a model is downloading or loading.
 nonisolated(unsafe) var engineBusyMessage: String?
-/// How far that load has got, 0…1. Only read while `engineBusyMessage` is set.
+/// How far that load has got, 0…1, or negative for "unknown length" — the gap
+/// after a download completes, while CoreML loads the bundles and reports
+/// nothing. Only read while `engineBusyMessage` is set.
 nonisolated(unsafe) var engineBusyProgress: Double = 0
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.
 nonisolated(unsafe) var lastRTF: Float = 0
@@ -653,6 +655,20 @@ if useOverlay {
 }
 
 applyVariant(currentVariant, initial: true)
+
+// First run, or a run with nothing cached: both are launches where the app can
+// do nothing for several minutes, and the welcome window is what fills them.
+//
+// After `applyVariant`, not before: that is what sets the load going, and a
+// window opened ahead of it polls once, sees nothing loading, and concludes the
+// download it is there to report has already finished.
+if useOverlay {
+    WelcomeWindow.shared.engineBusy = { engineBusyMessage }
+    WelcomeWindow.shared.engineProgress = { engineBusyProgress }
+    if WelcomeWindow.shouldShowAtLaunch {
+        WelcomeWindow.shared.show(markAsSeen: true)
+    }
+}
 do {
     try tap.start()
 } catch {

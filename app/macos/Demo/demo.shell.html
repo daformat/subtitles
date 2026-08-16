@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- The page the About window's webview loads. Hand-written; the demo markup is
+     spliced into the placeholder further down by tools/vendor-demo.sh, and
+     demo.css / demo.js come from the site untouched. Everything specific to
+     being embedded in a window rather than being part of a web page lives in the
+     <style> below, so that re-vendoring never has to be merged by hand.
+
+     Do not name the placeholder in this comment: the splice is a plain string
+     replacement, and a second copy of the token here is a second copy of the
+     demo — injected into the head, where it ends this comment early and takes
+     the stylesheet with it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subtitles demo</title>
+<link rel="stylesheet" href="demo.css">
+<style>
+  /* Transparent all the way down. The window behind this is a normal AppKit
+     one and paints its own background; anything opaque here would sit on top
+     of it as a white rectangle in dark mode. */
+  html, body {
+    margin: 0;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+  }
+
+  /* The demo sits in a page on the site, with air above it and a caption below.
+     Here the window's own padding is that air, and the ⇧ line under it is drawn
+     in AppKit rather than being page copy in a web view. */
+  .demo { margin-top: 0; }
+
+  /* Nothing in here scrolls: the window is sized to the content, and a webview
+     that can be rubber-banded inside a window reads as a bug. */
+  html, body { overflow: hidden; overscroll-behavior: none; }
+
+  /* The screen's shadow is tuned for a page background it can fall on. Over a
+     window it lands on the window's own material and reads as grime, so it is
+     replaced with the hairline that frames it. */
+  .demo-screen { box-shadow: none; }
+</style>
+</head>
+<body>
+<!--DEMO-->
+<script src="demo.js"></script>
+</body>
+</html>

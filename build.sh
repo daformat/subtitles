@@ -94,6 +94,13 @@ fi
 cp app/macos/StatusIcon.svg app/macos/LogoMat.svg app/macos/LogoTwitter.svg \
    "$APP/Contents/Resources/"
 
+# The About window's demo, vendored from the website by tools/vendor-demo.sh.
+# demo.shell.html is the template that script splices demo.html out of, and has
+# no business in the bundle.
+mkdir -p "$APP/Contents/Resources/Demo"
+cp app/macos/Demo/demo.html app/macos/Demo/demo.css app/macos/Demo/demo.js \
+   "$APP/Contents/Resources/Demo/"
+
 # The app icon. Built from the one PNG rather than committing an .icns, so there
 # is a single source of truth to edit. Cached against the source's timestamp:
 # ten sips resizes is a couple of seconds, which is real money on a rebuild loop

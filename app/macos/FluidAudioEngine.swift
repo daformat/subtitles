@@ -365,6 +365,11 @@ actor FluidAudioEngine {
     /// stops dead at 0.5 — a finished, loaded model still reporting "50%".
     private static let downloadPhaseWeight = 0.5
 
+    /// Reported as the fraction when there is no fraction to report: work is
+    /// happening and its length is unknown. Anything drawing a bar shows a
+    /// barber-pole for this rather than a position.
+    static let indeterminate = -1.0
+
     private func makeProgressHandler() -> ProgressHandler {
         let last = LastProgress()
         let name = variant.displayName
@@ -398,6 +403,17 @@ actor FluidAudioEngine {
                 headline = model.isEmpty
                     ? "Preparing \(name) — \(percent)%"
                     : "Compiling \(model) — \(percent)%"
+            }
+            // A phase that has reached 100% is not finished, it is between
+            // phases: the bytes are down and CoreML is loading them onto the
+            // Neural Engine, which reports nothing and takes long enough to look
+            // like a hang. A full bar sitting there says "done" and is wrong, so
+            // the bar goes indeterminate and the headline says what is happening.
+            guard displayed < 1 else {
+                let waiting = "Setting up \(name)…"
+                guard last.shouldReport(waiting) else { return }
+                report(Self.indeterminate, waiting)
+                return
             }
             guard last.shouldReport(headline) else { return }
             report(displayed, headline)
