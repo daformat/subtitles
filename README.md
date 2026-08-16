@@ -10,6 +10,11 @@ Transcription runs on the **Apple Neural Engine** via
 [FluidAudio](https://github.com/FluidInference/FluidAudio) (NVIDIA Parakeet),
 at roughly 0.15 real-time factor.
 
+**[subtitles-live.com](https://subtitles-live.com)** is the app itself: built,
+signed and notarised, so the audio permission survives updates. Everything
+needed to build your own copy is in this repository, and `build.sh` below does
+exactly that.
+
 ![status](https://img.shields.io/badge/platform-macOS%2014.2%2B-blue)
 
 ---
