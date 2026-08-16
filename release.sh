@@ -90,8 +90,9 @@ trap 'hdiutil detach "$MOUNT" -quiet -force 2>/dev/null || true' EXIT
 # points, origin at the window's top left. Changing one without the other points
 # the arrow at empty space.
 # Whatever name the volume actually got, rather than the one asked for — see
-# the stale-volume guard above. Unquoted heredoc so it interpolates; the script
-# below contains no $ or backslashes of its own.
+# the stale-volume guard above. Unquoted heredoc so it interpolates, which means
+# the script below must contain no $, backslash or backtick of its own — not even
+# inside an AppleScript comment, which the shell reads long before osascript does.
 VOLNAME=$(basename "$MOUNT")
 
 if ! osascript <<APPLESCRIPT
@@ -101,7 +102,7 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    -- 428, not 400: `bounds` covers the whole window including the title bar,
+    -- 428, not 400: "bounds" covers the whole window including the title bar,
     -- so asking for the image's height crops the bottom of it by ~28pt.
     set the bounds of container window to {240, 130, 880, 558}
     set opts to the icon view options of container window
