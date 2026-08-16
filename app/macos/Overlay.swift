@@ -63,12 +63,26 @@ final class SubtitleView: NSView {
     var tentative = "" { didSet { needsDisplay = true } }
     var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
 
+    /// Draws the dashed ring that says the box can be picked up right now. Set
+    /// while ⇧ is held, alongside the panel dropping its click-through.
+    var showsDragOutline = false { didSet { needsDisplay = true } }
+
     /// Hard ceiling on displayed lines. The controller pages the text so this is
     /// never actually exceeded; the view clips as a last resort.
     var maxLines = 3
 
     private let inset = NSSize(width: 22, height: 14)
     private let corner: CGFloat = 14
+
+    /// Transparent margin between the pill and the panel edge, where the ⇧ ring
+    /// is drawn. Reserved on every layout rather than only while ⇧ is held: a
+    /// window clips its own drawing, so the room for the ring has to exist
+    /// before there is a ring, and growing the panel on keypress would mean
+    /// re-laying it out mid-gesture.
+    static let pad: CGFloat = 4
+
+    /// The pill itself, inside that margin.
+    private var boxRect: NSRect { bounds.insetBy(dx: Self.pad, dy: Self.pad) }
 
     private var font: NSFont {
         // A rounded, heavy face reads better at a glance against arbitrary video.
@@ -111,7 +125,9 @@ final class SubtitleView: NSView {
         return out
     }
 
-    private func textWidth(for width: CGFloat) -> CGFloat { width - inset.width * 2 }
+    private func textWidth(for width: CGFloat) -> CGFloat {
+        width - (inset.width + Self.pad) * 2
+    }
 
     /// Exact text extent and wrapped line count, from the real layout engine.
     ///
@@ -162,20 +178,36 @@ final class SubtitleView: NSView {
         let cappedHeight = min(m.used.height, lineHeight * CGFloat(maxLines) + 4)
 
         // +2 of slack so a fractional advance never clips the final glyph.
-        let hugging = m.used.width + 2 + inset.width * 2
+        let hugging = m.used.width + 2 + (inset.width + Self.pad) * 2
         // A floor stops one- or two-character updates producing a jittering pill.
-        let width = min(max(hugging, 140), maxWidth)
-        return NSSize(width: width, height: ceil(cappedHeight) + inset.height * 2)
+        let width = min(max(hugging, 140 + Self.pad * 2), maxWidth)
+        return NSSize(width: width,
+                      height: ceil(cappedHeight) + (inset.height + Self.pad) * 2)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let text = attributed(committed: committed, tentative: tentative)
         guard text.length > 0 else { return }
 
+        let box = boxRect
         NSColor.black.withAlphaComponent(0.72).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: corner, yRadius: corner).fill()
+        NSBezierPath(roundedRect: box, xRadius: corner, yRadius: corner).fill()
 
-        text.draw(with: bounds.insetBy(dx: inset.width, dy: inset.height),
+        if showsDragOutline {
+            // Just enough to say it can be picked up now: a hairline dashed ring
+            // sitting off the pill, the same hint the web demo gives. Half a
+            // point in from the panel edge so the stroke lands on the pixel
+            // instead of straddling it.
+            let ring = NSBezierPath(
+                roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                xRadius: corner + Self.pad, yRadius: corner + Self.pad)
+            ring.lineWidth = 1
+            ring.setLineDash([2, 2], count: 2, phase: 0)
+            NSColor.white.withAlphaComponent(0.2).setStroke()
+            ring.stroke()
+        }
+
+        text.draw(with: box.insetBy(dx: inset.width, dy: inset.height),
                   options: [.usesLineFragmentOrigin, .usesFontLeading])
     }
 }
@@ -284,7 +316,11 @@ final class OverlayController {
             forName: NSWindow.didMoveNotification, object: panel, queue: nil
         ) { [weak self] _ in
             guard let self, !self.isRepositioning else { return }
-            self.anchor = NSPoint(x: self.panel.frame.midX, y: self.panel.frame.minY)
+            // The anchor is the pill's bottom edge, not the panel's: the panel
+            // carries a transparent margin for the ⇧ ring, and folding that into
+            // the anchor would walk the box a few points down on every drag.
+            self.anchor = NSPoint(x: self.panel.frame.midX,
+                                  y: self.panel.frame.minY + SubtitleView.pad)
         }
 
         // Polled rather than armed per update: a one-shot timer must be cancelled
@@ -305,6 +341,7 @@ final class OverlayController {
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
                 self.panel.ignoresMouseEvents = !wantsDrag
+                self.view.showsDragOutline = wantsDrag
                 // Nudge visible while it can be grabbed, so it is obvious the
                 // overlay is now catching clicks instead of passing them through.
                 if wantsDrag { self.panel.alphaValue = 1.0 }
@@ -479,8 +516,11 @@ final class OverlayController {
                                             y: screen.frame.minY + screen.frame.height * 0.12)
 
         // Round the origin: a half-pixel x makes the text render soft as the box
-        // resizes on every word.
-        let origin = NSPoint(x: (anchor.x - size.width / 2).rounded(), y: anchor.y.rounded())
+        // resizes on every word. The y drops by the ring margin so the *pill*
+        // still sits on the anchor — the margin is invisible, and the box would
+        // otherwise appear to float a few points above where it was left.
+        let origin = NSPoint(x: (anchor.x - size.width / 2).rounded(),
+                             y: (anchor.y - SubtitleView.pad).rounded())
         // NSWindow resizes its content view itself, so assigning view.frame here
         // is redundant — and actively harmful: setFrame(display: true) paints
         // immediately, so a manual assignment afterwards means that paint happens
@@ -567,6 +607,7 @@ final class OverlayController {
             // panel catching clicks it will never show anything for.
             isDraggable = false
             panel.ignoresMouseEvents = true
+            view.showsDragOutline = false
         }
     }
 
