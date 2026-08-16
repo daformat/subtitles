@@ -416,6 +416,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(permissionMenuItem())
+        menu.addItem(.separator())
+        menu.addItem(aboutMenuItem())
         menu.addItem(acknowledgementsMenuItem())
         menu.addItem(.separator())
 
@@ -644,6 +646,174 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                               action: #selector(openPrivacySettings), keyEquivalent: "")
         item.target = self
         return item
+    }
+
+    private func aboutMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "About Subtitles",
+                              action: #selector(showAbout), keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    /// AppKit's standard About panel rather than a window of our own.
+    ///
+    /// It already reads the icon, name, version and build out of the bundle, and
+    /// it is the shape every other Mac app's About box has. A custom window would
+    /// be a few hundred lines to arrive somewhere less familiar, and one more
+    /// thing to keep in step with `build.sh` every release.
+    @objc private func showAbout() {
+        // An agent app is never the active application, so the panel would
+        // otherwise open behind whatever the user is working in — and, having no
+        // Dock icon to click, be unreachable except by moving windows aside.
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: Self.aboutCredits])
+        Self.plainLinks()
+    }
+
+    /// Draw the credit links as ordinary text: label colour, no underline.
+    ///
+    /// It has to happen here rather than in the string. A text view paints every
+    /// `.link` range with its own `linkTextAttributes` — accent colour and an
+    /// underline — as temporary attributes, which are applied over whatever the
+    /// storage says and therefore win. The only place to say otherwise is the
+    /// view, which the panel owns, so the panel has to exist first.
+    ///
+    /// Nothing happens if the view is not found: the links are then blue and
+    /// underlined, which is a style regression and not a broken panel.
+    private static func plainLinks() {
+        func textView(in view: NSView) -> NSTextView? {
+            if let found = view as? NSTextView { return found }
+            for sub in view.subviews {
+                if let found = textView(in: sub) { return found }
+            }
+            return nil
+        }
+        // Matched by content rather than by window class or title, both of which
+        // are AppKit's to change and neither of which is documented.
+        for window in NSApp.windows {
+            guard let root = window.contentView, let view = textView(in: root),
+                  view.string.contains("hello-mat.com") else { continue }
+            view.linkTextAttributes = [
+                .foregroundColor: NSColor.labelColor,
+                .underlineStyle: 0,
+                // The only thing left saying these are clickable, now that the
+                // colour and the underline are gone.
+                .cursor: NSCursor.pointingHand,
+            ]
+            view.needsDisplay = true
+            return
+        }
+    }
+
+    /// What the panel says between the version and the copyright.
+    ///
+    /// Centred to match the rest of the panel, and at the size AppKit uses for
+    /// credits — the default for an attributed string is 12pt Helvetica, which
+    /// looks like a mistake next to the system font above it.
+    ///
+    /// The indents are the panel's padding. AppKit hands the credits a fixed
+    /// 268pt column with 8pt to the window edge and offers no way to inset the
+    /// view itself, so the margin has to come from the text: 10pt each side,
+    /// which leaves 248pt for the longest line to fit in.
+    private static var aboutCredits: NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.paragraphSpacing = 6
+        paragraph.firstLineHeadIndent = 10
+        paragraph.headIndent = 10
+        paragraph.tailIndent = -10
+
+        // The last two lines each sit away from what precedes them rather than
+        // reading as more of it. `paragraphSpacingBefore` rather than the
+        // `paragraphSpacing` above, because that one belongs to the paragraph on
+        // the near side of the gap and these gaps are owned by the far side.
+        let footer = NSMutableParagraphStyle()
+        footer.setParagraphStyle(paragraph)
+        footer.paragraphSpacingBefore = 10
+
+        let text = NSMutableAttributedString()
+        func add(_ string: String, colour: NSColor? = nil, link: String? = nil,
+                 style: NSParagraphStyle? = nil, size: CGFloat = 11) {
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: size),
+                .paragraphStyle: style ?? paragraph,
+            ]
+            // A link gets no colour of its own: the text view draws it in the
+            // accent colour and underlines it, and setting one here overrides
+            // that into something that no longer looks clickable.
+            if let link { attributes[.link] = URL(string: link)! }
+            if let colour { attributes[.foregroundColor] = colour }
+            text.append(NSAttributedString(string: string, attributes: attributes))
+        }
+
+        /// A mark set on the text baseline, in the same colour as the text.
+        ///
+        /// Attachments are not template images — a text view draws them exactly
+        /// as they come, and `linkTextAttributes` does not reach inside them — so
+        /// the tint is baked in here rather than left to `isTemplate`, which only
+        /// means something to a button or a menu item.
+        func addMark(_ name: String, height: CGFloat, link: String, style: NSParagraphStyle) {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "svg"),
+                  let image = NSImage(contentsOf: url) else { return }
+            let width = (height * image.size.width / image.size.height).rounded()
+            let tinted = NSImage(size: NSSize(width: width, height: height),
+                                 flipped: false) { rect in
+                NSColor.labelColor.set()
+                rect.fill()
+                image.draw(in: rect, from: .zero, operation: .destinationIn, fraction: 1)
+                return true
+            }
+
+            let attachment = NSTextAttachment()
+            attachment.image = tinted
+            // Dropped below the baseline by the font's descender, so the mark is
+            // centred on the x-height rather than perched on top of the line.
+            attachment.bounds = NSRect(x: 0, y: NSFont.systemFont(ofSize: 11).descender,
+                                       width: width, height: height)
+            let run = NSMutableAttributedString(attachment: attachment)
+            run.addAttributes([.link: URL(string: link)!, .paragraphStyle: style],
+                              range: NSRange(location: 0, length: run.length))
+            text.append(run)
+        }
+
+        // Directly under the version line, which is as close to the title as the
+        // panel allows — everything above the credits is AppKit's, drawn from the
+        // bundle, with nothing to insert between the name and the version.
+        add("subtitles-live.com\n", link: "https://subtitles-live.com")
+
+        // U+2028 rather than a newline, so the two sentences stay one paragraph
+        // and sit on consecutive lines instead of being pushed apart by the
+        // paragraph spacing that separates the blocks around them.
+        //
+        // Both are written to fit the padded column, which is 238pt: the 268pt
+        // AppKit gives, less the text container's own 5pt either side, less the
+        // indents above. Longer credits do not widen the window, they wrap, and
+        // a centred line that spills one word onto a second row looks like a
+        // mistake.
+        add("Live captions for whatever your Mac plays.\u{2028}"
+            + "Nothing is recorded; nothing leaves the Mac.\n",
+            colour: .labelColor)
+        add("FSL-1.1-ALv2", colour: .secondaryLabelColor)
+
+        // Ours to draw, and therefore ours to place. The panel's own copyright
+        // line is always last, below the credits, so the only way to put anything
+        // under it is to leave `NSHumanReadableCopyright` out of the Info.plist
+        // and say it here — see the note in `build.sh`.
+        // 10pt, which is the size the panel sets this line in when it draws it
+        // itself — and, at 11, a tenth of a point too wide for the column.
+        add("\nCopyright © 2026 Mathieu Jouhet (CSS labs)",
+            colour: .secondaryLabelColor, style: footer, size: 10)
+
+        // Who made it, at the very foot of the panel: the same two marks these
+        // links wear on hello-mat.com, so the pair reads as a signature rather
+        // than as more of the app's own business.
+        add("\n", style: footer)
+        addMark("LogoMat", height: 13, link: "https://hello-mat.com", style: footer)
+        add(" hello-mat.com", link: "https://hello-mat.com", style: footer)
+        add("   ", style: footer)
+        addMark("LogoTwitter", height: 11, link: "https://x.com/daformat", style: footer)
+        add(" @daformat", link: "https://x.com/daformat", style: footer)
+        return text
     }
 
     /// Opens the notices file `build.sh` puts in the bundle.

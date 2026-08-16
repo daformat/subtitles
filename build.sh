@@ -39,6 +39,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>
     <key>CFBundleVersion</key>            <string>$BUILD</string>
     <key>LSMinimumSystemVersion</key>     <string>14.2</string>
+    <!-- NSHumanReadableCopyright is deliberately absent. The About panel draws
+         that key as a line of its own, always below the credits and always last,
+         and the copyright needs to sit above the author links there. Setting it
+         here as well would show it twice, so MenuBar.swift owns the string —
+         which does mean Finder's Get Info no longer has one to show. -->
     <!-- Required for the audio-capture TCC grant. Without it the tap returns
          all-zero samples and reports no error whatsoever. -->
     <key>NSAudioCaptureUsageDescription</key>
@@ -82,9 +87,12 @@ if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   exit 1
 fi
 
-# The status icon. Copied rather than declared as a SwiftPM resource because the
-# bundle here is assembled by hand, not by SwiftPM.
-cp app/macos/StatusIcon.svg "$APP/Contents/Resources/"
+# The status icon, and the two marks the About panel puts beside its links.
+# Copied rather than declared as SwiftPM resources because the bundle here is
+# assembled by hand, not by SwiftPM. NSImage reads SVG directly on macOS 13+,
+# so there is no conversion step.
+cp app/macos/StatusIcon.svg app/macos/LogoMat.svg app/macos/LogoTwitter.svg \
+   "$APP/Contents/Resources/"
 
 # The app icon. Built from the one PNG rather than committing an .icns, so there
 # is a single source of truth to edit. Cached against the source's timestamp:
