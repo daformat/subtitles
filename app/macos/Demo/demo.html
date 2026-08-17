@@ -67,7 +67,7 @@
             <div class="demo-window win-meeting" data-app="meeting">
               <div class="win-titlebar">
                 <span class="lights"><i class="l-close"></i><i class="l-min"></i><i class="l-max"></i></span>
-                <span class="win-title">Weekly sync · 4 people</span>
+                <span class="win-title" data-i18n="home.demo.win1">Weekly sync · 4 people</span>
               </div>
               <div class="win-content">
                 <div class="meet-grid">
@@ -88,24 +88,24 @@
             <div class="demo-window win-notes" data-app="notes">
               <div class="win-titlebar">
                 <span class="lights"><i class="l-close"></i><i class="l-min"></i><i class="l-max"></i></span>
-                <span class="win-title">Notes · Weekly sync</span>
+                <span class="win-title" data-i18n="home.demo.win2">Notes · Weekly sync</span>
               </div>
               <div class="win-content">
                 <div class="notes-body">
                   <div class="notes-side"><i></i><i class="is-on"></i><i></i><i></i><i></i></div>
                   <div class="notes-doc">
-                    <b>Weekly sync</b>
-                    <i style="width:92%"></i>
-                    <i style="width:78%"></i>
-                    <i style="width:85%"></i>
-                    <i style="width:44%"></i>
-                    <b class="sub">Actions</b>
+                    <b data-i18n="home.demo.notes-title">Weekly sync</b>
+                    <i style="width:100%"></i>
+                    <i style="width:84.8%"></i>
+                    <i style="width:92.4%"></i>
+                    <i style="width:47.8%"></i>
+                    <b class="sub" data-i18n="home.demo.notes-sub">Actions</b>
+                    <i style="width:95.7%"></i>
+                    <i style="width:79.3%"></i>
                     <i style="width:88%"></i>
-                    <i style="width:73%"></i>
-                    <i style="width:81%"></i>
-                    <i style="width:52%"></i>
-                    <i style="width:86%"></i>
-                    <i style="width:38%"></i><span class="notes-caret"></span>
+                    <i style="width:56.5%"></i>
+                    <i style="width:93.5%"></i>
+                    <i style="width:41.3%"></i><span class="notes-caret"></span>
                   </div>
                 </div>
               </div>
@@ -115,7 +115,7 @@
             <div class="demo-window win-player" data-app="player">
               <div class="win-titlebar">
                 <span class="lights"><i class="l-close"></i><i class="l-min"></i><i class="l-max"></i></span>
-                <span class="win-title">Interview · Episode 42</span>
+                <span class="win-title" data-i18n="home.demo.win3">Interview · Episode 42</span>
               </div>
               <div class="win-content">
                 <div class="demo-scene"></div>
@@ -140,9 +140,9 @@
                     <div class="pod-head">
                       <span class="pod-art"></span>
                       <span class="pod-meta">
-                        <em>Podcast</em>
-                        <b>The Long Way Round</b>
-                        <i>Episode 42 · Ana Ferreira</i>
+                        <em data-i18n="home.demo.pod-kind">Podcast</em>
+                        <b data-i18n="home.demo.pod-show">The Long Way Round</b>
+                        <i data-i18n="home.demo.pod-episode">Episode 42 · Ana Ferreira</i>
                       </span>
                     </div>
                     <div class="pod-wave" id="pod-wave">
@@ -255,7 +255,7 @@
                   <span class="np-now">
                     <span class="np-art"></span>
                     <span class="np-text">
-                      <b>Episode 42</b>
+                      <b data-i18n="home.demo.pod-ep">Episode 42</b>
                       <i>Ana Ferreira</i>
                     </span>
                   </span>
@@ -277,29 +277,31 @@
             <div class="demo-switcher" id="switcher">
               <span class="sw-app" data-app="meeting">
                 <span class="sw-icon i-meet"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2.6" y="6.4" width="12.6" height="11.2" rx="2.6"/><path d="M16.8 11.2l3.6-2.6a.7.7 0 0 1 1.1.6v5.6a.7.7 0 0 1-1.1.6l-3.6-2.6z"/></svg></span>
+                <span class="sw-name"></span>
               </span>
               <span class="sw-app" data-app="notes">
                 <span class="sw-icon i-notes"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4.6" y="3" width="14.8" height="18" rx="2.6"/><g fill="#b07d18"><rect x="7.4" y="7" width="9.2" height="1.7" rx="0.85"/><rect x="7.4" y="11" width="9.2" height="1.7" rx="0.85"/><rect x="7.4" y="15" width="5.6" height="1.7" rx="0.85"/></g></svg></span>
+                <span class="sw-name"></span>
               </span>
               <span class="sw-app" data-app="player">
                 <span class="sw-icon i-player"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="7.68" fill="rgba(255,255,255,0.95)" stroke="none"/><path transform="translate(11.478 12) scale(.5) translate(-12 -12)" d="M8.4 5.8v12.4a.8.8 0 0 0 1.22.68l9.8-6.2a.8.8 0 0 0 0-1.36l-9.8-6.2a.8.8 0 0 0-1.22.68z"/></svg></span>
+                <span class="sw-name"></span>
               </span>
-              <span class="sw-name" id="switcher-name">Notes</span>
             </div>
 
             <div class="demo-overlay" id="caption-box"><span id="caption-text"></span><span class="tentative" id="caption-live"></span></div>
           </div>
         </div>
         <div class="demo-scenes">
-          <button type="button" class="scene-button" data-scene="0" aria-current="true">
+          <button type="button" class="scene-button" data-scene="0" aria-current="true" data-i18n="home.top.button1">
             <span class="scene-track"><span class="scene-fill"></span></span>
             <span class="scene-label">The call</span>
           </button>
-          <button type="button" class="scene-button" data-scene="1">
+          <button type="button" class="scene-button" data-scene="1" data-i18n="home.top.button2">
             <span class="scene-track"><span class="scene-fill"></span></span>
             <span class="scene-label">Your notes</span>
           </button>
-          <button type="button" class="scene-button" data-scene="2">
+          <button type="button" class="scene-button" data-scene="2" data-i18n="home.top.button3">
             <span class="scene-track"><span class="scene-fill"></span></span>
             <span class="scene-label">A podcast</span>
           </button>

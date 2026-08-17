@@ -137,7 +137,6 @@
   --window-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 10px 24px -12px rgb(0 0 0 / 0.2);
   --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.1), 0 20px 44px -14px rgb(0 0 0 / 0.28);
   --art-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.35);
-  --name-shadow: 0 1px 2px rgb(255 255 255 / 0.7);
 }
 
 /* Dark: the palette everything in here was drawn against, unchanged. Twice, as
@@ -170,7 +169,6 @@
     --window-shadow: 0 2px 6px rgb(0 0 0 / 0.34), 0 14px 34px -10px rgb(0 0 0 / 0.6);
     --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.36), 0 26px 60px -10px rgb(0 0 0 / 0.72);
     --art-shadow: 0 10px 26px -8px rgb(0 0 0 / 0.8);
-    --name-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
    }
 }
 :root[data-theme="dark"] .demo { 
@@ -199,7 +197,6 @@
     --window-shadow: 0 2px 6px rgb(0 0 0 / 0.34), 0 14px 34px -10px rgb(0 0 0 / 0.6);
     --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.36), 0 26px 60px -10px rgb(0 0 0 / 0.72);
     --art-shadow: 0 10px 26px -8px rgb(0 0 0 / 0.8);
-    --name-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
    }
 
 /* The screen is a container, and everything inside it is drawn in multiples of
@@ -240,9 +237,22 @@
 }
 /* On the children rather than on .demo-screen: an element's own container is
    the next one up, so cq units inside the container it establishes have to be
-   resolved by something it contains. */
+   resolved by something it contains.
+
+   The unit draws the chrome. When the windows were fanned out to about half the
+   stage it was taken down with them, to 0.74cqw, so that a title bar stayed the
+   same share of its own window that it had been at 82%. That reasoning was
+   wrong, and the result was a model that was consistent and too small to read.
+   A Mac does not scale its chrome to the window: a title bar is 28pt on a small
+   window and 28pt on a large one, and a narrow window simply wears more of it.
+   Holding the unit still across every window size is the faithful thing as well
+   as the legible one, so it is most of the way back to where it started: 8px at
+   the top rather than the 8.8 it was, which is a shade off the full size and
+   still comfortably readable. 0.91cqw is the slope that reaches 8 exactly at the
+   880 the screen tops out at, so the model scales the whole way there rather
+   than flattening early against its own cap. */
 .demo-menubar,
-.demo-stage { --u: clamp(4px, 1cqw, 8.8px); }
+.demo-stage { --u: clamp(4px, 0.91cqw, 8px); }
 
 /* Above the windows and above the ⌘-tab panel, the way a menu bar is, and now
    that windows can be dragged there is something for it to be above. The one
@@ -303,11 +313,13 @@
   aspect-ratio: 16 / 9.6;
 }
 
-/* fake macOS windows — all three stacked, one fronted at a time. They share a
-   bottom edge so the caption straddles the same line whichever is in front. */
+/* fake macOS windows, fanned across the stage with one fronted at a time. */
 .demo-window {
   position: absolute;
-  z-index: 1;
+  /* --z is a focus order, the way a desktop has one. Each window carries the
+     first scene's value below and the script rewrites it inline from then on;
+     the 1 is a fallback that should never be reached. */
+  z-index: var(--z, 1);
   display: flex;
   flex-direction: column;
   border-radius: calc(1.25 * var(--u));
@@ -316,27 +328,87 @@
   border: 1px solid rgb(var(--ink) / 0.11);
   box-shadow: var(--window-shadow);
   transition: box-shadow 0.28s ease;
+  /* A window is a drawing of a window, not a button, and tapping one on a phone
+     flashed a grey box over the whole thing. The tap does something, so the
+     highlight is not wrong exactly, but it lands on a 300px rectangle rather
+     than on a control, and what it reads as is the illusion breaking. Bringing
+     the window forward is the feedback. */
+  -webkit-tap-highlight-color: transparent;
 }
 /* Anything but the front window is a way into its own scene. */
 .demo-window:not(.is-front) { cursor: pointer; }
 .demo-window.is-held .win-titlebar { cursor: grabbing; }
-/* All three share a bottom edge, which is the one number that cannot move: the
-   caption box sits a fixed distance above it, so if the windows ended at
-   different heights the overlay would straddle a different part of each one and
-   a switch would read as a jump cut. Everything else is free, and is used to
-   push them apart: 82% wide rather than 86, on centres 6% apart rather than 4,
-   and each with its own top edge. They were close enough to read as one window
-   redrawn three times.
+/* Two layouts, and every width in between.
 
-   The whole stack then sits 3% of the stage lower than it did — about 15px at
-   the size the screen tops out at — which is the same amount off every top and
-   every bottom, so the shared edge stays shared. */
-.win-meeting { inset: 8% 9% 10.5% 9%; }
-.win-notes   { inset: 12% 3% 10.5% 15%; }
-.win-player  { inset: 5% 15% 10.5% 3%; }
+   Wide, the three windows fan across the stage: about half of it each, the two
+   behind showing a third to a half of themselves, so a call, a document and a
+   podcast are all legible before anything animates. Narrow, they go back to a
+   near stack, 82% wide on centres 6% apart, because three windows across stop
+   being worth reading long before they stop fitting. The widths are not equal
+   and are not meant to be: the podcast is the wider of the two behind because
+   its title, waveform and transport all read left to right, and the notes
+   window the narrower because a column of document lines says what it is at any
+   size.
 
+   Between those two the layout is interpolated rather than switched. Every
+   number below is a clamp whose middle term is a straight line in cqw, built to
+   meet the stack value exactly at 620px of screen and the fan value exactly at
+   880px, which is where the screen tops out. Outside that range the bounds take
+   over and it is one layout or the other, unchanged.
+
+   The line has to be written as `<slope>cqw - <intercept>px` because CSS cannot
+   divide a length by a length: there is no way to express "how far between 620
+   and 880 are we" as a number and multiply the two layouts by it. So the
+   progress is folded into the coefficients instead, per edge. They are derived,
+   not tuned. For an edge running from n% at 620 to f% at 880, with k = 1 across
+   and 9.6/16 down, since the stage is 16/9.6 and a vertical percentage resolves
+   against its height:
+
+     p1 = n/100 * k * 620,  p2 = f/100 * k * 880
+     slope = (p2 - p1) / 260,  intercept = p1 - slope * 620
+
+   and the two bounds are n*k and f*k in cqw. Change an endpoint and recompute
+   the pair; do not nudge a slope on its own, or the layout stops landing on the
+   value the comment claims.
+
+   One thing the fan gave up: these three used to share a bottom edge, so the
+   caption straddled the same part of whichever window was in front. A cascade
+   that stops on one line reads as three panels in a row rather than as a
+   desktop, and the staggered bottoms are most of what makes it look like one.
+   The caption moved up to suit and still crosses all three, which is the part
+   that mattered. Meeting keeps the front slot through all three scenes: on a
+   real desktop windows do not move when focus does. */
+/* --z is the stack order, and the script rewrites it inline on every focus. The
+   values here are the first scene's, so the page paints the call in front from
+   the very first frame rather than showing the markup's own order until the
+   script runs and corrects it. */
+.win-meeting {
+  --z: 3;
+  top:    clamp(3.45cqw, 0.230769cqw + 28.3292px, 4.8cqw);  /*  8%   ->  5.75% */
+  right:  clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
+  bottom: clamp(5.85cqw, 4.77692cqw + 9.44308px, 6.3cqw);   /* 10.5% ->  9.75% */
+  left:   clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
+}
+.win-notes {
+  --z: 1;
+  top:    clamp(6.45cqw, 4.66154cqw + 15.7385px, 7.2cqw);   /* 12%   -> 10.75% */
+  right:  clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
+  bottom: clamp(6.3cqw, 14.9308cqw - 53.5108px, 8.85cqw);   /* 10.5% -> 14.75% */
+  left:   clamp(15cqw, 32.7692cqw - 110.169px, 20.25cqw);   /* 15%   -> 20.25% */
+}
+.win-player {
+  --z: 2;
+  top:    clamp(3cqw, 20.7692cqw - 110.169px, 8.25cqw);     /*  5%   -> 13.75% */
+  right:  clamp(15cqw, 46.3077cqw - 194.108px, 24.25cqw);   /* 15%   -> 24.25% */
+  bottom: clamp(6.3cqw, 14.9308cqw - 53.5108px, 8.85cqw);   /* 10.5% -> 14.75% */
+  left:   clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
+}
+
+
+/* No z-index here any more. Lifting the front window on its own was what made
+   the two behind fall back on markup order, and this rule would beat the --z on
+   the base selector anyway. Being in front is now only how it is lit. */
 .demo-window.is-front {
-  z-index: 4;
   box-shadow: var(--window-shadow-front);
 }
 /* macOS greys the traffic lights out on an inactive window. */
@@ -352,7 +424,12 @@
   display: flex;
   align-items: center;
   flex: none;
-  height: calc(3.41 * var(--u));
+  /* The same height as the menu bar. A Mac's title bar is actually the taller of
+     the two, 28pt against 24pt, and this was drawn at that ratio; at the size
+     the fanned windows are, the 15% it buys reads as a heavy lid on a small
+     window rather than as anything true. Matching the bar is the one that looks
+     right, so it is the one that ships. */
+  height: calc(2.95 * var(--u));
   padding-inline: calc(1.48 * var(--u));
   background: var(--titlebar-bg);
   border-bottom: 1px solid var(--window-line);
@@ -501,14 +578,42 @@
 
 /* Bars are flex children, so the waveform fills whatever width is left at this
    breakpoint and each one carries its own height as --h. */
+/* The bars are laid out on a fixed pitch rather than stretched to fill, which is
+   the difference between a waveform and a moiré pattern.
+
+   Stretched, 96 bars across the pane came out 2.219px wide on a 3.578px pitch.
+   Layout handled that fine, to within a 128th of a pixel, but the raster did
+   not: at 2x, a 3.578px pitch is 7.156 device pixels, so every bar landed on a
+   different subpixel phase and each one was painted across four columns or five.
+   The apparent width swung by a whole device pixel, a fifth of the bar, and the
+   error walked along the row as a visible beat of thick and thin. It only showed
+   at rest, because a bar being scaled up and down twice a second is not one you
+   are reading the width of, which is why this looked like a bug that came and
+   went with the animation.
+
+   0.5u and 0.125u put the pitch at 5px at the size the model tops out at, which
+   is 10 whole device pixels on a retina Mac and 5 on anything else, so every bar
+   is painted identically on both. Both are fractions of --u so the row still
+   scales with the rest of the model; the phase lands exactly at the top of the
+   range, and everywhere else the bars are small enough that the beat does not
+   read.
+
+   The pitch is set by what the pane can hold: 96 bars want 479px and the podcast
+   window offers about 520, so the row nearly fills and starts hard left, on the
+   same edge as the artwork above it. It is aligned rather than stretched, since
+   stretching is what put the bars on a fractional pitch in the first place, and
+   that means the pitch has to be revisited whenever the podcast window is
+   resized. Too wide and the row is clipped; too narrow and it floats short of
+   the right edge. */
 .pod-wave {
   display: flex;
   align-items: center;
-  gap: calc(0.17 * var(--u));
+  gap: calc(0.125 * var(--u));
   height: calc(7.05 * var(--u));
 }
 .pod-wave i {
-  flex: 1;
+  flex: none;
+  width: calc(0.5 * var(--u));
   min-width: 1px;
   /* Resting height is held below the row so the loud end of the animation,
      which scales to 1.24, still has somewhere to go without spilling into the
@@ -519,23 +624,34 @@
   background: rgb(var(--ink) / 0.18);
   transform-origin: center;
 }
+/* --u stops at a 4px floor around 440px of screen, so below that the bars hold
+   their size while the pane they sit in carries on shrinking, and eventually the
+   row is wider than the window. It runs out at about 365px. Narrower than that
+   the bars give up a quarter of their width, which is the same answer the player
+   gives elsewhere: show less rather than the same thing clipped.
+
+   After the rule above rather than beside it, because both selectors are
+   `.pod-wave i` and a container query buys no specificity. */
+@container (max-width: 400px) {
+  .pod-wave i { width: calc(0.375 * var(--u)); }
+}
 /* Everything left of the playhead has been listened to, kept in step with the
    scrubber and the clock by the demo script. */
 .pod-wave i.is-played { background: var(--played); }
 
-/* Only while this window is the one in front, because a waveform moving behind
-   two other windows is noise. The negative per-bar delay starts every bar at a
-   different point of the same cycle, which is what makes it read as audio
-   rather than as one bar repeated. Reduced motion switches it off through the
-   global rule at the top of this file. */
-.demo-window.is-front .pod-wave i {
+/* While the window is playing, which is any time it is not the one at the bottom
+   of the stack. The negative per-bar delay starts every bar at a different point
+   of the same cycle, which is what makes it read as audio rather than as one bar
+   repeated. Reduced motion switches it off through the global rule at the top of
+   this file. */
+.demo-window.is-playing .pod-wave i {
   animation: pod-bar 0.34s ease-in-out infinite alternate;
   animation-delay: calc(var(--i) * -23ms);
 }
 /* Speech is not periodic. Three durations threaded through the row stop the
    whole waveform breathing in unison, which is what gave it away as a loop. */
-.demo-window.is-front .pod-wave i:nth-child(3n)   { animation-duration: 0.27s; }
-.demo-window.is-front .pod-wave i:nth-child(4n+1) { animation-duration: 0.43s; }
+.demo-window.is-playing .pod-wave i:nth-child(3n)   { animation-duration: 0.27s; }
+.demo-window.is-playing .pod-wave i:nth-child(4n+1) { animation-duration: 0.43s; }
 @keyframes pod-bar {
   from { transform: scaleY(0.32); }
   to   { transform: scaleY(1.24); }
@@ -816,11 +932,24 @@
   position: absolute;
   z-index: 6;
   left: 50%;
-  top: 44%;
+  /* Centred on the screen, not on the stage: the panel is positioned inside the
+     stage, which begins under the menu bar, so half a menu bar comes back off to
+     land on the middle of the Mac rather than the middle of the desktop below
+     it. That is where macOS puts it, and it is the one element here that belongs
+     to the whole screen rather than to any window on it.
+
+     The panel is symmetric about its icons, so centring the panel and centring
+     the icons are the same thing. */
+  top: calc(50% - 1.475 * var(--u));
   transform: translate(-50%, -50%) scale(0.94);
   display: flex;
   align-items: center;
   gap: calc(1.36 * var(--u));
+  /* Even all round: the panel gives the icons the same room underneath as it
+     does above them. The name lives in that lower band rather than adding to it,
+     which is what keeps the two equal. It is out of flow besides, hung off
+     whichever icon is selected, so the panel's width is the icons' business
+     alone and stays put whatever the selected app is called. */
   padding: calc(1.59 * var(--u));
   border-radius: calc(1.93 * var(--u));
   background: var(--panel-bg);
@@ -846,6 +975,8 @@
 }
 
 .sw-app {
+  /* The name below is positioned against this, not against the panel. */
+  position: relative;
   display: grid;
   place-items: center;
   padding: calc(0.8 * var(--u));
@@ -901,20 +1032,26 @@
 
 /* The app name sits under the selection, as macOS shows it. */
 .sw-name {
+  /* Hung under its own icon and centred on it, so it moves with the selection
+     for free rather than being repositioned. Out of flow, so it cannot widen the
+     panel. No text shadow: it sits on the panel's own blurred backdrop now
+     rather than on the desktop. */
   position: absolute;
-  left: 0;
-  right: 0;
-  /* -2.4 rather than the -1.59 the other conversions use: this one clamped from
-     the other end, its preferred value sitting between the two bounds at full
-     size rather than at the outer one. */
-  bottom: calc(-2.4 * var(--u));
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
   text-align: center;
-  font-size: calc(1.48 * var(--u));
+  font-size: calc(1 * var(--u));
+  /* A line exactly as tall as the panel's padding, so the name fills the band
+     under the icons without deepening it. The text is 1u inside that 1.59u,
+     which is where the air above and below it comes from. */
+  line-height: calc(1.59 * var(--u));
   font-weight: 500;
   color: rgb(var(--ink) / 0.88);
-  text-shadow: var(--name-shadow);
   white-space: nowrap;
 }
+.sw-app.is-selected .sw-name { opacity: 1; }
 
 /* The top layer, above every window and above the switcher — that is the whole
    point of it. Colours, radius, padding and the content-hugging width are the
@@ -924,6 +1061,12 @@
   position: absolute;
   z-index: 10;
   left: 50%;
+  /* Low, near the floor of the screen, which is where the app puts it and where
+     anybody who has used captions expects to look. It was lifted to 13% while
+     the windows were being fanned, on the reasoning that the overlay has to bite
+     into them; it does still clip the front one, and sitting low over the
+     desktop turns out to read as on top of everything more plainly than sitting
+     in the middle of a window does. */
   bottom: 5.5%;
   transform: translateX(-50%);
   /* Both of these are about the box keeping its shape while it is dragged. A
@@ -935,15 +1078,17 @@
      hundredth of it and does not care where the box sits. */
   width: max-content;
   min-width: 4.67em;
-  max-width: min(calc(80 * var(--u)), 640px);
+  max-width: min(73cqw, 640px);
   padding: 0.47em 0.73em;
   border-radius: 0.47em;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
-  /* Scaled with the rest of the model, but with a floor of its own: this is the
-     one thing in the demo anybody actually reads. */
-  font-size: clamp(14px, calc(2.61 * var(--u)), 23px);
+  /* Off the screen rather than off --u, which is the one thing in here that does
+     not scale with the chrome: this is what anybody actually reads, and when the
+     unit came down to fit the fanned windows the caption had no reason to follow
+     it. 2.61cqw is the size it was at the unit's old value, kept. */
+  font-size: clamp(14px, 2.61cqw, 23px);
   line-height: 1.34;
   font-weight: 600;
   text-align: center;
