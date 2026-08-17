@@ -87,6 +87,7 @@ if listSources {
 // ── persisted settings ──
 enum Defaults {
     static let fontSize = "overlay.fontSize"
+    static let reveal = "overlay.reveal"
     static let sourceID = "source.id"
     static let sourceName = "source.name"
     static let variant = "engine.variant"
@@ -582,6 +583,11 @@ var hotkey: Hotkey?
 if useOverlay {
     let controller = OverlayController(fontSize: fontSize)
     if resetPosition { controller.resetPosition() }
+    // `object(forKey:)` rather than `bool(forKey:)`: the latter reports false for
+    // a key that was never written, which would ship the feature off by default
+    // for everyone who has not touched the menu.
+    var revealEnabled = UserDefaults.standard.object(forKey: Defaults.reveal) as? Bool ?? true
+    controller.isRevealEnabled = revealEnabled
     renderer.overlay = controller
 
     let menu = StatusMenuController()
@@ -624,6 +630,12 @@ if useOverlay {
         useVAD.toggle()
         UserDefaults.standard.set(useVAD, forKey: Defaults.useVAD)
         applyVariant(currentVariant)   // detector is built with the engine
+    }
+    menu.revealEnabled = { revealEnabled }
+    menu.onToggleReveal = {
+        revealEnabled.toggle()
+        controller.isRevealEnabled = revealEnabled
+        UserDefaults.standard.set(revealEnabled, forKey: Defaults.reveal)
     }
     menu.onToggleSpeakerBreaks = {
         speakerBreaksEnabled.toggle()

@@ -149,6 +149,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onToggleSpeakerBreaks: (() -> Void)?
     var onToggleVAD: (() -> Void)?
     var vadEnabled: () -> Bool = { true }
+    var onToggleReveal: (() -> Void)?
+    var revealEnabled: () -> Bool = { true }
     var speakerBreaksEnabled: () -> Bool = { false }
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
@@ -408,6 +410,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         speakers.state = speakerBreaksEnabled() ? .on : .off
         speakers.toolTip = "Runs a second model on the Neural Engine"
         menu.addItem(speakers)
+
+        let reveal = NSMenuItem(title: "Fade Away Under Pointer",
+                                action: #selector(toggleReveal), keyEquivalent: "")
+        reveal.target = self
+        reveal.state = revealEnabled() ? .on : .off
+        reveal.toolTip = "Point at the box to see through it; hold ⇧ to keep it solid"
+        menu.addItem(reveal)
 
         let reset = NSMenuItem(title: "Reset Overlay Position",
                                action: #selector(resetPosition), keyEquivalent: "")
@@ -706,6 +715,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleVAD() { onToggleVAD?() }
+    @objc private func toggleReveal() { onToggleReveal?() }
     @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }

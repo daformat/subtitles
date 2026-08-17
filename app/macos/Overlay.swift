@@ -6,10 +6,11 @@
 // works and regresses between versions.
 //
 // Interaction model: click-through by default, so the overlay never intercepts a
-// click meant for the app underneath. Hold ⇧ to make it grabbable and drag it
-// somewhere else; the position is remembered. ⇧ rather than ⌥ because holding ⌥
-// while dragging a window puts macOS into its tiling preview, which fights the
-// drag.
+// click meant for the app underneath. Point at the box and it fades away under
+// the cursor, so anything it is covering can be read without moving it. Hold ⇧
+// to make it solid again and grabbable, and drag it somewhere else; the position
+// is remembered. ⇧ rather than ⌥ because holding ⌥ while dragging a window puts
+// macOS into its tiling preview, which fights the drag.
 //
 // ⇧ is detected by polling `NSEvent.modifierFlags` rather than installing a
 // global event monitor — a keyboard monitor would demand Accessibility
@@ -66,6 +67,28 @@ final class SubtitleView: NSView {
     /// Draws the dashed ring that says the box can be picked up right now. Set
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
+
+    /// Cursor position in view coordinates, or nil when the pointer is nowhere
+    /// near (or ⇧ is held). Punches a soft hole through the box so whatever the
+    /// overlay is covering can be read by pointing at it.
+    var maskCenter: NSPoint? {
+        didSet {
+            switch (oldValue, maskCenter) {
+            case (nil, nil): break
+            case let (old?, new?) where old == new: break
+            default: needsDisplay = true
+            }
+        }
+    }
+
+    /// Full extent of the reveal about the cursor. Wider than it is tall because
+    /// the box is: a circle big enough to clear the pill's width overshoots its
+    /// height several times over and takes far more of the screen with it than it
+    /// needs to.
+    static let maskSize = NSSize(width: 700, height: 300)
+
+    /// Fraction of the way out that stays fully clear before the falloff starts.
+    private static let maskPlateau: CGFloat = 0.3
 
     /// Hard ceiling on displayed lines. The controller pages the text so this is
     /// never actually exceeded; the view clips as a last resort.
@@ -185,9 +208,76 @@ final class SubtitleView: NSView {
                       height: ceil(cappedHeight) + (inset.height + Self.pad) * 2)
     }
 
+    /// Falloff for the reveal, built once.
+    ///
+    /// Two parts. A flat core out to `maskPlateau`, held at full strength so the
+    /// middle of the hole is properly gone rather than merely thinner — a falloff
+    /// that starts at the very centre spends its whole span dimming and never
+    /// reads as clear. Then a smoothstep tail, sampled rather than left as a pair
+    /// of stops because CoreGraphics interpolates linearly between them and a
+    /// straight ramp shows its edge.
+    ///
+    /// Smoothstep is flat at both ends, which is what makes the two parts join
+    /// invisibly: the tail leaves the plateau at zero slope, so there is no crease
+    /// where the core ends, and it lands on the untouched box the same way.
+    private static let maskGradient: CGGradient? = {
+        let space = CGColorSpaceCreateDeviceRGB()
+        var colors: [CGColor] = []
+        var locations: [CGFloat] = []
+        func stop(_ location: CGFloat, alpha: CGFloat) {
+            guard let c = CGColor(colorSpace: space, components: [0, 0, 0, alpha]) else { return }
+            colors.append(c)
+            locations.append(location)
+        }
+
+        stop(0, alpha: 1)
+        stop(maskPlateau, alpha: 1)
+
+        let steps = 32
+        for i in 1...steps {
+            let u = CGFloat(i) / CGFloat(steps)          // 0…1 across the tail
+            stop(maskPlateau + u * (1 - maskPlateau),
+                 alpha: 1 - u * u * (3 - 2 * u))
+        }
+        return CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations)
+    }()
+
+    /// Cuts the reveal out of everything drawn so far.
+    private func punchMask(_ ctx: CGContext, at center: NSPoint) {
+        guard let gradient = Self.maskGradient else { return }
+        ctx.saveGState()
+        // The gradient's alpha is subtracted from what is already on the layer,
+        // so opaque centre = fully transparent box.
+        ctx.setBlendMode(.destinationOut)
+        // CoreGraphics radial gradients are circular, so the ellipse comes from
+        // squashing the space it is drawn in: move the origin to the cursor,
+        // scale y, then draw a circle of the half-width there.
+        ctx.translateBy(x: center.x, y: center.y)
+        ctx.scaleBy(x: 1, y: Self.maskSize.height / Self.maskSize.width)
+        ctx.drawRadialGradient(
+            gradient,
+            startCenter: .zero, startRadius: 0,
+            endCenter: .zero, endRadius: Self.maskSize.width / 2,
+            options: [])
+        ctx.restoreGState()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let text = attributed(committed: committed, tentative: tentative)
         guard text.length > 0 else { return }
+
+        // Pill, ring and text have to be composited into one image before the
+        // hole is cut: `.destinationOut` only erases what is already in the
+        // destination, so without a transparency layer it would eat the pill and
+        // leave the text — and the text is the opaque part.
+        let ctx = NSGraphicsContext.current?.cgContext
+        if maskCenter != nil { ctx?.beginTransparencyLayer(auxiliaryInfo: nil) }
+        defer {
+            if let ctx, let center = maskCenter {
+                punchMask(ctx, at: center)
+                ctx.endTransparencyLayer()
+            }
+        }
 
         let box = boxRect
         NSColor.black.withAlphaComponent(0.72).setFill()
@@ -219,6 +309,7 @@ final class OverlayController {
     private let view: SubtitleView
     private var idleTimer: Timer?
     private var modifierTimer: Timer?
+    private var cursorTimer: Timer?
     private var moveObserver: NSObjectProtocol?
     /// True only while `layout()` is moving the panel itself, so the move
     /// observer can tell our repositioning apart from the user's dragging.
@@ -235,6 +326,16 @@ final class OverlayController {
     private var lastShownText = ""
     private let textIdleTimeout: TimeInterval = 4
     private var isDraggable = false
+
+    /// Whether pointing at the box fades it away. On by default; the menu turns it
+    /// off for anyone who would rather the subtitles simply stayed put.
+    var isRevealEnabled = true {
+        didSet {
+            // Close any hole that is open right now — the next poll would leave it
+            // there, since a disabled reveal stops updating the centre at all.
+            if !isRevealEnabled { view.maskCenter = nil }
+        }
+    }
 
     /// Paused. Nothing may put the overlay back on screen until resumed — not
     /// words already in the engine's pipeline when the pause landed, not the ⇧
@@ -348,12 +449,52 @@ final class OverlayController {
                 if !wantsDrag { self.saveAnchor() }
             }
         }
+
+        // Cursor tracking for the reveal. Polled for the same reason ⇧ is (see
+        // the file header) and because the panel is click-through: it receives no
+        // mouse events of its own, so there is nothing to track from.
+        //
+        // Its own timer at frame rate rather than a job on the 0.15s modifier
+        // poll: the hole is attached to the pointer, and at 0.15s it visibly lags
+        // behind it. Added to `.common` so the reveal keeps following while a menu
+        // or a resize has the run loop in a tracking mode.
+        let cursor = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            self?.updateMask()
+        }
+        RunLoop.main.add(cursor, forMode: .common)
+        cursorTimer = cursor
     }
 
     deinit {
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
         idleTimer?.invalidate()
         modifierTimer?.invalidate()
+        cursorTimer?.invalidate()
+    }
+
+    /// Point the reveal at the cursor, or turn it off.
+    ///
+    /// ⇧ is read here rather than reusing `isDraggable` so the box goes solid the
+    /// moment the key is down: `isDraggable` only catches up on the next 0.15s
+    /// modifier poll, which is long enough to start a drag through a hole.
+    private func updateMask() {
+        guard isRevealEnabled,
+              panel.alphaValue > 0,
+              !NSEvent.modifierFlags.contains(.shift) else {
+            view.maskCenter = nil
+            return
+        }
+
+        // Cheap reject before converting: only a cursor within the reveal's reach
+        // of the panel can affect a pixel of it. The reach is wide enough that the
+        // box starts opening before the pointer is over it.
+        let reach = SubtitleView.maskSize
+        let point = NSEvent.mouseLocation
+        guard panel.frame.insetBy(dx: -reach.width / 2, dy: -reach.height / 2).contains(point) else {
+            view.maskCenter = nil
+            return
+        }
+        view.maskCenter = view.convert(panel.convertPoint(fromScreen: point), from: nil)
     }
 
     // MARK: text
