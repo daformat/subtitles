@@ -24,6 +24,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onHistoryDepth: ((Int) -> Void)?
     var historyTextOpacity: () -> CGFloat = { HistoryPillView.defaultTextOpacity }
     var onHistoryTextOpacity: ((CGFloat) -> Void)?
+    /// Seconds of no new text before the stack is forgotten, and whether that
+    /// happens at all.
+    var historyExpiry: () -> Double = { OverlayController.defaultHistoryExpiry }
+    var onHistoryExpiry: ((Double) -> Void)?
+    var historyExpires: () -> Bool = { true }
+    var onHistoryExpires: ((Bool) -> Void)?
     var maxLines: () -> Int = { SubtitleView.defaultMaxLines }
     var onMaxLines: ((Int) -> Void)?
     var boxOpacity: () -> CGFloat = { SubtitleView.defaultBackgroundOpacity }
@@ -50,6 +56,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private static let inset: CGFloat = 22
     /// The width everything inside a pane is laid out against.
     private static var contentWidth: CGFloat { width - inset * 2 }
+    /// Shared by every row's trailing cell, so the numbers line up down the
+    /// window whichever kind of row they belong to.
+    private static let readoutWidth: CGFloat = 88
 
     private var window: NSWindow?
     /// Holds whichever pane is showing, so the header above it never moves.
@@ -83,6 +92,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// The rows each switch governs, dimmed with it.
     private var revealRows: [SliderRow] = []
     private var historyRows: [SliderRow] = []
+    /// Governed by the section switch *and* by its own, so it is held apart.
+    private var expiryRow: SecondsRow?
+    private var expiryToggle: ToggleRow?
 
     private let cacheReadout = NSTextField(labelWithString: "")
     private let clearButton = NSButton(title: "Clear Model Cache…", target: nil, action: nil)
@@ -97,12 +109,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         if let window {
             window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(nil)
             return
         }
         let window = build()
         self.window = window
         window.center()
         window.makeKeyAndOrderFront(nil)
+        // After keying it, not before: becoming key is when AppKit picks a first
+        // responder of its own, and it picks the seconds field — ringed, its
+        // contents selected, ready to swallow anything typed at a window nobody
+        // aimed at it.
+        window.makeFirstResponder(nil)
     }
 
     /// Torn down rather than hidden, so the next open reads the settings as they
@@ -115,6 +133,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         body = nil
         revealRows = []
         historyRows = []
+        expiryRow = nil
+        expiryToggle = nil
         vadRow = nil
         speakerRow = nil
         removable = []
@@ -144,6 +164,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let title: NSTextField
         let slider = NSSlider()
         let readout = NSTextField(labelWithString: "")
+
+        var cells: [NSView] { [title, slider, readout] }
 
         private let format: (Double) -> String
         private let apply: (Double) -> Void
@@ -190,7 +212,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                                                       weight: .regular)
             readout.textColor = .secondaryLabelColor
             readout.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            readout.widthAnchor.constraint(equalToConstant: 54).isActive = true
+            readout.widthAnchor.constraint(equalToConstant: readoutWidth).isActive = true
         }
 
         @objc private func changed(_ sender: NSSlider) {
@@ -211,6 +233,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private final class ToggleRow: NSObject {
         let view: NSStackView
         let control = NSSwitch()
+        private let label: NSTextField
+        private let sub: NSTextField
         private let apply: (Bool) -> Void
 
         init(_ title: String, detail: String, value: Bool, width: CGFloat,
@@ -219,6 +243,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
             let label = NSTextField(labelWithString: title)
             let sub = NSTextField(labelWithString: detail)
+            self.label = label
+            self.sub = sub
             sub.font = .systemFont(ofSize: 11)
             sub.textColor = .secondaryLabelColor
 
@@ -249,6 +275,141 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         var isOn: Bool {
             get { control.state == .on }
             set { control.state = newValue ? .on : .off }
+        }
+
+        var isEnabled = true {
+            didSet {
+                control.isEnabled = isEnabled
+                label.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+                sub.textColor = isEnabled ? .secondaryLabelColor : .disabledControlTextColor
+            }
+        }
+    }
+
+    /// A duration in seconds: a slider for the common range, and a field for
+    /// anything outside it.
+    ///
+    /// The field is the value, not a readout of the slider. The slider covers
+    /// 5 seconds to 5 minutes, which is the range anyone actually reaches for;
+    /// someone who wants an hour, or nought, types it, and the slider then sits
+    /// at its nearest end rather than pretending to hold a number it cannot
+    /// reach.
+    private final class SecondsRow: NSObject, NSTextFieldDelegate {
+        let title = NSTextField(labelWithString: "Clear after")
+        let slider = NSSlider()
+        private let field = NSTextField()
+        private let stepper = NSStepper()
+        private let unit = NSTextField(labelWithString: "sec")
+        private let trailing = NSStackView()
+        private let apply: (Double) -> Void
+
+        /// The value the three controls are showing. Kept so an emptied field can
+        /// be put back rather than read as nought.
+        private var seconds: Double
+
+        var cells: [NSView] { [title, slider, trailing] }
+
+        var isEnabled = true {
+            didSet {
+                slider.isEnabled = isEnabled
+                field.isEnabled = isEnabled
+                stepper.isEnabled = isEnabled
+                title.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+                unit.textColor = isEnabled ? .secondaryLabelColor : .disabledControlTextColor
+            }
+        }
+
+        /// Refuses the keystroke rather than the commit.
+        ///
+        /// A formatter alone only judges the finished string, so a letter can be
+        /// typed, sit there looking accepted, and be thrown away on return.
+        /// `isPartialStringValid` is asked about every edit as it happens, so
+        /// anything that is not a digit simply never appears.
+        private final class DigitsOnly: NumberFormatter {
+            override func isPartialStringValid(
+                _ partialString: String,
+                newEditingString: AutoreleasingUnsafeMutablePointer<NSString?>?,
+                errorDescription: AutoreleasingUnsafeMutablePointer<NSString?>?
+            ) -> Bool {
+                // Empty is allowed through so the field can be cleared to retype;
+                // committing it restores the old value rather than reading as 0.
+                partialString.isEmpty || partialString.allSatisfy { $0.isASCII && $0.isNumber }
+            }
+        }
+
+        init(seconds: Double, apply: @escaping (Double) -> Void) {
+            self.apply = apply
+            self.seconds = max(seconds.rounded(), 0)
+            super.init()
+
+            slider.minValue = 5
+            slider.maxValue = 300
+            slider.isContinuous = true
+            slider.target = self
+            slider.action = #selector(sliderMoved)
+
+            let formatter = DigitsOnly()
+            formatter.minimum = 0
+            formatter.allowsFloats = false
+            field.formatter = formatter
+            field.alignment = .right
+            field.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
+                                                    weight: .regular)
+            field.delegate = self
+            field.target = self
+            field.action = #selector(fieldCommitted)
+            field.widthAnchor.constraint(equalToConstant: 40).isActive = true
+
+            stepper.minValue = 0
+            stepper.maxValue = 86_400
+            stepper.increment = 1
+            stepper.valueWraps = false
+            stepper.target = self
+            stepper.action = #selector(stepped)
+
+            unit.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            unit.textColor = .secondaryLabelColor
+
+            trailing.orientation = .horizontal
+            trailing.spacing = 4
+            trailing.alignment = .centerY
+            trailing.setViews([field, stepper, unit], in: .leading)
+            trailing.widthAnchor.constraint(equalToConstant: readoutWidth).isActive = true
+
+            set(self.seconds, notify: false)
+        }
+
+        private static func text(_ seconds: Double) -> String {
+            String(Int(seconds.rounded()))
+        }
+
+        /// One place where all three controls agree.
+        ///
+        /// The slider parks at whichever end it can reach and the field keeps the
+        /// real number, so a value outside 5–300 still shows honestly.
+        private func set(_ value: Double, notify: Bool = true) {
+            seconds = max(value.rounded(), 0)
+            field.stringValue = Self.text(seconds)
+            stepper.doubleValue = seconds
+            slider.doubleValue = min(max(seconds, slider.minValue), slider.maxValue)
+            if notify { apply(seconds) }
+        }
+
+        @objc private func sliderMoved(_ sender: NSSlider) { set(sender.doubleValue) }
+
+        @objc private func stepped(_ sender: NSStepper) { set(sender.doubleValue) }
+
+        @objc private func fieldCommitted(_ sender: NSTextField) {
+            let typed = sender.stringValue.trimmingCharacters(in: .whitespaces)
+            // Cleared and left cleared: put back what was there, rather than
+            // reading an empty field as a request for nought.
+            set(typed.isEmpty ? seconds : sender.doubleValue)
+        }
+
+        /// Committed on losing focus as well as on return, or a number typed and
+        /// then clicked away from is silently dropped.
+        func controlTextDidEndEditing(_ notification: Notification) {
+            fieldCommitted(field)
         }
     }
 
@@ -321,6 +482,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.contentView = root
         self.body = body
         show(pane: selected, in: window)
+        window.makeFirstResponder(nil)
     }
 
     /// Swap in one pane and fit the window to it.
@@ -518,7 +680,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 "How many lines a box fills before it clears and starts a new one, "
                 + "and how solid the box behind the text is. The ⌥ history follows "
                 + "it, a step behind.",
-                Self.grid([lines, background]), nil)
+                Self.grid([lines.cells, background.cells]), nil)
         revealSwitch.target = self
         revealSwitch.action = #selector(toggleReveal)
         revealSwitch.state = revealEnabled() ? .on : .off
@@ -527,17 +689,37 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         section("Pointer Reveal",
                 "How much of the box disappears under the pointer, and how far the "
                 + "hole around it reaches. Hold ⇧ to keep the box solid.",
-                Self.grid(revealRows), revealSwitch)
+                Self.grid(revealRows.map(\.cells)), revealSwitch)
         syncRevealEnabled()
         historySwitch.target = self
         historySwitch.action = #selector(toggleHistory)
         historySwitch.state = historyEnabled() ? .on : .off
         historyRows = [depth, dimness]
 
+        let expiry = SecondsRow(seconds: historyExpiry()) { [weak self] in
+            self?.onHistoryExpiry?($0)
+        }
+        let expires = ToggleRow(
+            "Forget it when idle",
+            detail: "Otherwise the stack is kept until you pause or quit.",
+            value: historyExpires(), width: Self.contentWidth) { [weak self] on in
+                self?.onHistoryExpires?(on)
+                self?.syncHistoryEnabled()
+            }
+        expiryRow = expiry
+        expiryToggle = expires
+
+        let recent = NSStackView(views: [
+            Self.grid(historyRows.map(\.cells)), expires.view, Self.grid([expiry.cells]),
+        ])
+        recent.orientation = .vertical
+        recent.alignment = .leading
+        recent.spacing = 10
+
         section("Recent Boxes",
                 "How many finished boxes ⌥ can bring back and scroll through, and "
                 + "how far their text sits behind the live one's.",
-                Self.grid(historyRows), historySwitch)
+                recent, historySwitch)
         syncHistoryEnabled()
 
         let reset = NSButton(title: "Reset All Settings…", target: self,
@@ -711,6 +893,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func syncHistoryEnabled() {
         let on = historySwitch.state == .on
         for row in historyRows { row.isEnabled = on }
+        expiryToggle?.isEnabled = on
+        // Two gates: the section's, and the expiry's own.
+        expiryRow?.isEnabled = on && expiryToggle?.isOn == true
     }
 
     /// A section title, optionally with a control pinned to the right of it.
@@ -754,8 +939,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// Title, slider and readout in three aligned columns, so the sliders of
     /// different sections still line up with each other.
-    private static func grid(_ rows: [SliderRow]) -> NSGridView {
-        let grid = NSGridView(views: rows.map { [$0.title, $0.slider, $0.readout] })
+    private static func grid(_ rows: [[NSView]]) -> NSGridView {
+        let grid = NSGridView(views: rows)
         grid.rowSpacing = 8
         grid.columnSpacing = 10
         grid.column(at: 0).xPlacement = .trailing

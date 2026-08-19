@@ -411,6 +411,16 @@ final class OverlayController {
     /// How bright the ⌥ stack's text is against the live box's white.
     var historyTextOpacity = HistoryPillView.defaultTextOpacity
 
+    /// Forget the stack after this long with no new text, so ⌥ pressed an hour
+    /// later does not answer with whatever was on screen before lunch. Off keeps
+    /// it until a pause or a model switch.
+    var historyExpiry: TimeInterval = OverlayController.defaultHistoryExpiry
+    var isHistoryExpiryEnabled = true
+
+    /// Half a minute. Long enough to cover a pause in the conversation, short
+    /// enough that the stack is about what was *just* said.
+    static let defaultHistoryExpiry: TimeInterval = 30
+
     /// Whether ⌥ brings the last few boxes back. Menu-controlled, like the
     /// pointer reveal.
     var isHistoryEnabled = true {
@@ -490,6 +500,7 @@ final class OverlayController {
         // A poll cannot be forgotten.
         idleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.fadeIfTextIdle()
+            self?.expireHistoryIfIdle()
         }
 
         // ⇧ toggles grabbable. Polled, not monitored — see the file header.
@@ -807,6 +818,21 @@ final class OverlayController {
     private func saveAnchor() {
         guard let anchor else { return }
         UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
+    }
+
+    /// Drop the ⌥ stack once the transcript has been quiet long enough.
+    ///
+    /// Measured from the last *text*, not the last audio, for the same reason
+    /// the fade is: a backing track keeps the voice gate open indefinitely, and
+    /// what matters is whether new words are arriving.
+    private func expireHistoryIfIdle() {
+        guard isHistoryExpiryEnabled, !pastPages.isEmpty else { return }
+        // Not while it is on screen. Someone holding ⌥ is reading it, and a
+        // stack that empties under their eyes because nobody spoke for a minute
+        // is the one moment this must not fire.
+        guard history.shown.isEmpty else { return }
+        guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
+        pastPages.removeAll()
     }
 
     private func fadeIfTextIdle() {

@@ -91,8 +91,11 @@ panes:
 
 - **UI** — how many lines a box fills before it clears, how solid it is, how much
   of it the pointer dissolves and how far that reach extends, and how many
-  finished boxes ⌥ brings back and how far behind the live one they sit. Every
-  control applies to the overlay as you drag it, so the overlay is the preview.
+  finished boxes ⌥ brings back and how far behind the live one they sit, and how
+  long a silence forgets them — thirty seconds by default, a slider out to five
+  minutes, a field for anything else, or off to keep them until you pause or
+  quit. Every control
+  applies to the overlay as you drag it, so the overlay is the preview.
 - **Models** — whether non-speech is skipped before it reaches the recogniser,
   whether a speaker change starts a new box, and a **Clear Model Cache** button.
   Every model you try stays downloaded; this removes the ones nothing is using

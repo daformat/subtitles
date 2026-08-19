@@ -99,6 +99,11 @@ enum Defaults {
     static let maxLines = "overlay.maxLines"
     static let boxOpacity = "overlay.boxOpacity"
     static let historyTextOpacity = "overlay.historyTextOpacity"
+    // Seconds. A new key rather than the minutes one it replaces: the old
+    // values are numerically valid seconds, so reusing it would quietly turn
+    // someone's five minutes into five seconds.
+    static let historyExpiry = "overlay.historyExpirySeconds"
+    static let historyExpires = "overlay.historyExpires"
     static let revealOpacity = "overlay.revealOpacity"
     static let revealWidth = "overlay.revealWidth"
     static let revealHeight = "overlay.revealHeight"
@@ -645,6 +650,10 @@ if useOverlay {
         ?? OverlayController.defaultHistoryDepth
     controller.maxLines = UserDefaults.standard.object(forKey: Defaults.maxLines) as? Int
         ?? SubtitleView.defaultMaxLines
+    controller.historyExpiry = (UserDefaults.standard.object(forKey: Defaults.historyExpiry)
+        as? Double).map { max($0, 0) } ?? OverlayController.defaultHistoryExpiry
+    controller.isHistoryExpiryEnabled =
+        UserDefaults.standard.object(forKey: Defaults.historyExpires) as? Bool ?? true
     controller.historyTextOpacity = min(max(CGFloat(
         UserDefaults.standard.object(forKey: Defaults.historyTextOpacity) as? Double
             ?? Double(HistoryPillView.defaultTextOpacity)),
@@ -702,6 +711,7 @@ if useOverlay {
         // same number by coincidence does not.
         for key in [Defaults.fontSize, Defaults.reveal, Defaults.history,
                     Defaults.historyDepth, Defaults.historyTextOpacity,
+                    Defaults.historyExpiry, Defaults.historyExpires,
                     Defaults.maxLines, Defaults.boxOpacity,
                     Defaults.revealOpacity,
                     Defaults.revealWidth, Defaults.revealHeight] {
@@ -720,6 +730,8 @@ if useOverlay {
         controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
         controller.historyDepth = OverlayController.defaultHistoryDepth
         controller.historyTextOpacity = HistoryPillView.defaultTextOpacity
+        controller.historyExpiry = OverlayController.defaultHistoryExpiry
+        controller.isHistoryExpiryEnabled = true
         controller.revealOpacity = SubtitleView.defaultMaskStrength
         controller.revealSize = SubtitleView.defaultMaskSize
         // Owns its own key, so it clears it itself.
@@ -727,6 +739,16 @@ if useOverlay {
     }
     settings.modelsInUse = {
         ModelCache.inUse(variant: currentVariant, speakerBreaks: speakerBreaksEnabled)
+    }
+    settings.historyExpiry = { controller.historyExpiry }
+    settings.onHistoryExpiry = { seconds in
+        controller.historyExpiry = max(seconds, 0)
+        UserDefaults.standard.set(seconds, forKey: Defaults.historyExpiry)
+    }
+    settings.historyExpires = { controller.isHistoryExpiryEnabled }
+    settings.onHistoryExpires = { on in
+        controller.isHistoryExpiryEnabled = on
+        UserDefaults.standard.set(on, forKey: Defaults.historyExpires)
     }
     settings.historyTextOpacity = { controller.historyTextOpacity }
     settings.onHistoryTextOpacity = { value in
