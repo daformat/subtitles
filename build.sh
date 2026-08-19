@@ -16,8 +16,8 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.0.3"
-BUILD="4"
+VERSION="1.1.0"
+BUILD="5"
 
 echo "==> building rust core"
 (cd core && cargo build --release)
