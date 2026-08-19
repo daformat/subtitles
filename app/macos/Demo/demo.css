@@ -1183,6 +1183,16 @@
   font-size: clamp(14px, 2.61cqw, 23px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The browser must not correct the scroll on its own here.
+     A box mid-entrance is displaced by its own transform, which widens the
+     scrollable overflow, and once the stack is nearly as tall as the room it
+     has, that displacement alone is enough to tip the container into being
+     scrollable for the length of the animation. Scroll anchoring sees content
+     resize under it, adjusts to keep its anchor still, and the adjustment is
+     left behind when the transform resolves and the overflow goes away again.
+     That is why this showed up a little before the stack was long enough to
+     scroll rather than after. */
+  overflow-anchor: none;
   scrollbar-width: none;
   opacity: 0;
   visibility: hidden;
@@ -1257,22 +1267,22 @@
   font-weight: 600;
   text-align: center;
   text-wrap: balance;
+  will-change: transform;
 }
 
-/* The app fades the stack where it is clipped, by as much as is actually
-   hidden. Here the top box is the only one that can be cut, so the fade is a
-   fixed band at the top and costs nothing when nothing is behind it. */
+/* The fade at the edge that still has boxes past it. Its depth is --fade, set
+   by script.js from how much is actually hidden there, so it shrinks as you
+   approach the end and the class comes off entirely once you reach it. The
+   direction is the only part CSS decides, because it follows the side the stack
+   took: older boxes are above when the stack is above, and below when it is
+   below. Never the near edge, which holds the newest box, the one being read. */
 .demo-history.is-clipped {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2.2em);
-  mask-image: linear-gradient(to bottom, transparent, #000 2.2em);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em));
 }
-
-/* The far edge, never the near one: the box against the live one is the newest
-   and the one being read, so dimming it would be backwards. Older boxes are
-   above when the stack is above, and below when it is below. */
 .demo-history.is-below.is-clipped {
-  -webkit-mask-image: linear-gradient(to top, transparent, #000 2.2em);
-  mask-image: linear-gradient(to top, transparent, #000 2.2em);
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em));
+  mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em));
 }
 
 /* No room left on the chosen side. It stays built, so the next page shrinking

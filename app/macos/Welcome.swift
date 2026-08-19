@@ -203,7 +203,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
 
         // Deliberately short. The demo below says what this is far better than a
         // paragraph would, and the one thing it cannot show — that ⇧ is being
-        // held — is the first of the lines underneath it.
+        // held — is one of the lines underneath it.
         let blurb = NSTextField(labelWithString:
             "Live captions for whatever your Mac plays.")
         blurb.font = .systemFont(ofSize: 11)
@@ -214,26 +214,29 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         stack.addArrangedSubview(demo)
         stack.setCustomSpacing(18, after: blurb)
 
+        // Dissolving leads, because it is the one thing here that happens
+        // without being asked for: point at the captions and they go. The two
+        // keys under it are what to do about that.
+        let dissolve = hintLine("Point at the captions and they dissolve under you.")
+        stack.addArrangedSubview(dissolve)
+        stack.setCustomSpacing(16, after: demo)
+
         let hint = buildShiftHint()
         stack.addArrangedSubview(hint)
-        stack.setCustomSpacing(16, after: demo)
+        // The three lines are one block of help text, so they sit closer to each
+        // other than the block does to the demo above it.
+        stack.setCustomSpacing(6, after: dissolve)
 
         let option = buildOptionHint()
         stack.addArrangedSubview(option)
-        // The three lines are one block of help text, so they sit closer to each
-        // other than the block does to the demo above it.
         stack.setCustomSpacing(6, after: hint)
-
-        let dissolve = hintLabel("Point at the captions and they dissolve under you.")
-        stack.addArrangedSubview(dissolve)
-        stack.setCustomSpacing(6, after: option)
 
         let row = NSStackView()
         row.orientation = .vertical
         row.alignment = .centerX
         row.spacing = 8
         stack.addArrangedSubview(row)
-        stack.setCustomSpacing(20, after: dissolve)
+        stack.setCustomSpacing(20, after: option)
         statusRow = row
         buildProgress(into: row)
         contentStack = stack
@@ -274,8 +277,8 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// native window never quite matches the labels around it, and this way the
     /// key can light up when the key is actually held.
     private func buildShiftHint() -> NSView {
-        hintRow("Hold", KeycapView(key: "⇧", modifier: .shift),
-                "and drag the captions to move them.")
+        hintRow([hintLabel("Hold"), KeycapView(key: "⇧", modifier: .shift),
+                 hintLabel("and drag the captions to move them.")])
     }
 
     /// "Hold ⌥ to stack the last few back up."
@@ -284,20 +287,26 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// something on screen rather than a promise about the app — which is what
     /// earns it a line of its own.
     private func buildOptionHint() -> NSView {
-        hintRow("Hold", KeycapView(key: "⌥", modifier: .option),
-                "to stack the last few back up.")
+        hintRow([hintLabel("Hold"), KeycapView(key: "⌥", modifier: .option),
+                 hintLabel("to stack the last few back up.")])
     }
 
-    /// A line of help text with a key set into it.
-    private func hintRow(_ before: String, _ keycap: KeycapView,
-                         _ after: String) -> NSView {
-        let row = NSStackView()
+    /// A line of help text with nothing but words in it.
+    ///
+    /// Still a row, and still a keycap tall: a bare label is shorter than a line
+    /// with a key in it, and next to two of those it reads as smaller type
+    /// rather than as the same sentence without a key.
+    private func hintLine(_ string: String) -> NSView {
+        hintRow([hintLabel(string)])
+    }
+
+    /// A line of help text, one keycap tall whatever is in it.
+    private func hintRow(_ views: [NSView]) -> NSView {
+        let row = NSStackView(views: views)
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 5
-        row.addArrangedSubview(hintLabel(before))
-        row.addArrangedSubview(keycap)
-        row.addArrangedSubview(hintLabel(after))
+        row.heightAnchor.constraint(equalToConstant: KeycapView.height).isActive = true
         return row
     }
 
@@ -440,9 +449,17 @@ final class KeycapView: NSView {
     private var pressed = false { didSet { if pressed != oldValue { needsDisplay = true } } }
     private var poll: Timer?
 
-    private var font: NSFont { .systemFont(ofSize: 11) }
-    private let padding = NSSize(width: 7, height: 3)
+    private static let font: NSFont = .systemFont(ofSize: 11)
+    private static let padding = NSSize(width: 7, height: 3)
     private let corner: CGFloat = 4.5
+
+    /// How tall a key is — and so how tall every line of help text is, whether
+    /// it has a key in it or not. `size(withAttributes:)` reports the font's
+    /// line height rather than the glyph's ink, so this is the same number for
+    /// ⇧ and ⌥ and there is nothing to clip.
+    static let height: CGFloat =
+        ceil(("⇧" as NSString).size(withAttributes: [.font: font]).height)
+        + padding.height * 2
 
     init(key: String, modifier: NSEvent.ModifierFlags) {
         self.key = key
@@ -454,11 +471,11 @@ final class KeycapView: NSView {
     required init?(coder: NSCoder) { nil }
 
     override var intrinsicContentSize: NSSize {
-        let size = (key as NSString).size(withAttributes: [.font: font])
+        let size = (key as NSString).size(withAttributes: [.font: Self.font])
         // A floor, so ⇧ and a wider key are the same width — a row of keycaps
         // that each hug their own glyph reads as a row of different-sized boxes.
-        return NSSize(width: max(ceil(size.width) + padding.width * 2, 20),
-                      height: ceil(size.height) + padding.height * 2)
+        return NSSize(width: max(ceil(size.width) + Self.padding.width * 2, 20),
+                      height: Self.height)
     }
 
     /// The modifier is polled, not monitored — a keyboard event monitor would demand
@@ -508,7 +525,7 @@ final class KeycapView: NSView {
 
         let colour = pressed ? held : NSColor.secondaryLabelColor
         let text = NSAttributedString(string: key, attributes: [
-            .font: font, .foregroundColor: colour,
+            .font: Self.font, .foregroundColor: colour,
         ])
         let size = text.size()
         text.draw(at: NSPoint(x: (bounds.width - size.width) / 2,

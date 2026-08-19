@@ -633,28 +633,65 @@ const I18N = (() => {
   const history = document.getElementById('caption-history');
   const screen = document.querySelector('.demo-screen');
 
-  // Closed pages, oldest first. `defaultHistoryDepth` is 15 in the app; this
-  // stage is a few hundred pixels tall and would clip most of them, so it keeps
-  // what the room can nearly show and lets the fade say there is more.
-  const PAST_MAX = 6;
+  // Closed pages, oldest first, at the app's own `defaultHistoryDepth`.
+  //
+  // Held back to six at first, on the reasoning that this stage is only a few
+  // hundred pixels tall and would clip most of them. That was the wrong way
+  // round: a stack that always fits is a stack the scroll never does anything
+  // to, and scrolling back through the older ones is half of what the feature
+  // is. Fifteen overflows this stage comfortably, which is the point.
+  //
+  // The demo speaks seven distinct lines, so a full buffer repeats them. The
+  // app would do the same with a speaker who repeats themselves: closePage only
+  // refuses a line identical to the one before it.
+  const PAST_MAX = 15;
   const past = [];
+
+  // Pages carry an id rather than being matched on their text. The demo speaks
+  // seven lines into fifteen slots, so the same sentence is in the stack more
+  // than once, and keying the reconciliation below on text made two different
+  // boxes look like one box that had moved. Everything downstream then rebuilt
+  // and re-animated the lot.
+  let pageId = 0;
 
   // Deduplicated against the last entry, as the app's own closePage is: a page
   // can close twice in a beat, and two identical boxes read as a stutter rather
   // than as history.
   const closePage = (line) => {
     const trimmed = line.trim();
-    if (!trimmed || trimmed === past[past.length - 1]) return;
-    past.push(trimmed);
+    const last = past[past.length - 1];
+    if (!trimmed || (last && trimmed === last.text)) return;
+    past.push({ id: ++pageId, text: trimmed });
     if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
     if (history && history.classList.contains('is-visible')) paintHistory();
   };
 
+  // The live box's top edge, as the stack should hang off it.
+  //
+  // Between pages the box is invisible but still holds the caption that just
+  // ended, at whatever height that sentence needed. Anchoring to that edge put
+  // the stack where a two-line box had left it and then dropped it the moment
+  // the next caption came up one line short, which reads as the stack lagging a
+  // page behind.
+  //
+  // The box is bottom-anchored and grows upwards, so its bottom edge is the
+  // stable one. While it is down, anchor to where a single line would put the
+  // top instead, which is where the next caption opens. A sentence that goes on
+  // to wrap still lifts the stack when it wraps, exactly as it does in the app.
+  const anchorTop = (rect) => {
+    if (box.classList.contains('is-visible')) return rect.top;
+    const cs = getComputedStyle(box);
+    const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.34;
+    const oneLine = line + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    return Math.max(rect.top, rect.bottom - oneLine);
+  };
+
   // Vertical space for the stack on one side of the live box. The gap is the
   // app's 6pt and the margin off the edge of the screen its 12pt, both at 30pt
-  // of text, so both in em.
+  // of text, so both in em. The bottom edge needs no such care: it does not move
+  // when the caption changes length.
   const roomFor = (above, rect, bounds, em) =>
-    (above ? rect.top - bounds.top : bounds.bottom - rect.bottom) - em * 0.6;
+    (above ? anchorTop(rect) - bounds.top : bounds.bottom - rect.bottom) - em * 0.6;
 
   // Which side of the live box the stack takes. Decided on the press that raises
   // it and held for as long as it is up: re-deciding it as the box resizes would
@@ -665,31 +702,167 @@ const I18N = (() => {
   // Below this there is not enough room to be worth drawing: the app's 40pt.
   const MIN_ROOM = 1.33;
 
+  // How tall the stack's content is, measured from layout rather than read off
+  // `scrollHeight`.
+  //
+  // A box mid-entrance carries a transform, and a transformed child widens its
+  // scroll container's scrollable overflow. So during the rise `scrollHeight`
+  // reports a stack up to 0.4em taller than the one that will be standing there
+  // a fifth of a second later. Parking the scroll against that number scrolled
+  // the content up by those few pixels, and when the transforms resolved the
+  // overflow shrank back and the browser clamped the scroll down again: the
+  // boxes appeared slightly high and then dropped onto their real position.
+  // Nothing engine-specific about it, which is why it happened everywhere.
+  //
+  // `offsetHeight` is layout and ignores transforms, so this is the height the
+  // stack will settle at, available before it gets there.
+  const contentHeight = () => {
+    const kids = [...history.children];
+    if (!kids.length) return 0;
+    const gap = parseFloat(getComputedStyle(history).rowGap) || 0;
+    return kids.reduce((sum, el) => sum + el.offsetHeight, 0) + gap * (kids.length - 1);
+  };
+
+  // How many boxes are still playing their entrance. While any of them is, the
+  // scroll geometry below is not to be trusted or written to: a box mid-rise is
+  // displaced by its own transform, and that displacement widens the scrollable
+  // overflow it is measured against.
+  let rising = 0;
+
+  // The exact scroll range, from the browser rather than from arithmetic.
+  //
+  // This used to sum the children's `offsetHeight`, chosen because offsetHeight
+  // is layout and ignores transforms. What it also is, is rounded to whole
+  // pixels: the pills are fractional tall, so the error compounded down the
+  // stack and a full one was off by several pixels. Parking against that number
+  // put the scroll past the real end, the browser clamped it back, and the stack
+  // snapped — which is why it only appeared once the history filled up.
+  //
+  // scrollHeight is exact and fractional. It is only wrong while a transform is
+  // in flight, and `rising` is what keeps this from being read then.
+  const maxScroll = () => Math.max(0, history.scrollHeight - history.clientHeight);
+
+  // Distance between the edge nearest the live box and the end of the content
+  // on that side. Zero means the newest box is flush against the live one,
+  // which is where the stack parks itself. Everything is measured from that
+  // edge because it is the one the reader is anchored to and the end new boxes
+  // arrive at — and which edge that is depends on the side the stack took.
+  const nearDistance = () =>
+    placedAbove ? maxScroll() - history.scrollTop : history.scrollTop;
+
+  // When the reader last turned the wheel, and when we last moved the scroll
+  // ourselves. The second exists only to keep the first honest: every write
+  // below fires a scroll event, and without telling them apart the stack would
+  // read its own corrections as a gesture.
+  let userScrolledAt = -1e9;
+  let selfScrolledAt = -1e9;
+
+  // Whether the stack is sitting against the live box, tracked rather than
+  // measured. Deriving it from the scroll offset meant reading geometry at the
+  // one moment it cannot be trusted: a box closing while an earlier one is still
+  // rising would have read as the reader having scrolled away, and the stack
+  // would have refused to follow the newest box.
+  let parked = true;
+
+  const setNearDistance = (distance) => {
+    const max = maxScroll();
+    const clamped = Math.min(Math.max(distance, 0), max);
+    selfScrolledAt = performance.now();
+    history.scrollTop = placedAbove ? max - clamped : clamped;
+  };
+
+  // Fade the edge that still has boxes beyond it, and only that one.
+  //
+  // The far edge, never the near one: the box against the live one is the
+  // newest and the one being read, so dimming it would be backwards.
+  //
+  // And only while something is genuinely hidden there. Scroll to the end and
+  // the fade goes with it, because a fade with nothing behind it advertises
+  // content that is not there. The band is sized to the amount actually hidden,
+  // so a stack overflowing by ten pixels gets a ten-pixel fade rather than
+  // swallowing a whole box to announce it, and it never takes more than half
+  // the visible height.
+  const FADE_MAX = 2.2;
+
+  // Only the depth moves. `is-clipped` is deliberately left alone here and set
+  // from layout in placeHistory instead: it carries the mask, and adding or
+  // removing a mask on a scroll container disturbs the scroll, so toggling it
+  // on every scroll frame put the fade in a fight with the gesture it was
+  // reading. A depth of zero looks exactly like no mask and costs the scroller
+  // nothing.
+  const updateFade = () => {
+    if (!history) return;
+    const em = parseFloat(getComputedStyle(history).fontSize) || 16;
+    const hidden = Math.max(0, maxScroll() - nearDistance());
+    const fade = Math.min(em * FADE_MAX, hidden, history.clientHeight / 2);
+    history.style.setProperty('--fade', fade.toFixed(1) + 'px');
+  };
+
+  // Follows the wheel, not just the moment the stack is built: scrolling is
+  // exactly when the amount hidden at each edge changes. One update a frame,
+  // because this writes a property and then measures, and doing that on every
+  // scroll event is how a handler starts costing more than the scroll.
+  let fadeQueued = false;
+  if (history) history.addEventListener('scroll', () => {
+    if (performance.now() - selfScrolledAt > 60) {
+      userScrolledAt = performance.now();
+      // Only worth reading between entrances, when the geometry is honest.
+      if (!rising) parked = nearDistance() < 1;
+    }
+    if (fadeQueued) return;
+    fadeQueued = true;
+    requestAnimationFrame(() => { fadeQueued = false; updateFade(); });
+  });
+
   // Pinned to the live box, so dragging the captions takes the stack with them.
+  //
+  // Deliberately does not park the scroll. This runs on every frame the stack
+  // is up, to follow a live box that moves and resizes under it, and parking
+  // here is what threw the reader back to the newest box the instant they
+  // scrolled away from it.
   const placeHistory = () => {
     if (!history || !stage) return;
     const bounds = stage.getBoundingClientRect();
     const rect = box.getBoundingClientRect();
     const em = parseFloat(getComputedStyle(history).fontSize) || 16;
     const room = roomFor(placedAbove, rect, bounds, em);
+    const near = nearDistance();
+    const was = history.clientHeight;
 
     history.style.left = ((rect.left + rect.width / 2 - bounds.left) / bounds.width * 100) + '%';
     if (placedAbove) {
       history.style.top = 'auto';
-      history.style.bottom = ((bounds.bottom - rect.top + em * 0.2) / bounds.height * 100) + '%';
+      history.style.bottom = ((bounds.bottom - anchorTop(rect) + em * 0.2) / bounds.height * 100) + '%';
     } else {
       history.style.bottom = 'auto';
       history.style.top = ((rect.bottom - bounds.top + em * 0.2) / bounds.height * 100) + '%';
     }
-    history.style.maxHeight = Math.max(0, room) + 'px';
+    // Rounded, because `room` is derived from the live box's rect and jitters by
+    // fractions of a pixel as a caption is typed. Left as a float it crossed the
+    // half-pixel test below on its own every few frames, and every crossing was
+    // a scroll correction the reader had not asked for.
+    history.style.maxHeight = Math.max(0, Math.round(room)) + 'px';
 
     // Nowhere left to put it. Hidden rather than emptied, because the live box
     // shrinks again on the next page and the stack should still be there.
     history.classList.toggle('is-starved', room < em * MIN_ROOM);
-    history.classList.toggle('is-clipped', history.scrollHeight > room + 1);
-    // Parked against the live box, which is the end the newest box arrives at
-    // and the one somebody holding ⌥ is reaching for.
-    history.scrollTop = placedAbove ? history.scrollHeight : 0;
+    // Whether the stack can scroll at all, which changes only when a box lands
+    // or the live box takes room away — never mid-gesture.
+    history.classList.toggle('is-clipped', contentHeight() > room + 1);
+
+    // Only a change of height disturbs the scroller; the live box merely moving
+    // does not. Put the reader back the same distance from the live box, so a
+    // box growing to a second line eats the stack from the far end rather than
+    // sliding it under them.
+    // Never mid-gesture. Someone flicking through the stack while a caption
+    // happens to resize the live box underneath is navigating, and moving the
+    // content under them is the one thing that must not happen — the app draws
+    // the same line with `!scroll.isScrolling`.
+    if (Math.abs(history.clientHeight - was) > 0.5
+        && performance.now() - userScrolledAt > 400
+        && !rising) setNearDistance(near);
+
+    updateFade();
   };
 
   // Reconciled rather than rebuilt, so that a box already on screen is not
@@ -697,40 +870,66 @@ const I18N = (() => {
   // just closed rises. The app does the same, against the same problem.
   const paintHistory = () => {
     if (!history) return;
-    const carried = new Map();
-    [...history.children].forEach((el) => {
-      if (!carried.has(el.textContent)) carried.set(el.textContent, el);
-    });
+    // Read the reader's place before the rebuild destroys it. Sticking to the
+    // newest box is right only if that is where they already were; if they had
+    // scrolled back to an older one, hold *that* box still instead. New text
+    // arriving must not drag the page out from under someone mid-sentence.
+    const wasParked = !history.children.length || parked;
+    const wasNear = nearDistance();
+    const wasContent = contentHeight();
 
     // Reversed when the stack hangs below, so the newest box is the one touching
     // the live box either way.
     const ordered = placedAbove ? past : [...past].reverse();
 
-    const risen = [];
-    history.textContent = '';
-    ordered.forEach((line) => {
-      let el = carried.get(line);
-      if (el) {
-        carried.delete(line);
-      } else {
-        el = document.createElement('div');
-        el.className = 'hist-line';
-        el.textContent = line;
-        risen.push(el);
-      }
-      history.appendChild(el);
+    // Patched in place. The boxes already standing are never detached, only the
+    // ones that have fallen out of the buffer are removed and the new one is
+    // inserted where it belongs.
+    //
+    // The previous version emptied the container and re-appended the survivors,
+    // which is what re-ran the entrance on the whole stack: taking an element
+    // out of the document and putting it back restarts a CSS animation that is
+    // still named on it. Leaving them alone also leaves the scroll position
+    // alone, which the browser maintains for as long as the boxes it is
+    // measured against stay put.
+    const living = new Set(ordered.map((page) => String(page.id)));
+    [...history.children].forEach((el) => {
+      if (!living.has(el.dataset.pid)) el.remove();
     });
 
-    // Nearest the live box first, so the stack unrolls out of it. Which end that
-    // is depends on the side: the newest box is last above it and first below.
+    const risen = [];
+    ordered.forEach((page, i) => {
+      const here = history.children[i];
+      if (here && here.dataset.pid === String(page.id)) return;
+      const el = document.createElement('div');
+      el.className = 'hist-line';
+      el.dataset.pid = page.id;
+      el.textContent = page.text;
+      history.insertBefore(el, here || null);
+      risen.push(el);
+    });
+
+    placeHistory();
+
+    // Settle the scroll while the new boxes are still sitting at their resting
+    // position, before a single transform exists to widen the overflow they are
+    // measured against. Parked stays parked; otherwise the box they were reading
+    // holds still, which means moving with the growth that landed at the near
+    // end.
+    setNearDistance(wasParked ? 0 : wasNear + (contentHeight() - wasContent));
+    parked = wasParked;
+
+    // Only now do they animate. Nearest the live box first, so the stack unrolls
+    // out of it: the newest box is last above the live one and first below.
     const kids = [...history.children];
     risen.forEach((el) => {
       const i = kids.indexOf(el);
       el.style.setProperty('--rise', placedAbove ? kids.length - 1 - i : i);
+      rising++;
+      el.addEventListener('animationend', () => { rising = Math.max(0, rising - 1); },
+                          { once: true });
       el.classList.add('is-rising');
     });
-
-    placeHistory();
   };
 
   const showHistory = (on) => {
@@ -742,7 +941,13 @@ const I18N = (() => {
       // while ⌥ is still held does the reconciliation in paintHistory matter,
       // and then it is a single box that just closed, joining a stack that is
       // already up. The app draws the same line.
-      if (!history.classList.contains('is-visible')) history.textContent = '';
+      if (!history.classList.contains('is-visible')) {
+        history.textContent = '';
+        // Whatever was still animating went with them, and a fresh press always
+        // opens against the live box.
+        rising = 0;
+        parked = true;
+      }
 
       // Flip only when there is genuinely more room the other way, which is what
       // makes the stack fall below the box once the box is dragged to the top.
