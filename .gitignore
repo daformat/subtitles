@@ -34,3 +34,4 @@ spike/tap/*.txt
 # SwiftPM
 .build/
 spike/fa-probe/.build/
+.idea/
