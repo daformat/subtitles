@@ -45,7 +45,7 @@ mkdir -p "$OUT"
 # The caption is a paragraph of page copy, and the welcome window draws its own
 # ⇧ line in AppKit instead: text rendered by a web view inside a native window
 # is text that does not match anything around it.
-HTML=$(extract index.html 277 539)
+HTML=$(extract index.html 297 566)
 expect "the demo markup" "$HTML" '<div class="demo" id="demo">'
 expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 {
@@ -58,7 +58,7 @@ expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 # The palettes come along because every colour in the demo is a var() into them,
 # and the two dark blocks because the webview follows the system appearance.
 CSS_ROOT=$(extract styles.css 1 79)
-CSS_DEMO=$(extract styles.css 670 1770)
+CSS_DEMO=$(extract styles.css 674 1955)
 expect "the light palette" "$CSS_ROOT" -- '--desktop-bg\|:root {'
 expect "the dark palette" "$CSS_ROOT" 'prefers-color-scheme: dark'
 expect "the demo styles" "$CSS_DEMO" '^\.demo {'
@@ -78,7 +78,7 @@ expect "the scene buttons' styles" "$CSS_DEMO" '^\.demo-scenes {'
 # reads the translations out of a <template> in the page; there is no template
 # here, so every call falls back to the English literal it was given.
 JS_I18N=$(extract script.js 8 20)
-JS=$(extract script.js 158 775)
+JS=$(extract script.js 158 980)
 expect "the i18n helper" "$JS_I18N" 'const I18N = '
 expect "the menu bar clock" "$JS" 'function menuBarClock'
 expect "the caption demo" "$JS" 'function captionDemo'

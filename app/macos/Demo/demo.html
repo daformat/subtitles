@@ -289,6 +289,13 @@
               </span>
             </div>
 
+            <!-- The ⌥ stack. A sibling rather than a child of the box, for the
+                 reason the app gives: the live box carries the pointer reveal,
+                 and a mask applies to a whole subtree, so a stack inside it
+                 would dissolve along with it. Positioned against the box by
+                 script.js, the way the app's second panel is. -->
+            <div class="demo-history" id="caption-history"></div>
+
             <div class="demo-overlay" id="caption-box"><span id="caption-text"></span><span class="tentative" id="caption-live"></span></div>
           </div>
         </div>

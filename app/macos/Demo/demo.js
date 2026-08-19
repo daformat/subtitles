@@ -332,6 +332,9 @@ const I18N = (() => {
 
     await step(hold);
     box.classList.remove('is-visible');
+    // The page has closed. The app records it here too, at the fade, because
+    // fading is precisely when somebody looked away and will want it back.
+    closePage(line);
     await step(GAP_MS);
   }
 
@@ -618,6 +621,208 @@ const I18N = (() => {
       box.classList.remove('is-dragging');
     })
   );
+
+  // ── the pointer reveal and the ⌥ stack ────────────────────────────────────
+  //
+  // Neither of these is drawn. The page has a pointer and something underneath
+  // the captions, which is everything the reveal needs, and a keyboard with the
+  // same modifier on it, so both are wired to the real thing and behave as they
+  // do in the app. The geometry is in styles.css, against the app's own
+  // constants; what is here is where the hole is and what is in the stack.
+
+  const history = document.getElementById('caption-history');
+  const screen = document.querySelector('.demo-screen');
+
+  // Closed pages, oldest first. `defaultHistoryDepth` is 15 in the app; this
+  // stage is a few hundred pixels tall and would clip most of them, so it keeps
+  // what the room can nearly show and lets the fade say there is more.
+  const PAST_MAX = 6;
+  const past = [];
+
+  // Deduplicated against the last entry, as the app's own closePage is: a page
+  // can close twice in a beat, and two identical boxes read as a stutter rather
+  // than as history.
+  const closePage = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === past[past.length - 1]) return;
+    past.push(trimmed);
+    if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
+    if (history && history.classList.contains('is-visible')) paintHistory();
+  };
+
+  // Vertical space for the stack on one side of the live box. The gap is the
+  // app's 6pt and the margin off the edge of the screen its 12pt, both at 30pt
+  // of text, so both in em.
+  const roomFor = (above, rect, bounds, em) =>
+    (above ? rect.top - bounds.top : bounds.bottom - rect.bottom) - em * 0.6;
+
+  // Which side of the live box the stack takes. Decided on the press that raises
+  // it and held for as long as it is up: re-deciding it as the box resizes would
+  // let one sentence wrapping to a second line throw the stack across it
+  // mid-read, which is the app's reasoning too.
+  let placedAbove = true;
+
+  // Below this there is not enough room to be worth drawing: the app's 40pt.
+  const MIN_ROOM = 1.33;
+
+  // Pinned to the live box, so dragging the captions takes the stack with them.
+  const placeHistory = () => {
+    if (!history || !stage) return;
+    const bounds = stage.getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
+    const em = parseFloat(getComputedStyle(history).fontSize) || 16;
+    const room = roomFor(placedAbove, rect, bounds, em);
+
+    history.style.left = ((rect.left + rect.width / 2 - bounds.left) / bounds.width * 100) + '%';
+    if (placedAbove) {
+      history.style.top = 'auto';
+      history.style.bottom = ((bounds.bottom - rect.top + em * 0.2) / bounds.height * 100) + '%';
+    } else {
+      history.style.bottom = 'auto';
+      history.style.top = ((rect.bottom - bounds.top + em * 0.2) / bounds.height * 100) + '%';
+    }
+    history.style.maxHeight = Math.max(0, room) + 'px';
+
+    // Nowhere left to put it. Hidden rather than emptied, because the live box
+    // shrinks again on the next page and the stack should still be there.
+    history.classList.toggle('is-starved', room < em * MIN_ROOM);
+    history.classList.toggle('is-clipped', history.scrollHeight > room + 1);
+    // Parked against the live box, which is the end the newest box arrives at
+    // and the one somebody holding ⌥ is reaching for.
+    history.scrollTop = placedAbove ? history.scrollHeight : 0;
+  };
+
+  // Reconciled rather than rebuilt, so that a box already on screen is not
+  // animated again when a page closes while ⌥ is still held — only the one that
+  // just closed rises. The app does the same, against the same problem.
+  const paintHistory = () => {
+    if (!history) return;
+    const carried = new Map();
+    [...history.children].forEach((el) => {
+      if (!carried.has(el.textContent)) carried.set(el.textContent, el);
+    });
+
+    // Reversed when the stack hangs below, so the newest box is the one touching
+    // the live box either way.
+    const ordered = placedAbove ? past : [...past].reverse();
+
+    const risen = [];
+    history.textContent = '';
+    ordered.forEach((line) => {
+      let el = carried.get(line);
+      if (el) {
+        carried.delete(line);
+      } else {
+        el = document.createElement('div');
+        el.className = 'hist-line';
+        el.textContent = line;
+        risen.push(el);
+      }
+      history.appendChild(el);
+    });
+
+    // Nearest the live box first, so the stack unrolls out of it. Which end that
+    // is depends on the side: the newest box is last above it and first below.
+    const kids = [...history.children];
+    risen.forEach((el) => {
+      const i = kids.indexOf(el);
+      el.style.setProperty('--rise', placedAbove ? kids.length - 1 - i : i);
+      el.classList.add('is-rising');
+    });
+
+    placeHistory();
+  };
+
+  const showHistory = (on) => {
+    if (!history || !stage) return;
+    const want = on && past.length > 0;
+
+    if (want) {
+      // A fresh press builds the stack from nothing, so every box rises. Only
+      // while ⌥ is still held does the reconciliation in paintHistory matter,
+      // and then it is a single box that just closed, joining a stack that is
+      // already up. The app draws the same line.
+      if (!history.classList.contains('is-visible')) history.textContent = '';
+
+      // Flip only when there is genuinely more room the other way, which is what
+      // makes the stack fall below the box once the box is dragged to the top.
+      const bounds = stage.getBoundingClientRect();
+      const rect = box.getBoundingClientRect();
+      const em = parseFloat(getComputedStyle(history).fontSize) || 16;
+      placedAbove = roomFor(true, rect, bounds, em) >= roomFor(false, rect, bounds, em);
+      history.classList.toggle('is-below', !placedAbove);
+      paintHistory();
+    }
+    // The boxes are left in place on the way out so the stack fades rather than
+    // vanishing; the next press is what clears them.
+    history.classList.toggle('is-visible', want);
+    box.classList.toggle('is-solid', want);
+    queueHole();
+  };
+
+  // Where the pointer is, in the page's coordinates. Kept rather than the hole's
+  // offset because the box moves under a still pointer far more than the pointer
+  // moves over a still box: it re-centres and re-sizes on every word, and the
+  // app recomputes the centre on exactly the same events for the same reason.
+  let pointer = null;
+  let holeQueued = false;
+
+  const paintHole = () => {
+    // ⇧ keeps the box solid, the way it does in the app: you are about to pick
+    // it up, and a hole under the hand you are picking it up with is no help.
+    // ⌥ does too, because the stack is what is being read then.
+    if (!pointer || box.classList.contains('is-movable') || box.classList.contains('is-solid')) {
+      box.style.setProperty('--hole-x', '-999px');
+      box.style.setProperty('--hole-y', '-999px');
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    box.style.setProperty('--hole-x', (pointer.x - rect.left) + 'px');
+    box.style.setProperty('--hole-y', (pointer.y - rect.top) + 'px');
+  };
+
+  // One paint a frame at most. The box resizes on every word and the pointer
+  // reports faster than that, so both feed the same queue.
+  const queueHole = () => {
+    if (holeQueued) return;
+    holeQueued = true;
+    requestAnimationFrame(() => {
+      holeQueued = false;
+      paintHole();
+      if (history && history.classList.contains('is-visible')) placeHistory();
+    });
+  };
+
+  if (screen) {
+    screen.addEventListener('pointermove', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      pointer = { x: event.clientX, y: event.clientY };
+      queueHole();
+    });
+    // Nothing to turn off: the falloff means distance alone ends the reveal, on
+    // this screen as on a real one. This is only for the pointer that leaves in
+    // one jump, or out of the window entirely.
+    screen.addEventListener('pointerleave', () => { pointer = null; queueHole(); });
+  }
+
+  // The box changes width on almost every word, which moves its left edge by
+  // most of the box. Without this the hole lands off the pointer until the
+  // pointer next moves, and reads as the reveal blinking out.
+  if (typeof ResizeObserver === 'function') new ResizeObserver(queueHole).observe(box);
+
+  // Tabbing away with either key down would otherwise leave it armed forever,
+  // the same reason armBox watches blur.
+  window.addEventListener('keydown', (e) => {
+    // Held keys repeat, and a repeat that repainted would restart the stagger
+    // over and over for as long as ⌥ is down.
+    if (e.key === 'Alt' && !e.repeat) showHistory(true);
+    if (e.key === 'Shift') queueHole();
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt') showHistory(false);
+    if (e.key === 'Shift') queueHole();
+  });
+  window.addEventListener('blur', () => showHistory(false));
 
   // Only run while the demo is actually on screen...
   new IntersectionObserver(

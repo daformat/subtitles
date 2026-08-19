@@ -203,7 +203,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
 
         // Deliberately short. The demo below says what this is far better than a
         // paragraph would, and the one thing it cannot show — that ⇧ is being
-        // held — is the line underneath it.
+        // held — is the first of the lines underneath it.
         let blurb = NSTextField(labelWithString:
             "Live captions for whatever your Mac plays.")
         blurb.font = .systemFont(ofSize: 11)
@@ -218,12 +218,22 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         stack.addArrangedSubview(hint)
         stack.setCustomSpacing(16, after: demo)
 
+        let option = buildOptionHint()
+        stack.addArrangedSubview(option)
+        // The three lines are one block of help text, so they sit closer to each
+        // other than the block does to the demo above it.
+        stack.setCustomSpacing(6, after: hint)
+
+        let dissolve = hintLabel("Point at the captions and they dissolve under you.")
+        stack.addArrangedSubview(dissolve)
+        stack.setCustomSpacing(6, after: option)
+
         let row = NSStackView()
         row.orientation = .vertical
         row.alignment = .centerX
         row.spacing = 8
         stack.addArrangedSubview(row)
-        stack.setCustomSpacing(20, after: hint)
+        stack.setCustomSpacing(20, after: dissolve)
         statusRow = row
         buildProgress(into: row)
         contentStack = stack
@@ -264,21 +274,38 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// native window never quite matches the labels around it, and this way the
     /// key can light up when the key is actually held.
     private func buildShiftHint() -> NSView {
+        hintRow("Hold", KeycapView(key: "⇧", modifier: .shift),
+                "and drag the captions to move them.")
+    }
+
+    /// "Hold ⌥ to stack the last few back up."
+    ///
+    /// The demo above already dissolves and stacks, so this is a caption for
+    /// something on screen rather than a promise about the app — which is what
+    /// earns it a line of its own.
+    private func buildOptionHint() -> NSView {
+        hintRow("Hold", KeycapView(key: "⌥", modifier: .option),
+                "to stack the last few back up.")
+    }
+
+    /// A line of help text with a key set into it.
+    private func hintRow(_ before: String, _ keycap: KeycapView,
+                         _ after: String) -> NSView {
         let row = NSStackView()
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 5
-
-        func label(_ string: String) -> NSTextField {
-            let field = NSTextField(labelWithString: string)
-            field.font = .systemFont(ofSize: 11)
-            field.textColor = .secondaryLabelColor
-            return field
-        }
-        row.addArrangedSubview(label("Hold"))
-        row.addArrangedSubview(KeycapView(key: "⇧"))
-        row.addArrangedSubview(label("and drag the captions to move them."))
+        row.addArrangedSubview(hintLabel(before))
+        row.addArrangedSubview(keycap)
+        row.addArrangedSubview(hintLabel(after))
         return row
+    }
+
+    private func hintLabel(_ string: String) -> NSTextField {
+        let field = NSTextField(labelWithString: string)
+        field.font = .systemFont(ofSize: 11)
+        field.textColor = .secondaryLabelColor
+        return field
     }
 
     private func buildProgress(into row: NSStackView) {
@@ -404,10 +431,12 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
 /// light and dark. Colours asked for here are resolved every time the view is
 /// painted, which is what makes the outline right in both.
 ///
-/// It also lights up while ⇧ is actually held — the same key, doing the thing the
-/// sentence beside it describes, which says it better than the sentence does.
+/// It also lights up while its own modifier is actually held — the same key,
+/// doing the thing the sentence beside it describes, which says it better than
+/// the sentence does.
 final class KeycapView: NSView {
     private let key: String
+    private let modifier: NSEvent.ModifierFlags
     private var pressed = false { didSet { if pressed != oldValue { needsDisplay = true } } }
     private var poll: Timer?
 
@@ -415,8 +444,9 @@ final class KeycapView: NSView {
     private let padding = NSSize(width: 7, height: 3)
     private let corner: CGFloat = 4.5
 
-    init(key: String) {
+    init(key: String, modifier: NSEvent.ModifierFlags) {
         self.key = key
+        self.modifier = modifier
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
     }
@@ -431,7 +461,7 @@ final class KeycapView: NSView {
                       height: ceil(size.height) + padding.height * 2)
     }
 
-    /// ⇧ is polled, not monitored — a keyboard event monitor would demand
+    /// The modifier is polled, not monitored — a keyboard event monitor would demand
     /// Accessibility permission, which is a scary prompt to raise for a highlight
     /// on a welcome screen. The overlay reads the modifier the same way, and for
     /// the same reason; see Overlay.swift.
@@ -446,7 +476,8 @@ final class KeycapView: NSView {
         guard window != nil else { return }
 
         let timer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
-            self?.pressed = NSEvent.modifierFlags.contains(.shift)
+            guard let self else { return }
+            self.pressed = NSEvent.modifierFlags.contains(self.modifier)
         }
         RunLoop.main.add(timer, forMode: .common)
         poll = timer

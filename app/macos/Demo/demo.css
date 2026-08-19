@@ -1110,6 +1110,178 @@
 }
 .demo-overlay.is-dragging { cursor: grabbing; }
 
+/* Two ways the box goes solid, and both drop the mask rather than merely parking
+   it somewhere harmless.
+
+   ⇧ because the app keeps it solid to be picked up, and because `mask-clip` is
+   the border box by default: it would clip the dashed ring above at its 3px
+   offset, and `no-clip` is not carried everywhere. ⌥ because the stack above is
+   what you are reading at that moment, and dissolving the live box under the
+   pointer while you read past it is the reveal firing at the one time nobody
+   asked it to. */
+.demo-overlay.is-movable,
+.demo-overlay.is-solid {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* The pointer reveal, and the numbers in it are the app's own.
+   `defaultMaskSize` is 800×400pt against a 30pt overlay, so 26.67 × 13.33em
+   here, which is why this is written in em like the rest of the box: the demo's
+   caption scales with the screen and the hole has to scale with it.
+
+   `maskPlateau` is 0.7 of the radius at full strength, and `defaultMaskStrength`
+   is 0.95, so the centre keeps a twentieth of the box rather than erasing it
+   outright — the difference between a hole and a gap. The app spends the last
+   0.3 of the radius on a smoothstep; four stops carry the same curve closely
+   enough that the join is invisible, which is the only thing the 32 in the app
+   is buying.
+
+   A CSS mask is the inverse of the app's: there the gradient is subtracted from
+   what is drawn, here it is what survives. So these alphas are 1 minus the ones
+   in `buildMaskGradient`.
+
+   Off-screen by default, and left there for touch and for ⇧: the falloff means
+   distance alone turns it off, exactly as it does when you move the mouse away
+   from the box on a real screen. */
+.demo-overlay {
+  --hole-x: -999px;
+  --hole-y: -999px;
+  -webkit-mask-image: radial-gradient(ellipse 13.33em 6.67em at var(--hole-x) var(--hole-y),
+    rgba(0, 0, 0, 0.05) 0%,
+    rgba(0, 0, 0, 0.05) 70%,
+    rgba(0, 0, 0, 0.198) 77.5%,
+    rgba(0, 0, 0, 0.525) 85%,
+    rgba(0, 0, 0, 0.852) 92.5%,
+    rgba(0, 0, 0, 1) 100%);
+  mask-image: radial-gradient(ellipse 13.33em 6.67em at var(--hole-x) var(--hole-y),
+    rgba(0, 0, 0, 0.05) 0%,
+    rgba(0, 0, 0, 0.05) 70%,
+    rgba(0, 0, 0, 0.198) 77.5%,
+    rgba(0, 0, 0, 0.525) 85%,
+    rgba(0, 0, 0, 0.852) 92.5%,
+    rgba(0, 0, 0, 1) 100%);
+}
+
+/* The ⌥ stack: the last few closed boxes, above the live one.
+   `HistoryPillView.recession` is 0.92 of the live box's background and
+   `defaultTextOpacity` is 0.65 of its text, which is the stack receding as one
+   rather than each box ageing on its own. The gap is the app's 6pt at 30pt of
+   text, so 0.2em.
+
+   Positioned by script.js against the live box, which is the one thing here the
+   app gets for free: its stack is a panel of its own, pinned above a panel whose
+   frame it can read. */
+.demo-history {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  transform: translateX(-50%);
+  font-size: clamp(14px, 2.61cqw, 23px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  opacity: 0;
+  visibility: hidden;
+  /* The panel's own fade: 0.12s in and 0.15s out, as the app's is. */
+  transition: opacity 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+.demo-history::-webkit-scrollbar { display: none; }
+
+/* Only while ⌥ is down, and only then does it take the wheel — the same trade
+   the app makes, where the stack is the one panel that is not click-through
+   because the scroll has to land somewhere. */
+.demo-history.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.12s ease, visibility 0s;
+}
+
+/* Boxes rise out of the live one, nearest first.
+   The app's numbers exactly: 0.22s ease-out, 35ms apart, and displaced 12pt
+   towards the live box to start with, which at 30pt of text is 0.4em, so it
+   reads as pushed out of that box rather than materialising in place. The
+   stagger is what makes a stack read as a stack instead of one slab arriving.
+
+   `backwards` is the app's `.backwards` fill and does the same job: without it
+   every box sits at its final opacity until its delay elapses, and the whole
+   stack flashes in before it animates. --rise counts from the bottom, which is
+   what makes "nearest first" nearest and not furthest. */
+@keyframes hist-rise {
+  from { opacity: 0; transform: translateY(0.4em); }
+  to   { opacity: 1; transform: none; }
+}
+.demo-history .hist-line.is-rising {
+  animation: hist-rise 0.22s ease-out backwards;
+  animation-delay: calc(var(--rise, 0) * 35ms);
+}
+
+/* Below the live box, "out of it" is downwards, so the displacement flips with
+   the side. */
+@keyframes hist-fall {
+  from { opacity: 0; transform: translateY(-0.4em); }
+  to   { opacity: 1; transform: none; }
+}
+.demo-history.is-below .hist-line.is-rising { animation-name: hist-fall; }
+@media (prefers-reduced-motion: reduce) {
+  .demo-history .hist-line.is-rising { animation: none; }
+}
+
+/* Same measurements as the live box, for the reason Pill.swift exists: a stray
+   point of inset between the two is invisible apart and glaring stacked. */
+/* Bottom-anchored by an auto margin rather than justify-content: flex-end,
+   which in every engine puts the overflowing top of a scroll container out of
+   reach of the scrollbar it just created. Only when the stack is above the live
+   box: below it the boxes hang from the top and there is nothing to push down. */
+.demo-history:not(.is-below) .hist-line:first-child { margin-top: auto; }
+
+.demo-history .hist-line {
+  flex: none;
+  width: max-content;
+  /* The same floor the live box has, and for the same reason: `fittingSize`
+     gives a history pill the app's 140pt minimum too, so a three-word line is a
+     pill rather than a chip. */
+  min-width: 4.67em;
+  max-width: min(73cqw, 640px);
+  padding: 0.47em 0.73em;
+  border-radius: 0.47em;
+  background: rgba(0, 0, 0, 0.66);
+  color: rgba(255, 255, 255, 0.65);
+  font-family: ui-rounded, "SF Pro Rounded", var(--font);
+  line-height: 1.34;
+  font-weight: 600;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The app fades the stack where it is clipped, by as much as is actually
+   hidden. Here the top box is the only one that can be cut, so the fade is a
+   fixed band at the top and costs nothing when nothing is behind it. */
+.demo-history.is-clipped {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2.2em);
+  mask-image: linear-gradient(to bottom, transparent, #000 2.2em);
+}
+
+/* The far edge, never the near one: the box against the live one is the newest
+   and the one being read, so dimming it would be backwards. Older boxes are
+   above when the stack is above, and below when it is below. */
+.demo-history.is-below.is-clipped {
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 2.2em);
+  mask-image: linear-gradient(to top, transparent, #000 2.2em);
+}
+
+/* No room left on the chosen side. It stays built, so the next page shrinking
+   the live box brings it straight back. */
+.demo-history.is-starved {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* The in-flight word, before the recogniser commits it. */
 .demo-overlay .tentative { color: rgba(255, 255, 255, 0.55); }
 
@@ -1178,3 +1350,12 @@
   text-align: center;
 }
 .demo-caption kbd { font-size: 12px; padding: 0.24em 0.42em; }
+/* The lines under the demo are one block of help text, so they sit closer to
+   each other than the block does to the screen above it. */
+.demo-caption + .demo-caption { margin-top: 6px; }
+
+/* Only says anything to a pointer and a keyboard, so it is only shown to one. */
+.demo-caption-try { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .demo-caption-try { display: block; }
+}
