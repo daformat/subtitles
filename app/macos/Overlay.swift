@@ -12,6 +12,10 @@
 // is remembered. ⇧ rather than ⌥ because holding ⌥ while dragging a window puts
 // macOS into its tiling preview, which fights the drag.
 //
+// Hold ⌥ and the last few closed pages stack up above the live box — see
+// History.swift. The box pages like broadcast subtitles, so without it anything
+// you glanced away from is gone for good.
+//
 // ⇧ is detected by polling `NSEvent.modifierFlags` rather than installing a
 // global event monitor — a keyboard monitor would demand Accessibility
 // permission, and asking for a second scary prompt to enable dragging is a bad
@@ -85,17 +89,54 @@ final class SubtitleView: NSView {
     /// the box is: a circle big enough to clear the pill's width overshoots its
     /// height several times over and takes far more of the screen with it than it
     /// needs to.
-    static let maskSize = NSSize(width: 700, height: 300)
+    /// Settable, because it is one of the numbers you can only judge by watching
+    /// it move — see Settings.swift.
+    var maskSize = SubtitleView.defaultMaskSize {
+        didSet { if maskSize != oldValue, maskCenter != nil { needsDisplay = true } }
+    }
+
+    static let defaultMaskSize = NSSize(width: 800, height: 400)
 
     /// Fraction of the way out that stays fully clear before the falloff starts.
-    private static let maskPlateau: CGFloat = 0.3
+    /// Most of the radius, leaving the falloff the last third to spend.
+    private static let maskPlateau: CGFloat = 0.7
+
+    /// How much of the box the reveal takes at its strongest. 1 erases the pill
+    /// outright under the cursor; lower leaves it showing through.
+    var maskStrength: CGFloat = SubtitleView.defaultMaskStrength {
+        didSet {
+            guard maskStrength != oldValue else { return }
+            // The falloff is baked into the gradient's stops, so a new strength
+            // means a new gradient.
+            builtGradient = nil
+            if maskCenter != nil { needsDisplay = true }
+        }
+    }
+
+    static let defaultMaskStrength: CGFloat = 0.95
+
+    /// Weakest the reveal may be set to. Below about half, the hole stops
+    /// reading as a hole — you get a slightly paler box and no sense that
+    /// anything was revealed, which is a setting with nothing on the other end
+    /// of it.
+    static let minMaskStrength: CGFloat = 0.5
 
     /// Hard ceiling on displayed lines. The controller pages the text so this is
     /// never actually exceeded; the view clips as a last resort.
-    var maxLines = 3
+    var maxLines = SubtitleView.defaultMaxLines { didSet { needsDisplay = true } }
 
-    private let inset = NSSize(width: 22, height: 14)
-    private let corner: CGFloat = 14
+    static let defaultMaxLines = 2
+
+    /// How solid the pill behind the text is. Zero is a legitimate setting —
+    /// bare text over the picture, the way some players draw subtitles.
+    var backgroundOpacity = SubtitleView.defaultBackgroundOpacity {
+        didSet { if backgroundOpacity != oldValue { needsDisplay = true } }
+    }
+
+    static let defaultBackgroundOpacity: CGFloat = 0.72
+
+    private let inset = Pill.inset
+    private let corner = Pill.corner
 
     /// Transparent margin between the pill and the panel edge, where the ⇧ ring
     /// is drawn. Reserved on every layout rather than only while ⇧ is held: a
@@ -107,24 +148,6 @@ final class SubtitleView: NSView {
     /// The pill itself, inside that margin.
     private var boxRect: NSRect { bounds.insetBy(dx: Self.pad, dy: Self.pad) }
 
-    private var font: NSFont {
-        // A rounded, heavy face reads better at a glance against arbitrary video.
-        let base = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
-        return NSFont(descriptor: d, size: fontSize) ?? base
-    }
-
-    private func paragraph(centered: Bool) -> NSParagraphStyle {
-        let p = NSMutableParagraphStyle()
-        // Measured left-aligned, drawn centred. A centred line fragment spans the
-        // whole container, so measuring it reports the ceiling width rather than
-        // the width the glyphs actually need.
-        p.alignment = centered ? .center : .left
-        p.lineBreakMode = .byWordWrapping
-        p.lineSpacing = 2
-        return p
-    }
-
     /// Committed text at full strength, the in-flight tail dimmed.
     ///
     /// Spike 0A measured this engine as effectively non-revising (0 ms p50 commit
@@ -133,57 +156,14 @@ final class SubtitleView: NSView {
     /// engine survivable if the model is ever swapped.
     func attributed(committed: String, tentative: String,
                     centered: Bool = true) -> NSAttributedString {
-        let style = paragraph(centered: centered)
-        let out = NSMutableAttributedString()
-        out.append(NSAttributedString(string: committed, attributes: [
-            .font: font,
-            .foregroundColor: NSColor.white,
-            .paragraphStyle: style,
-        ]))
-        out.append(NSAttributedString(string: tentative, attributes: [
-            .font: font,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.55),
-            .paragraphStyle: style,
-        ]))
-        return out
+        Pill.attributed(committed: committed, tentative: tentative,
+                        size: fontSize, centered: centered)
     }
 
-    private func textWidth(for width: CGFloat) -> CGFloat {
-        width - (inset.width + Self.pad) * 2
-    }
-
-    /// Exact text extent and wrapped line count, from the real layout engine.
-    ///
-    /// `boundingRect` under-reports width by enough to clip the last word, and
-    /// dividing its height by a nominal line height is off-by-one near the
-    /// boundary — either error shows up directly as clipped or mis-paged text.
     private func metrics(committed: String, tentative: String,
                          maxWidth: CGFloat) -> (used: NSSize, lines: Int) {
-        let text = attributed(committed: committed, tentative: tentative, centered: false)
-        guard text.length > 0 else { return (.zero, 0) }
-
-        let container = NSTextContainer(
-            size: CGSize(width: textWidth(for: maxWidth), height: .greatestFiniteMagnitude))
-        container.lineFragmentPadding = 0
-        let manager = NSLayoutManager()
-        let storage = NSTextStorage(attributedString: text)
-        manager.addTextContainer(container)
-        storage.addLayoutManager(manager)
-        manager.ensureLayout(for: container)
-
-        var lines = 0
-        var index = 0
-        var widest: CGFloat = 0
-        while index < manager.numberOfGlyphs {
-            var range = NSRange()
-            _ = manager.lineFragmentRect(forGlyphAt: index, effectiveRange: &range)
-            let used = manager.lineFragmentUsedRect(forGlyphAt: index, effectiveRange: nil)
-            widest = max(widest, used.width)
-            index = NSMaxRange(range)
-            lines += 1
-        }
-        let height = manager.usedRect(for: container).height
-        return (NSSize(width: ceil(widest), height: ceil(height)), lines)
+        Pill.metrics(attributed(committed: committed, tentative: tentative, centered: false),
+                     textWidth: maxWidth - (inset.width + Self.pad) * 2)
     }
 
     func lineCount(committed: String, tentative: String, width: CGFloat) -> Int {
@@ -194,18 +174,18 @@ final class SubtitleView: NSView {
     ///
     /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
     func fittingSize(maxWidth: CGFloat) -> NSSize {
-        let m = metrics(committed: committed, tentative: tentative, maxWidth: maxWidth)
-        guard m.lines > 0 else { return .zero }
+        Pill.fittingSize(attributed(committed: committed, tentative: tentative, centered: false),
+                         size: fontSize, maxWidth: maxWidth,
+                         maxLines: maxLines, pad: Self.pad)
+    }
 
-        let lineHeight = font.ascender - font.descender + font.leading + 2
-        let cappedHeight = min(m.used.height, lineHeight * CGFloat(maxLines) + 4)
-
-        // +2 of slack so a fractional advance never clips the final glyph.
-        let hugging = m.used.width + 2 + (inset.width + Self.pad) * 2
-        // A floor stops one- or two-character updates producing a jittering pill.
-        let width = min(max(hugging, 140 + Self.pad * 2), maxWidth)
-        return NSSize(width: width,
-                      height: ceil(cappedHeight) + (inset.height + Self.pad) * 2)
+    /// A resize must repaint the whole box, not just the newly exposed strip.
+    /// The reveal is punched through a transparency layer covering the entire
+    /// pill, so a partial redraw would apply it to part of the box and leave the
+    /// rest carrying the hole from the previous frame.
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsDisplay = true
     }
 
     /// Falloff for the reveal, built once.
@@ -220,7 +200,17 @@ final class SubtitleView: NSView {
     /// Smoothstep is flat at both ends, which is what makes the two parts join
     /// invisibly: the tail leaves the plateau at zero slope, so there is no crease
     /// where the core ends, and it lands on the untouched box the same way.
-    private static let maskGradient: CGGradient? = {
+    private var builtGradient: CGGradient?
+
+    /// Rebuilt only when the strength changes, so the 60 Hz cursor poll still
+    /// draws against a gradient it did not have to sample.
+    private var maskGradient: CGGradient? {
+        if let builtGradient { return builtGradient }
+        builtGradient = Self.buildMaskGradient(strength: maskStrength)
+        return builtGradient
+    }
+
+    private static func buildMaskGradient(strength: CGFloat) -> CGGradient? {
         let space = CGColorSpaceCreateDeviceRGB()
         var colors: [CGColor] = []
         var locations: [CGFloat] = []
@@ -230,21 +220,23 @@ final class SubtitleView: NSView {
             locations.append(location)
         }
 
-        stop(0, alpha: 1)
-        stop(maskPlateau, alpha: 1)
+        stop(0, alpha: strength)
+        stop(maskPlateau, alpha: strength)
 
         let steps = 32
         for i in 1...steps {
             let u = CGFloat(i) / CGFloat(steps)          // 0…1 across the tail
+            // Scaled by `strength` too, or the tail would start above the plateau
+            // it is meant to leave and draw a bright ring around the hole.
             stop(maskPlateau + u * (1 - maskPlateau),
-                 alpha: 1 - u * u * (3 - 2 * u))
+                 alpha: strength * (1 - u * u * (3 - 2 * u)))
         }
         return CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations)
-    }()
+    }
 
     /// Cuts the reveal out of everything drawn so far.
     private func punchMask(_ ctx: CGContext, at center: NSPoint) {
-        guard let gradient = Self.maskGradient else { return }
+        guard let gradient = maskGradient else { return }
         ctx.saveGState()
         // The gradient's alpha is subtracted from what is already on the layer,
         // so opaque centre = fully transparent box.
@@ -253,11 +245,11 @@ final class SubtitleView: NSView {
         // squashing the space it is drawn in: move the origin to the cursor,
         // scale y, then draw a circle of the half-width there.
         ctx.translateBy(x: center.x, y: center.y)
-        ctx.scaleBy(x: 1, y: Self.maskSize.height / Self.maskSize.width)
+        ctx.scaleBy(x: 1, y: maskSize.height / maskSize.width)
         ctx.drawRadialGradient(
             gradient,
             startCenter: .zero, startRadius: 0,
-            endCenter: .zero, endRadius: Self.maskSize.width / 2,
+            endCenter: .zero, endRadius: maskSize.width / 2,
             options: [])
         ctx.restoreGState()
     }
@@ -280,7 +272,7 @@ final class SubtitleView: NSView {
         }
 
         let box = boxRect
-        NSColor.black.withAlphaComponent(0.72).setFill()
+        NSColor.black.withAlphaComponent(backgroundOpacity).setFill()
         NSBezierPath(roundedRect: box, xRadius: corner, yRadius: corner).fill()
 
         if showsDragOutline {
@@ -288,12 +280,31 @@ final class SubtitleView: NSView {
             // sitting off the pill, the same hint the web demo gives. Half a
             // point in from the panel edge so the stroke lands on the pixel
             // instead of straddling it.
+            //
+            // Two-tone, because the ring is drawn over whatever is on the desktop
+            // and a single colour loses to half of it — white vanished against a
+            // white window. `.difference` is the obvious answer and is not
+            // available: a blend mode composites against what is already in *this
+            // window*, and the ring hangs in the transparent margin outside the
+            // pill, where there is nothing to blend with. The desktop behind is
+            // composited by the window server long after this draw call. So the
+            // contrast has to be carried in the ink itself: white dashes, black
+            // dashes phase-shifted into the gaps between them, and whichever tone
+            // the background happens to be, the other one shows against it.
             let ring = NSBezierPath(
                 roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
                 xRadius: corner + Self.pad, yRadius: corner + Self.pad)
             ring.lineWidth = 1
-            ring.setLineDash([2, 2], count: 2, phase: 0)
-            NSColor.white.withAlphaComponent(0.2).setStroke()
+
+            let dash: [CGFloat] = [3, 3]
+            ring.setLineDash(dash, count: dash.count, phase: 0)
+            NSColor.white.withAlphaComponent(0.75).setStroke()
+            ring.stroke()
+
+            // Offset by exactly one dash, so the black lands in the gaps the
+            // white left rather than on top of it.
+            ring.setLineDash(dash, count: dash.count, phase: dash[0])
+            NSColor.black.withAlphaComponent(0.75).setStroke()
             ring.stroke()
         }
 
@@ -327,6 +338,25 @@ final class OverlayController {
     private let textIdleTimeout: TimeInterval = 4
     private var isDraggable = false
 
+    /// How solid the box behind the text is, 0…1. The ⌥ stack follows it, a step
+    /// behind — see `HistoryPillView.recession`.
+    var boxOpacity: CGFloat {
+        get { view.backgroundOpacity }
+        set { view.backgroundOpacity = newValue }
+    }
+
+    /// How much of the box the pointer reveal takes, 0…1.
+    var revealOpacity: CGFloat {
+        get { view.maskStrength }
+        set { view.maskStrength = newValue }
+    }
+
+    /// Full extent of that reveal.
+    var revealSize: NSSize {
+        get { view.maskSize }
+        set { view.maskSize = newValue }
+    }
+
     /// Whether pointing at the box fades it away. On by default; the menu turns it
     /// off for anyone who would rather the subtitles simply stayed put.
     var isRevealEnabled = true {
@@ -356,6 +386,36 @@ final class OverlayController {
     private var pendingCommit = ""
     private var tentative = ""
     private var startFreshOnNextText = false
+
+    // ── history ──
+    // Pages that have scrolled off, oldest first, brought back by holding ⌥.
+    // Recorded at every point a page closes rather than sampled, because by the
+    // time a page is gone from `page` there is nothing left to read it from.
+    private let history = HistoryController()
+    private var pastPages: [String] = []
+
+    /// How many closed pages ⌥ can reach back through. Adjustable in Settings;
+    /// lowering it drops the oldest immediately rather than waiting for the
+    /// buffer to be pushed down to the new size. Zero keeps none at all, which
+    /// is how someone turns the whole thing off without losing the ⌥ gesture
+    /// having ever meant anything.
+    var historyDepth = OverlayController.defaultHistoryDepth {
+        didSet {
+            guard historyDepth != oldValue, pastPages.count > historyDepth else { return }
+            pastPages.removeFirst(pastPages.count - historyDepth)
+        }
+    }
+
+    static let defaultHistoryDepth = 15
+
+    /// How bright the ⌥ stack's text is against the live box's white.
+    var historyTextOpacity = HistoryPillView.defaultTextOpacity
+
+    /// Whether ⌥ brings the last few boxes back. Menu-controlled, like the
+    /// pointer reveal.
+    var isHistoryEnabled = true {
+        didSet { if !isHistoryEnabled { history.dismiss() } }
+    }
     /// Audio time the current page starts at. Words spoken before this are on a
     /// page the reader has already lost.
     ///
@@ -459,6 +519,7 @@ final class OverlayController {
         // behind it. Added to `.common` so the reveal keeps following while a menu
         // or a resize has the run loop in a tracking mode.
         let cursor = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            self?.updateHistory()
             self?.updateMask()
         }
         RunLoop.main.add(cursor, forMode: .common)
@@ -472,15 +533,54 @@ final class OverlayController {
         cursorTimer?.invalidate()
     }
 
+    /// Raise or drop the ⌥ stack.
+    ///
+    /// Rebuilt whenever the entries differ from what is on screen, so a page
+    /// closing while ⌥ is still held joins the stack immediately — `present`
+    /// leaves boxes that were already up alone and animates only the new one.
+    private func updateHistory() {
+        let flags = NSEvent.modifierFlags
+        // Never alongside ⇧: that is the drag gesture, and a second panel over
+        // the box while it is being picked up just gets in the way.
+        let wants = isHistoryEnabled && !isSuppressed && !pastPages.isEmpty
+            && flags.contains(.option) && !flags.contains(.shift)
+        guard wants else {
+            history.dismiss()
+            return
+        }
+
+        if history.shown != pastPages {
+            let style = HistoryStyle(
+                fontSize: view.fontSize,
+                maxLines: view.maxLines,
+                fill: view.backgroundOpacity * HistoryPillView.recession,
+                textOpacity: historyTextOpacity)
+            history.present(entries: pastPages, style: style,
+                            anchor: panel.frame, maxWidth: maxWidth)
+        } else {
+            // The live box resizes on every word; the stack rides along with it.
+            history.reposition(anchor: panel.frame)
+        }
+    }
+
     /// Point the reveal at the cursor, or turn it off.
     ///
     /// ⇧ is read here rather than reusing `isDraggable` so the box goes solid the
     /// moment the key is down: `isDraggable` only catches up on the next 0.15s
     /// modifier poll, which is long enough to start a drag through a hole.
-    private func updateMask() {
+    ///
+    /// ⌥ suppresses it for a different reason: the pointer has to be over the
+    /// stack to scroll it, and a hole punched through the live box under the
+    /// cursor while the user is reading the history above it is pure noise.
+    /// `frame` is the panel frame to measure against, for the case where the
+    /// panel is about to be given one and has not got it yet.
+    private func updateMask(for frame: NSRect? = nil) {
+        let panelFrame = frame ?? panel.frame
+        let flags = NSEvent.modifierFlags
         guard isRevealEnabled,
               panel.alphaValue > 0,
-              !NSEvent.modifierFlags.contains(.shift) else {
+              !flags.contains(.shift),
+              !flags.contains(.option) else {
             view.maskCenter = nil
             return
         }
@@ -488,13 +588,18 @@ final class OverlayController {
         // Cheap reject before converting: only a cursor within the reveal's reach
         // of the panel can affect a pixel of it. The reach is wide enough that the
         // box starts opening before the pointer is over it.
-        let reach = SubtitleView.maskSize
+        let reach = view.maskSize
         let point = NSEvent.mouseLocation
-        guard panel.frame.insetBy(dx: -reach.width / 2, dy: -reach.height / 2).contains(point) else {
+        guard panelFrame.insetBy(dx: -reach.width / 2, dy: -reach.height / 2).contains(point) else {
             view.maskCenter = nil
             return
         }
-        view.maskCenter = view.convert(panel.convertPoint(fromScreen: point), from: nil)
+        // Subtraction rather than the panel's own coordinate conversion: this is
+        // called before the panel has been given `frame`, so asking the panel
+        // where a screen point lands would answer for the frame it is leaving. A
+        // borderless panel's content view fills its frame exactly, so the two
+        // agree in every other respect.
+        view.maskCenter = NSPoint(x: point.x - panelFrame.minX, y: point.y - panelFrame.minY)
     }
 
     // MARK: text
@@ -518,6 +623,7 @@ final class OverlayController {
            view.lineCount(committed: grown, tentative: text, width: maxWidth) > view.maxLines {
             // Would overflow: clear and restart from the words that caused it, so
             // nothing is lost and nothing scrolls.
+            closePage(grown)
             page = trimLeadingSpace(pendingCommit)
         } else {
             page = grown
@@ -557,6 +663,7 @@ final class OverlayController {
             // Everything already spoken belongs to the page just closed; the new
             // one begins with whatever comes after it. Anchoring on *time* is what
             // stops words arriving in this same update from being skipped.
+            closePage(page)
             pageStartTime = latestWordEnd
         }
         latestWordEnd = max(latestWordEnd, newest.end)
@@ -575,6 +682,7 @@ final class OverlayController {
             let fitted = longestFittingPrefix(visible.map(\.text), from: 0)
             if fitted >= visible.count { break }   // it all fits
             if fitted <= 0 { break }               // one word wider than the box
+            closePage(visible[..<fitted].map(\.text).joined(separator: " "))
             pageStartTime = visible[fitted].start  // new page starts where it spilled
             visible = Array(visible[fitted...])
         }
@@ -641,6 +749,21 @@ final class OverlayController {
         startFreshOnNextText = true
     }
 
+    /// A page just left the screen. Keep it for ⌥.
+    ///
+    /// Deduplicated against the last entry: a page can close by more than one
+    /// route in the same beat — an overflow immediately after a pause, say — and
+    /// two identical boxes in the stack read as a stutter, not as history.
+    private func closePage(_ text: String) {
+        guard historyDepth > 0 else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != pastPages.last else { return }
+        pastPages.append(trimmed)
+        if pastPages.count > historyDepth {
+            pastPages.removeFirst(pastPages.count - historyDepth)
+        }
+    }
+
     private func trimLeadingSpace(_ s: String) -> String {
         var out = s
         while out.hasPrefix(" ") { out.removeFirst() }
@@ -667,8 +790,17 @@ final class OverlayController {
         // immediately, so a manual assignment afterwards means that paint happens
         // with the view still at its previous, smaller size and the text is drawn
         // clipped for a frame.
+        // The reveal's centre is in view coordinates, so a layout that moves the
+        // panel's origin invalidates it — and `setFrame(display:)` paints
+        // immediately, so the stale centre is what gets painted. A box can go
+        // from 140 to 900 points wide on one word, which moves the origin by most
+        // of the box: the hole lands off the pointer for a frame or two, and
+        // reads as the reveal blinking out. Recomputed here against the frame
+        // about to be set, so the first paint is already right.
+        let frame = NSRect(origin: origin, size: size)
+        updateMask(for: frame)
         isRepositioning = true
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.setFrame(frame, display: true)
         isRepositioning = false
     }
 
@@ -691,7 +823,10 @@ final class OverlayController {
             guard self.panel.alphaValue == 0 else { return }
 
             // Empty the box now that it is invisible, so the next words open a
-            // clean one instead of resuming a paragraph nobody can still see.
+            // clean one instead of resuming a paragraph nobody can still see —
+            // but keep it for ⌥ first. Fading is precisely when someone looks
+            // away and wants it back.
+            self.closePage(self.page)
             self.page = ""
             self.pendingCommit = ""
             self.tentative = ""
@@ -722,12 +857,33 @@ final class OverlayController {
         layout()
     }
 
+    /// How many lines a box may fill before it is closed and a new one begun.
+    var maxLines: Int {
+        get { view.maxLines }
+        set {
+            guard newValue != view.maxLines else { return }
+            view.maxLines = newValue
+            // Re-page at the new ceiling, for the same reason a font size change
+            // does: what fitted five lines does not fit two, and without this the
+            // box already on screen would simply be clipped.
+            if !page.isEmpty,
+               view.lineCount(committed: page, tentative: "", width: maxWidth) > view.maxLines {
+                closePage(page)
+                page = ""
+                view.committed = ""
+                startFreshOnNextText = true
+            }
+            layout()
+        }
+    }
+
     func setFontSize(_ size: CGFloat) {
         view.fontSize = size
         // Re-page at the new size: text that fit three lines at 22pt may need five
         // at 52pt, and without this the box would simply clip.
         if !page.isEmpty,
            view.lineCount(committed: page, tentative: "", width: maxWidth) > view.maxLines {
+            closePage(page)
             page = ""
             view.committed = ""
             startFreshOnNextText = true
@@ -755,6 +911,11 @@ final class OverlayController {
     /// Wipe the box and fade it out, leaving it free to come back on the next
     /// word. Used when the engine underneath changes — model or source switch.
     func clearAndHide() {
+        // The history goes with it. It survives the idle fade on purpose, but a
+        // pause or a model switch is the user saying this transcript is over, and
+        // ⌥ offering the last thing a since-replaced model heard is a puzzle.
+        pastPages.removeAll()
+        history.dismiss()
         lastShownText = ""
         lastTextAt = .distantPast
         page = ""

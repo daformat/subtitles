@@ -30,9 +30,13 @@ func err(_ s: String) {
 var threads: Int32 = 2
 var showStatus = true
 var useOverlay = true
-var fontSize: CGFloat = 30
+/// Named because "reset to defaults" has to be able to say it too, and two
+/// literals that must agree are one literal too many.
+let defaultFontSize: CGFloat = 30
+var fontSize = defaultFontSize
 var resetPosition = false
 var listSources = false
+var listModels = false
 var variantOverride: FluidVariant?
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -43,8 +47,9 @@ while i < args.count {
     case "--headless": useOverlay = false
     case "--reset-position": resetPosition = true
     case "--list-sources": listSources = true
+    case "--list-models": listModels = true
     case "--font-size" where i + 1 < args.count:
-        fontSize = CGFloat(Double(args[i + 1]) ?? 30); i += 1
+        fontSize = (Double(args[i + 1]) as Double?).map { CGFloat($0) } ?? defaultFontSize; i += 1
     case "--variant" where i + 1 < args.count:
         variantOverride = FluidVariant(rawValue: args[i + 1]); i += 1
     case "--help", "-h":
@@ -56,11 +61,12 @@ while i < args.count {
           --font-size N     overlay text size (default 30)
           --reset-position  put the overlay back to bottom-centre
           --list-sources    print audio sources and exit (no permission needed)
+          --list-models     print the model cache and what is unused, and exit
           --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
         The overlay is click-through; hold ⇧ to drag it, and its position is
-        remembered.
+        remembered. Hold ⌥ to stack the last few boxes back up above it.
 
         Launch via run.sh, not directly — TCC attributes the audio-capture grant
         to the launching process.
@@ -88,6 +94,14 @@ if listSources {
 enum Defaults {
     static let fontSize = "overlay.fontSize"
     static let reveal = "overlay.reveal"
+    static let history = "overlay.history"
+    static let historyDepth = "overlay.historyDepth"
+    static let maxLines = "overlay.maxLines"
+    static let boxOpacity = "overlay.boxOpacity"
+    static let historyTextOpacity = "overlay.historyTextOpacity"
+    static let revealOpacity = "overlay.revealOpacity"
+    static let revealWidth = "overlay.revealWidth"
+    static let revealHeight = "overlay.revealHeight"
     static let sourceID = "source.id"
     static let sourceName = "source.name"
     static let variant = "engine.variant"
@@ -151,6 +165,30 @@ if let override = variantOverride {
 if let raw = UserDefaults.standard.string(forKey: Defaults.language),
    let l = FluidLanguage(rawValue: raw) {
     currentLanguage = l
+}
+
+if listModels {
+    // The read-only half of the Clear Model Cache button: same two calls, same
+    // answers, nothing removed. A button that deletes gigabytes should have a way
+    // to say what it would delete without being pressed.
+    let keeping = ModelCache.inUse(variant: currentVariant, speakerBreaks: speakerBreaksEnabled)
+    print("models directory: \(ModelCache.directory.path)\n")
+    print("in use, never removed:")
+    for folder in keeping.sorted() { print("  \(folder)") }
+
+    let removable = ModelCache.removable(keeping: keeping)
+    if removable.isEmpty {
+        print("\nnothing unused on disk")
+    } else {
+        print("\nremovable:")
+        for entry in removable {
+            print("  \(ModelCache.format(entry.bytes))\t\(entry.name)"
+                + "  [\(entry.url.path.replacingOccurrences(of: ModelCache.directory.path + "/", with: ""))]")
+        }
+        let total = removable.reduce(0) { $0 + $1.bytes }
+        print("\ntotal \(ModelCache.format(total))")
+    }
+    exit(0)
 }
 
 /// Gated, pre-rolled 16 kHz frames from the core. Runs on the core's worker
@@ -588,6 +626,128 @@ if useOverlay {
     // for everyone who has not touched the menu.
     var revealEnabled = UserDefaults.standard.object(forKey: Defaults.reveal) as? Bool ?? true
     controller.isRevealEnabled = revealEnabled
+    var historyEnabled = UserDefaults.standard.object(forKey: Defaults.history) as? Bool ?? true
+    controller.isHistoryEnabled = historyEnabled
+
+    // Dials behind those switches, all live-adjustable in the settings window.
+    let defaultSize = SubtitleView.defaultMaskSize
+    // Clamped on the way in: the floor was lowered after this key was already
+    // being written, so a stored value can predate it.
+    controller.revealOpacity = min(max(CGFloat(
+        UserDefaults.standard.object(forKey: Defaults.revealOpacity) as? Double
+            ?? Double(SubtitleView.defaultMaskStrength)), SubtitleView.minMaskStrength), 1)
+    controller.revealSize = NSSize(
+        width: UserDefaults.standard.object(forKey: Defaults.revealWidth) as? Double
+            ?? Double(defaultSize.width),
+        height: UserDefaults.standard.object(forKey: Defaults.revealHeight) as? Double
+            ?? Double(defaultSize.height))
+    controller.historyDepth = UserDefaults.standard.object(forKey: Defaults.historyDepth) as? Int
+        ?? OverlayController.defaultHistoryDepth
+    controller.maxLines = UserDefaults.standard.object(forKey: Defaults.maxLines) as? Int
+        ?? SubtitleView.defaultMaxLines
+    controller.historyTextOpacity = min(max(CGFloat(
+        UserDefaults.standard.object(forKey: Defaults.historyTextOpacity) as? Double
+            ?? Double(HistoryPillView.defaultTextOpacity)),
+        HistoryPillView.minTextOpacity), 1)
+    controller.boxOpacity = CGFloat(
+        UserDefaults.standard.object(forKey: Defaults.boxOpacity) as? Double
+            ?? Double(SubtitleView.defaultBackgroundOpacity))
+
+    // Read back from the controller rather than from a copy: the window is built
+    // fresh on every open, and the overlay is the thing that actually holds these.
+    let settings = SettingsWindow.shared
+    settings.revealOpacity = { controller.revealOpacity }
+    settings.onRevealOpacity = { value in
+        controller.revealOpacity = value
+        UserDefaults.standard.set(Double(value), forKey: Defaults.revealOpacity)
+    }
+    settings.revealSize = { controller.revealSize }
+    settings.onRevealSize = { size in
+        controller.revealSize = size
+        UserDefaults.standard.set(Double(size.width), forKey: Defaults.revealWidth)
+        UserDefaults.standard.set(Double(size.height), forKey: Defaults.revealHeight)
+    }
+    settings.revealEnabled = { revealEnabled }
+    settings.onToggleReveal = { on in
+        revealEnabled = on
+        controller.isRevealEnabled = on
+        UserDefaults.standard.set(on, forKey: Defaults.reveal)
+    }
+    // Both rebuild the engine, so they refuse a no-op: `windowDidBecomeKey` sets
+    // the switches from these same values, and a stray reload on every focus
+    // change would be a few seconds of dead air each time.
+    settings.historyEnabled = { historyEnabled }
+    settings.onToggleHistory = { on in
+        historyEnabled = on
+        controller.isHistoryEnabled = on
+        UserDefaults.standard.set(on, forKey: Defaults.history)
+    }
+    settings.vadEnabled = { useVAD }
+    settings.onToggleVAD = { on in
+        guard on != useVAD else { return }
+        useVAD = on
+        UserDefaults.standard.set(useVAD, forKey: Defaults.useVAD)
+        applyVariant(currentVariant)   // detector is built with the engine
+    }
+    settings.speakerBreaksEnabled = { speakerBreaksEnabled }
+    settings.onToggleSpeakerBreaks = { on in
+        guard on != speakerBreaksEnabled else { return }
+        speakerBreaksEnabled = on
+        UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
+        applyVariant(currentVariant)   // tracker is built with the engine
+    }
+    settings.onResetDefaults = {
+        // Forget them rather than write the defaults back: a key that is absent
+        // follows the default if the default ever changes, and a key holding the
+        // same number by coincidence does not.
+        for key in [Defaults.fontSize, Defaults.reveal, Defaults.history,
+                    Defaults.historyDepth, Defaults.historyTextOpacity,
+                    Defaults.maxLines, Defaults.boxOpacity,
+                    Defaults.revealOpacity,
+                    Defaults.revealWidth, Defaults.revealHeight] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        // Then apply them to the running overlay, since nothing re-reads the
+        // defaults until launch.
+        fontSize = defaultFontSize
+        controller.setFontSize(fontSize)
+        revealEnabled = true
+        controller.isRevealEnabled = true
+        historyEnabled = true
+        controller.isHistoryEnabled = true
+        controller.maxLines = SubtitleView.defaultMaxLines
+        controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
+        controller.historyDepth = OverlayController.defaultHistoryDepth
+        controller.historyTextOpacity = HistoryPillView.defaultTextOpacity
+        controller.revealOpacity = SubtitleView.defaultMaskStrength
+        controller.revealSize = SubtitleView.defaultMaskSize
+        // Owns its own key, so it clears it itself.
+        controller.resetPosition()
+    }
+    settings.modelsInUse = {
+        ModelCache.inUse(variant: currentVariant, speakerBreaks: speakerBreaksEnabled)
+    }
+    settings.historyTextOpacity = { controller.historyTextOpacity }
+    settings.onHistoryTextOpacity = { value in
+        controller.historyTextOpacity = value
+        UserDefaults.standard.set(Double(value), forKey: Defaults.historyTextOpacity)
+    }
+    settings.boxOpacity = { controller.boxOpacity }
+    settings.onBoxOpacity = { value in
+        controller.boxOpacity = value
+        UserDefaults.standard.set(Double(value), forKey: Defaults.boxOpacity)
+    }
+    settings.maxLines = { controller.maxLines }
+    settings.onMaxLines = { lines in
+        controller.maxLines = lines
+        UserDefaults.standard.set(lines, forKey: Defaults.maxLines)
+    }
+    settings.historyDepth = { controller.historyDepth }
+    settings.onHistoryDepth = { depth in
+        controller.historyDepth = depth
+        UserDefaults.standard.set(depth, forKey: Defaults.historyDepth)
+    }
     renderer.overlay = controller
 
     let menu = StatusMenuController()
@@ -637,6 +797,12 @@ if useOverlay {
         controller.isRevealEnabled = revealEnabled
         UserDefaults.standard.set(revealEnabled, forKey: Defaults.reveal)
     }
+    menu.historyEnabled = { historyEnabled }
+    menu.onToggleHistory = {
+        historyEnabled.toggle()
+        controller.isHistoryEnabled = historyEnabled
+        UserDefaults.standard.set(historyEnabled, forKey: Defaults.history)
+    }
     menu.onToggleSpeakerBreaks = {
         speakerBreaksEnabled.toggle()
         UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
@@ -663,7 +829,7 @@ if useOverlay {
     hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
 
-    err("overlay on — click-through; hold ⇧ to drag it. ⌥⌘S pauses.")
+    err("overlay on — click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
 }
 
 applyVariant(currentVariant, initial: true)

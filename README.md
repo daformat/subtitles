@@ -77,12 +77,27 @@ The app lives in the menu bar (no Dock icon).
 |---|---|
 | **⌥⌘S** | pause / resume |
 | **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
+| **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older |
+| **⌘,** | settings — from the menu bar |
 | Menu bar | model, source, text size, overlay position, permission state |
 
 The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
 while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and
 nothing at all when paused, where the icon dims instead. Deliberately never red —
 red means recording, and nothing is ever written anywhere.
+
+**Settings** (⌘, from the menu) holds the dials the menu has no room for, in two
+panes:
+
+- **UI** — how many lines a box fills before it clears, how solid it is, how much
+  of it the pointer dissolves and how far that reach extends, and how many
+  finished boxes ⌥ brings back and how far behind the live one they sit. Every
+  control applies to the overlay as you drag it, so the overlay is the preview.
+- **Models** — whether non-speech is skipped before it reaches the recogniser,
+  whether a speaker change starts a new box, and a **Clear Model Cache** button.
+  Every model you try stays downloaded; this removes the ones nothing is using
+  and never the one in use. `subtitles --list-models` prints the same answer
+  without removing anything.
 
 **Language / Models** is the one setting most people will touch, and language is
 the top level of it, because that is the first thing that rules a model in or out:

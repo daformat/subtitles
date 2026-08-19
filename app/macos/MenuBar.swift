@@ -151,6 +151,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var vadEnabled: () -> Bool = { true }
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
+    var onToggleHistory: (() -> Void)?
+    var historyEnabled: () -> Bool = { true }
     var speakerBreaksEnabled: () -> Bool = { false }
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
@@ -418,12 +420,20 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         reveal.toolTip = "Point at the box to see through it; hold ⇧ to keep it solid"
         menu.addItem(reveal)
 
+        let history = NSMenuItem(title: "Recent Boxes On ⌥",
+                                 action: #selector(toggleHistory), keyEquivalent: "")
+        history.target = self
+        history.state = historyEnabled() ? .on : .off
+        history.toolTip = "Hold ⌥ to stack the last few boxes back up; scroll for older"
+        menu.addItem(history)
+
         let reset = NSMenuItem(title: "Reset Overlay Position",
                                action: #selector(resetPosition), keyEquivalent: "")
         reset.target = self
         menu.addItem(reset)
 
         menu.addItem(.separator())
+        menu.addItem(settingsMenuItem())
         menu.addItem(permissionMenuItem())
         menu.addItem(.separator())
         menu.addItem(welcomeMenuItem())
@@ -658,6 +668,18 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// ⌘, is the standard place to look for this. It only fires while the menu
+    /// is open — an agent app has no main menu for AppKit to route a global key
+    /// equivalent through — but it is the right thing to print next to the item.
+    private func settingsMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Settings…", action: #selector(showSettings),
+                              keyEquivalent: ",")
+        item.target = self
+        return item
+    }
+
+    @objc private func showSettings() { SettingsWindow.shared.show() }
+
     private func welcomeMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Show Welcome Screen Again",
                               action: #selector(showWelcome), keyEquivalent: "")
@@ -716,6 +738,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleVAD() { onToggleVAD?() }
     @objc private func toggleReveal() { onToggleReveal?() }
+    @objc private func toggleHistory() { onToggleHistory?() }
     @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }
