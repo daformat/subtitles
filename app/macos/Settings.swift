@@ -34,6 +34,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onMaxLines: ((Int) -> Void)?
     var boxOpacity: () -> CGFloat = { SubtitleView.defaultBackgroundOpacity }
     var onBoxOpacity: ((CGFloat) -> Void)?
+    /// Read-only here — text size is a menu setting. The preview needs it to
+    /// draw the box the size it actually is.
+    var fontSize: () -> CGFloat = { 30 }
     /// Cache folders that must not be removed — the models actually in use.
     var modelsInUse: () -> Set<String> = { [] }
     /// The same state as the menu's "Fade Away Under Pointer".
@@ -61,10 +64,24 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private static let readoutWidth: CGFloat = 88
 
     private var window: NSWindow?
+    /// Scrolls the pane when the screen is too short for it. Always present
+    /// rather than installed on demand: a window that is tall enough today is
+    /// one display change away from not being, and the scrollers hide
+    /// themselves when there is nothing to reach.
+    private let paneScroll = WindowFit.scrollView()
+    /// The body's height, which is the pane's until the screen runs out.
+    private var bodyHeight: NSLayoutConstraint?
+    /// Fires when a display is added, removed, rearranged or set to another
+    /// resolution — any of which can leave this window taller than the screen
+    /// it is on.
+    private var screenObserver: NSObjectProtocol?
     /// Holds whichever pane is showing, so the header above it never moves.
     private var body: NSView?
     /// Rows hold their own action closures, so they have to outlive `build`.
     private var rows: [SliderRow] = []
+    /// The screen at the top of the UI pane. Nil while that pane has never been
+    /// built, and again after the window closes.
+    private var preview: SettingsPreview?
 
     /// The panes, in toolbar order.
     ///
@@ -131,6 +148,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         stacks = []
         buttons = []
         body = nil
+        // The scroll view outlives the window; the pane it was showing must not.
+        paneScroll.documentView = nil
+        bodyHeight = nil
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = nil
+        preview = nil
         revealRows = []
         historyRows = []
         expiryRow = nil
@@ -150,6 +173,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         syncHistoryEnabled()
         vadRow?.isOn = vadEnabled()
         speakerRow?.isOn = speakerBreaksEnabled()
+        preview?.apply(currentStyle())
         refreshCacheSize()
     }
 
@@ -426,6 +450,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.delegate = self
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self, let window = self.window else { return }
+            // Re-measured rather than merely clamped: the screen may have grown,
+            // in which case the pane that was scrolling now fits.
+            self.show(pane: self.selected, in: window)
+        }
         install(into: window)
         return window
     }
@@ -468,6 +501,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let body = NSView()
         body.translatesAutoresizingMaskIntoConstraints = false
 
+        paneScroll.translatesAutoresizingMaskIntoConstraints = false
+        body.addSubview(paneScroll)
+        let height = body.heightAnchor.constraint(equalToConstant: 0)
+        bodyHeight = height
+        NSLayoutConstraint.activate([
+            paneScroll.topAnchor.constraint(equalTo: body.topAnchor),
+            paneScroll.leadingAnchor.constraint(equalTo: body.leadingAnchor),
+            paneScroll.trailingAnchor.constraint(equalTo: body.trailingAnchor),
+            paneScroll.bottomAnchor.constraint(equalTo: body.bottomAnchor),
+            height,
+        ])
+
         let root = NSStackView(views: [headerBar, divider, body])
         root.orientation = .vertical
         root.spacing = 0
@@ -490,20 +535,40 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Per pane, not to the tallest of them: Models is a good deal shorter than
     /// UI, and sizing both to the maximum leaves it in a window mostly full of
     /// nothing.
+    ///
+    /// And never taller than the screen. A window sized to its content alone
+    /// runs off a short display with its lower half unreachable — there is no
+    /// title bar down there to drag it back by, and the controls that are cut
+    /// off are simply gone. What does not fit scrolls instead.
     private func show(pane index: Int, in window: NSWindow) {
-        guard index < stacks.count, let body else { return }
+        guard index < stacks.count, let bodyHeight else { return }
         selected = index
         for (i, button) in buttons.enumerated() { button.isSelected = i == index }
 
-        body.subviews.forEach { $0.removeFromSuperview() }
         let stack = stacks[index]
-        body.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: body.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: body.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: body.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: body.bottomAnchor),
-        ])
+        // Guarded, because this is called again on every screen change: setting
+        // the same document view twice would leave a second copy of these
+        // constraints behind each time.
+        if paneScroll.documentView !== stack {
+            paneScroll.documentView = stack
+            NSLayoutConstraint.activate([
+                stack.topAnchor.constraint(equalTo: paneScroll.contentView.topAnchor),
+                stack.leadingAnchor.constraint(equalTo: paneScroll.contentView.leadingAnchor),
+                stack.trailingAnchor.constraint(equalTo: paneScroll.contentView.trailingAnchor),
+            ])
+        }
+
+        // What the window costs with nothing in the body at all: the header, its
+        // rule, and the title bar. Measured rather than assumed, so a change to
+        // the header does not quietly eat into the room left for the pane.
+        bodyHeight.constant = 0
+        window.layoutIfNeeded()
+        let chrome = (window.contentView?.fittingSize.height ?? 0)
+            + WindowFit.chrome(of: window)
+
+        let room = max(200, WindowFit.available(for: window) - chrome)
+        let wanted = stack.fittingSize.height
+        bodyHeight.constant = min(wanted, room)
 
         // `setContentSize` does the titlebar arithmetic; restoring the top edge
         // afterwards is what stops the window walking up and down the screen as
@@ -515,6 +580,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         var frame = window.frame
         frame.origin.y = top - frame.height
         window.setFrame(frame, display: true, animate: false)
+        // Holding the top edge is right until it puts the bottom off the screen,
+        // which on a short display is exactly what it does.
+        WindowFit.clamp(window)
+        window.layoutIfNeeded()
+        // A pane that fits does not scroll at all.
+        WindowFit.syncScrolling(paneScroll)
+        // And one that does opens at its first control, not its last.
+        WindowFit.scrollToTop(paneScroll)
     }
 
     // MARK: - Header button
@@ -627,7 +700,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             "Opacity", range: Double(SubtitleView.minMaskStrength)...1,
             value: Double(revealOpacity()),
             format: { "\(Int(($0 * 100).rounded()))%" },
-            apply: { [weak self] in self?.onRevealOpacity?(CGFloat($0)) })
+            apply: { [weak self] in
+                self?.onRevealOpacity?(CGFloat($0))
+                self?.syncPreview(.reveal)
+            })
 
         let width = SliderRow(
             "Width", range: 200...1600, value: Double(size.width),
@@ -635,6 +711,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: $0.rounded(), height: self.revealSize().height))
+                self.syncPreview(.reveal)
             })
 
         let height = SliderRow(
@@ -643,17 +720,24 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: self.revealSize().width, height: $0.rounded()))
+                self.syncPreview(.reveal)
             })
 
         let lines = SliderRow(
             "Lines", range: 1...5, value: Double(maxLines()), snaps: true,
             format: { $0 < 1.5 ? "1 line" : "\(Int($0.rounded())) lines" },
-            apply: { [weak self] in self?.onMaxLines?(Int($0.rounded())) })
+            apply: { [weak self] in
+                self?.onMaxLines?(Int($0.rounded()))
+                self?.syncPreview(.lines)
+            })
 
         let background = SliderRow(
             "Background", range: 0...1, value: Double(boxOpacity()),
             format: { "\(Int(($0 * 100).rounded()))%" },
-            apply: { [weak self] in self?.onBoxOpacity?(CGFloat($0)) })
+            apply: { [weak self] in
+                self?.onBoxOpacity?(CGFloat($0))
+                self?.syncPreview(.background)
+            })
 
         let depth = SliderRow(
             "Keep", range: 0...30, value: Double(historyDepth()), snaps: true,
@@ -664,17 +748,34 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 case let n: return "\(n) boxes"
                 }
             },
-            apply: { [weak self] in self?.onHistoryDepth?(Int($0.rounded())) })
+            apply: { [weak self] in
+                self?.onHistoryDepth?(Int($0.rounded()))
+                self?.syncPreview(.keep)
+            })
 
         let dimness = SliderRow(
             "Text", range: Double(HistoryPillView.minTextOpacity)...1,
             value: Double(historyTextOpacity()),
             format: { "\(Int(($0 * 100).rounded()))%" },
-            apply: { [weak self] in self?.onHistoryTextOpacity?(CGFloat($0)) })
+            apply: { [weak self] in
+                self?.onHistoryTextOpacity?(CGFloat($0))
+                self?.syncPreview(.dimness)
+            })
 
         rows = [lines, background, opacity, width, height, depth, dimness]
 
         let (stack, section) = Self.makeStack()
+
+        // Above everything, because everything below it is a description of it.
+        let screen = SettingsPreview()
+        preview = screen
+        screen.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(screen)
+        NSLayoutConstraint.activate([
+            screen.widthAnchor.constraint(equalToConstant: Self.contentWidth),
+            screen.heightAnchor.constraint(equalToConstant: SettingsPreview.displayHeight),
+        ])
+        screen.apply(currentStyle())
 
         section("Subtitle Box",
                 "How many lines a box fills before it clears and starts a new one, "
@@ -698,6 +799,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let expiry = SecondsRow(seconds: historyExpiry()) { [weak self] in
             self?.onHistoryExpiry?($0)
+            self?.syncPreview(.expiry)
         }
         let expires = ToggleRow(
             "Forget it when idle",
@@ -705,6 +807,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             value: historyExpires(), width: Self.contentWidth) { [weak self] on in
                 self?.onHistoryExpires?(on)
                 self?.syncHistoryEnabled()
+                self?.syncPreview(.expiry)
             }
         expiryRow = expiry
         expiryToggle = expires
@@ -877,11 +980,41 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func toggleReveal(_ sender: NSSwitch) {
         onToggleReveal?(sender.state == .on)
         syncRevealEnabled()
+        syncPreview(.reveal)
     }
 
     @objc private func toggleHistory(_ sender: NSSwitch) {
         onToggleHistory?(sender.state == .on)
         syncHistoryEnabled()
+        syncPreview(.keep)
+    }
+
+    // MARK: - The preview
+
+    /// Everything the preview draws, read back from the same getters the rows
+    /// read. Assembled fresh on every edit rather than tracked: the menu can
+    /// change half of these while this window is open, and a copy kept here
+    /// would be the stale one.
+    private func currentStyle() -> PreviewStyle {
+        PreviewStyle(
+            fontSize: fontSize(),
+            maxLines: maxLines(),
+            boxOpacity: boxOpacity(),
+            revealOpacity: revealOpacity(),
+            revealSize: revealSize(),
+            revealEnabled: revealEnabled(),
+            historyEnabled: historyEnabled(),
+            historyDepth: historyDepth(),
+            historyTextOpacity: historyTextOpacity(),
+            historyExpiry: historyExpiry(),
+            historyExpires: historyExpires())
+    }
+
+    /// A control was touched: show what it did, and say what it does.
+    private func syncPreview(_ topic: PreviewTopic) {
+        guard let preview else { return }
+        preview.apply(currentStyle())
+        preview.explain(topic)
     }
 
     /// Dim each section's dials when the feature itself is switched off.

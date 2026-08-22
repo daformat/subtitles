@@ -322,6 +322,7 @@ final class OverlayController {
     private var modifierTimer: Timer?
     private var cursorTimer: Timer?
     private var moveObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
     /// True only while `layout()` is moving the panel itself, so the move
     /// observer can tell our repositioning apart from the user's dragging.
     private var isRepositioning = false
@@ -494,6 +495,22 @@ final class OverlayController {
                                   y: self.panel.frame.minY + SubtitleView.pad)
         }
 
+        // Resolution changed, a display arrived or left, or the arrangement
+        // moved. The remembered position is in the coordinates of a screen that
+        // no longer exists at that size, so the box can be sitting off the edge
+        // of the new one — and `maxWidth`, which decides where the text pages,
+        // has changed with it.
+        //
+        // An untouched overlay derives its position from the screen on every
+        // layout and so fixes itself, but only on the next word: a machine that
+        // is quiet across the change stays wrong until somebody speaks.
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.screenChanged()
+        }
+
         // Polled rather than armed per update: a one-shot timer must be cancelled
         // and re-armed on every text change, and anything that forgets to re-arm
         // strands the overlay on screen — which is exactly the bug this replaces.
@@ -539,6 +556,7 @@ final class OverlayController {
 
     deinit {
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         idleTimer?.invalidate()
         modifierTimer?.invalidate()
         cursorTimer?.invalidate()
@@ -813,6 +831,45 @@ final class OverlayController {
         isRepositioning = true
         panel.setFrame(frame, display: true)
         isRepositioning = false
+    }
+
+    /// Bring the box back onto the screen it is now on, and lay it out there.
+    ///
+    /// The anchor is written back rather than only applied: it is what gets
+    /// saved, and a position that is off the current display is not one to keep
+    /// remembering.
+    private func screenChanged() {
+        guard let screen = NSScreen.main else { return }
+        if let current = anchor {
+            let clamped = clamp(current, to: screen)
+            if clamped != current {
+                anchor = clamped
+                saveAnchor()
+            }
+        }
+        // Empty box: `layout()` returns early and there is nothing to move, but
+        // the anchor above is now right for the next word.
+        layout()
+    }
+
+    /// Hold the pill inside the screen's visible frame.
+    ///
+    /// The anchor is the pill's bottom centre, so the clamp is against half a
+    /// width either side and the box's own height above. A box wider or taller
+    /// than the screen has no valid position, and centring it is the least
+    /// surprising answer.
+    private func clamp(_ point: NSPoint, to screen: NSScreen) -> NSPoint {
+        let area = screen.visibleFrame
+        let size = panel.frame.size
+        let half = size.width / 2
+
+        let x = area.width >= size.width
+            ? min(max(point.x, area.minX + half), area.maxX - half)
+            : area.midX
+        let lowest = area.minY + SubtitleView.pad
+        let highest = area.maxY - size.height + SubtitleView.pad
+        let y = highest >= lowest ? min(max(point.y, lowest), highest) : lowest
+        return NSPoint(x: x.rounded(), y: y.rounded())
     }
 
     private func saveAnchor() {

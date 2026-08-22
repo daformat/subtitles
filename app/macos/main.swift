@@ -755,6 +755,7 @@ if useOverlay {
         controller.historyTextOpacity = value
         UserDefaults.standard.set(Double(value), forKey: Defaults.historyTextOpacity)
     }
+    settings.fontSize = { fontSize }
     settings.boxOpacity = { controller.boxOpacity }
     settings.onBoxOpacity = { value in
         controller.boxOpacity = value

@@ -106,6 +106,9 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         readyTimer?.invalidate()
         readyTimer = nil
         window.center()
+        // `center` puts a window taller than the screen half off the top of it.
+        WindowFit.clamp(window)
+        if let pageScroll { WindowFit.scrollToTop(pageScroll) }
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -118,6 +121,9 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         readyTimer?.invalidate()
         readyTimer = nil
         presented = false
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = nil
+        pageScroll = nil
         webView?.stopLoading()
         webView = nil
         demoHeight = nil
@@ -181,10 +187,11 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // Return closes it, which is what anybody who has been waiting will press.
         button.keyEquivalent = "\r"
         row.addArrangedSubview(button)
-        window?.setContentSize(contentStack?.fittingSize ?? .zero)
+        fit()
     }
 
     private weak var contentStack: NSStackView?
+    private var screenObserver: NSObjectProtocol?
 
     // MARK: building
 
@@ -251,15 +258,26 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.fit()
+        }
 
-        let root = NSView()
-        root.addSubview(stack)
-        window.contentView = root
+        // In a scroll view rather than straight into the window: this page is
+        // as tall as the demo it carries, and on a short display a window sized
+        // to it runs off the bottom with the button that dismisses it down there
+        // somewhere. Scrollers hide themselves, so on a screen with the room
+        // there is nothing to see.
+        let scroll = WindowFit.scrollView()
+        scroll.documentView = stack
+        pageScroll = scroll
+        window.contentView = scroll
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: root.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
             // Width stated outright, rather than left to `fittingSize`. The
             // widest child has a fixed width of its own, and a stack pinned to a
             // window exactly that wide has nowhere to put its edge insets — so
@@ -267,9 +285,38 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
             stack.widthAnchor.constraint(
                 equalToConstant: Self.width + Self.insetH * 2),
         ])
-        window.setContentSize(stack.fittingSize)
+        fit()
         return window
     }
+
+    /// Give the window its content's size, up to what the screen can show.
+    ///
+    /// Past that the content scrolls, and the window is pulled back inside the
+    /// visible frame: a window taller than the display is one whose bottom half
+    /// cannot be reached, and with the title bar hidden there is nothing to drag
+    /// it back by either.
+    /// The only place this window is given a size.
+    ///
+    /// Every path that changes its content goes through here — the demo
+    /// reporting its height, the download finishing and swapping the progress
+    /// bar for a button, a display changing under it — because each of them can
+    /// be the one that takes it past the bottom of the screen.
+    private func fit() {
+        guard let window, let stack = contentStack else { return }
+        // Measured after the constraint that prompted this has been applied, not
+        // before: `fittingSize` read across a pending change answers for the
+        // layout being replaced.
+        window.layoutIfNeeded()
+        let content = stack.fittingSize
+        let room = max(240, WindowFit.available(for: window) - WindowFit.chrome(of: window))
+        window.setContentSize(NSSize(width: content.width, height: min(content.height, room)))
+        WindowFit.clamp(window)
+        window.layoutIfNeeded()
+        if let pageScroll { WindowFit.syncScrolling(pageScroll) }
+    }
+
+    /// The page's scroll view, so a resize can put it back at the top.
+    private weak var pageScroll: NSScrollView?
 
     /// "Hold ⇧ and drag the captions to move them."
     ///
@@ -336,8 +383,49 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         bar = indicator
     }
 
+    /// A demo that gives the wheel back when it has no use for it.
+    ///
+    /// A `WKWebView` swallows every wheel event that reaches it, whether or not
+    /// its page has anywhere to scroll. The demo fills most of this window, so
+    /// on a screen too short for it, scrolling over the only large thing in the
+    /// window did nothing at all — which reads as a window that cannot be
+    /// scrolled rather than as one whose middle is not listening.
+    ///
+    /// Handing every event to the window instead is not the answer either: the
+    /// demo has a scrollback of its own, the ⌥ stack, and that gesture is a
+    /// wheel over exactly this view.
+    ///
+    /// Two conditions, and between them the two scrolls never compete. The
+    /// window only takes the wheel when it has somewhere to go — so on a display
+    /// with the room, nothing changes at all. And it never takes it while ⌥ is
+    /// down, because the demo's stack is up precisely then and there is no other
+    /// reason to be turning the wheel over it.
+    private final class DemoWebView: WKWebView {
+        /// Whether this event belongs to the window rather than to the page.
+        /// Asked at the moment of the event rather than cached: the answer
+        /// changes with the display, with the demo's own height, and with
+        /// whether a key is down right now.
+        var windowWantsWheel: () -> Bool = { false }
+
+        override func scrollWheel(with event: NSEvent) {
+            guard windowWantsWheel() else {
+                super.scrollWheel(with: event)
+                return
+            }
+            nextResponder?.scrollWheel(with: event)
+        }
+    }
+
     private func buildDemo() -> NSView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let web = DemoWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        web.windowWantsWheel = { [weak self] in
+            guard let scroll = self?.pageScroll else { return false }
+            // Never while ⌥ is down. That is the gesture that raises the demo's
+            // own stack, and a wheel over the demo with ⌥ held is somebody
+            // scrolling that stack, on any size of screen.
+            guard !NSEvent.modifierFlags.contains(.option) else { return false }
+            return WindowFit.canScroll(scroll)
+        }
         web.translatesAutoresizingMaskIntoConstraints = false
         // Transparent, so the window's own material shows through the page. The
         // page paints nothing behind the demo either — see demo.shell.html.
@@ -381,8 +469,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         { [weak self] value, _ in
             guard let self, let height = value as? Double, height > 0 else { return }
             self.demoHeight?.constant = ceil(height)
-            guard let window = self.window, let stack = self.contentStack else { return }
-            window.setContentSize(stack.fittingSize)
+            self.fit()
             self.present()
         }
     }

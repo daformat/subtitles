@@ -94,13 +94,26 @@ panes:
   finished boxes ⌥ brings back and how far behind the live one they sit, and how
   long a silence forgets them — thirty seconds by default, a slider out to five
   minutes, a field for anything else, or off to keep them until you pause or
-  quit. Every control
-  applies to the overlay as you drag it, so the overlay is the preview.
+  quit. Every control applies to the overlay as you drag it, and the pane opens
+  onto a small screen of its own that shows what each one does.
 - **Models** — whether non-speech is skipped before it reaches the recogniser,
   whether a speaker change starts a new box, and a **Clear Model Cache** button.
   Every model you try stays downloaded; this removes the ones nothing is using
   and never the one in use. `subtitles --list-models` prints the same answer
   without removing anything.
+
+The UI pane's preview is not a picture of the overlay: it puts the overlay's own
+views on a scaled-down desktop, so the paging, the pill, the reveal's falloff and
+the ⌥ stack's entrance are the real ones and cannot drift from what the app does.
+Point at it and the box dissolves under the pointer; hold ⌥ and the finished
+boxes stack up and scroll, and the hole closes — exactly as they do on screen.
+Touch a control and the box says what that control does, with its current value
+in the sentence.
+
+Its captions are scripted rather than the live transcript, which is deliberate:
+the transcript is empty on a quiet machine, and that is most of the time this
+window is open — and when it is not, it is somebody else's sentence arriving
+mid-drag and re-paging the box under the hand holding the slider.
 
 **Language / Models** is the one setting most people will touch, and language is
 the top level of it, because that is the first thing that rules a model in or out:
