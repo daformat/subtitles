@@ -260,7 +260,8 @@ xcrun notarytool store-credentials "subtitles-notary" \
 ```
 
 Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
-`build.sh` before releasing.
+`build.sh` before releasing, and write the release into
+[CHANGELOG.md](CHANGELOG.md) while the reasons are still to hand.
 
 ## Known limits
 
