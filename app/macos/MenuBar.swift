@@ -540,7 +540,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         sub.addItem(groupHeader("Full vocabulary · 633 MB"))
         // The order the model card lists its transcription-ready tier in, with
         // Mandarin last because it sits a tier below the rest. Not alphabetical:
-        // these are endonyms, so sorting them — 中文, 日本語, Русский — orders by
+        // these are endonyms, so sorting 中文, 日本語 and Русский orders them by
         // codepoint, which is no order at all to the eye doing the reading.
         for entry in [FluidLanguage.nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .zh] {
             sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))

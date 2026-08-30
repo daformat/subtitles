@@ -133,8 +133,8 @@ enum FluidVariant: String, CaseIterable {
 ///
 /// The repo ships two vocabularies and the download follows the language, not the
 /// user: the six Latin-script languages share a pruned 2828-token pack (583 MB),
-/// while every other language — and `auto`, which must be able to decode anything
-/// — needs the full 13087-token pack (633 MB). Switching within a pack is free;
+/// while every other language needs the full 13087-token pack (633 MB), `auto`
+/// included, since it must be able to decode anything. Switching within a pack is free;
 /// crossing between them is another download, which is why the two groups are kept
 /// visibly apart in the menu.
 ///
@@ -143,10 +143,10 @@ enum FluidVariant: String, CaseIterable {
 /// was built for the six languages upstream lists and its 2828 tokens cover nothing
 /// beyond them.
 ///
-/// The set is NVIDIA's transcription-ready tier — the 19 locales the model card
+/// The set is NVIDIA's transcription-ready tier: the 19 locales the model card
 /// calls accurate out of the box, which collapse to 15 languages once the regional
-/// pairs (en-US/en-GB, pt-BR/pt-PT, …) are folded together — plus Mandarin, which
-/// sits a tier down. The checkpoint reaches ~40 locales in all; the rest are
+/// pairs (en-US/en-GB, pt-BR/pt-PT, …) are folded together. Mandarin joins them from
+/// a tier down. The checkpoint reaches ~40 locales in all; the rest are
 /// broad-coverage or need fine-tuning first, and each is one `code` away.
 enum FluidLanguage: String, CaseIterable {
     case auto

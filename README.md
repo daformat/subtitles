@@ -271,9 +271,9 @@ Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
 - **Multilingual on auto-detect** is the default. The EOU variants are the ones
   measured; Nemotron 1120 / 2240 are wired but barely tested.
 - Non-English needs the **Multilingual** variant; the other six are English-only
-  checkpoints. Its sixteen languages are NVIDIA's transcription-ready tier — the
+  checkpoints. Its sixteen languages are NVIDIA's transcription-ready tier: the
   19 locales its card calls accurate out of the box, 15 languages once the
-  regional pairs are folded together — plus Mandarin, which sits a tier down.
+  regional pairs are folded together, plus Mandarin, which sits a tier down.
   The checkpoint itself reaches ~40 locales via `prompt_id`; the remainder are
   broad-coverage or need fine-tuning first, and adding one is a menu entry plus a
   FLEURS-style code. None of them are measured here.

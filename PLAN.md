@@ -1529,10 +1529,10 @@ through FluidInference's CoreML conversion of it, and it covers 40 language-loca
 hard-coded the list, and every code it could have named was already sitting in the
 checkpoint's `prompt_dictionary`.
 
-The menu now carries NVIDIA's **transcription-ready** tier — the 19 locales the card
+The menu now carries NVIDIA's **transcription-ready** tier: the 19 locales the card
 calls accurate out of the box, 15 languages once the regional pairs (en-US/en-GB,
-pt-BR/pt-PT, es-ES/es-US, fr-FR/fr-CA) fold together — plus Mandarin, which was here
-first and sits a tier down:
+pt-BR/pt-PT, es-ES/es-US, fr-FR/fr-CA) fold together. Mandarin joins them, having
+been here first and sitting a tier down:
 
 ```
 Full vocabulary · 633 MB
@@ -1547,8 +1547,8 @@ doing the reading.
 **Script is not the split.** Dutch, Turkish and Vietnamese are Latin-script and still
 take the 633 MB pack. The pruned 2828-token one was built for the six languages
 upstream names and covers nothing beyond them, so `usesLatinPack` has to agree with
-`StreamingNemotronMultilingualAsrManager.languageDirectory` — a prefix list — rather
-than with the alphabet.
+`StreamingNemotronMultilingualAsrManager.languageDirectory`, which is a prefix list,
+rather than with the alphabet.
 
 All eight new entries live in the pack `auto` already downloads, so for anyone on the
 default they cost nothing: no download, and moving between them is the same engine
