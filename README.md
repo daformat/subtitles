@@ -266,7 +266,7 @@ Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
 - **Multilingual on auto-detect** is the default. The EOU variants are the ones
   measured; Nemotron 1120 / 2240 are wired but barely tested.
 - Non-English needs the **Multilingual** variant; the other six are English-only
-  checkpoints. Its nine languages are the ones exposed here — the model itself
+  checkpoints. Its eight languages are the ones exposed here — the model itself
   reaches ~40 via `prompt_id`, and adding one is a menu entry plus a FLEURS-style
   code.
 - Singing is speech as far as the VAD is concerned, so vocal music will be
