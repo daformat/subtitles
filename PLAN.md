@@ -6,7 +6,8 @@ primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
 First-run download is visible and interruptible (§18); default is Multilingual,
-auto-detecting. Per-app capture actually switches as of §19; eight languages, §20.
+auto-detecting. Per-app capture actually switches as of §19; sixteen languages,
+§20 and §22.
 The menu bar badge says what is actually happening (§21).
 Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER,
@@ -1519,6 +1520,43 @@ are the better choice for English anyway, and the code path survives for a saved
 preference or `--variant`.
 
 ---
+
+## 22. The rest of the transcription-ready tier (2026-08-30)
+
+The multilingual checkpoint is `nvidia/nemotron-3.5-asr-streaming-0.6b`, reached
+through FluidInference's CoreML conversion of it, and it covers 40 language-locales.
+§20 exposed eight. That was a picker limit rather than a model one: `FluidLanguage`
+hard-coded the list, and every code it could have named was already sitting in the
+checkpoint's `prompt_dictionary`.
+
+The menu now carries NVIDIA's **transcription-ready** tier — the 19 locales the card
+calls accurate out of the box, 15 languages once the regional pairs (en-US/en-GB,
+pt-BR/pt-PT, es-ES/es-US, fr-FR/fr-CA) fold together — plus Mandarin, which was here
+first and sits a tier down:
+
+```
+Full vocabulary · 633 MB
+Nederlands  Türkçe  Русский  العربية  हिन्दी
+日本語  한국어  Tiếng Việt  Українська  中文
+```
+
+Listed in the order the model card gives that tier, not alphabetically: these are
+endonyms, and sorting them orders by codepoint, which is no order at all to the eye
+doing the reading.
+
+**Script is not the split.** Dutch, Turkish and Vietnamese are Latin-script and still
+take the 633 MB pack. The pruned 2828-token one was built for the six languages
+upstream names and covers nothing beyond them, so `usesLatinPack` has to agree with
+`StreamingNemotronMultilingualAsrManager.languageDirectory` — a prefix list — rather
+than with the alphabet.
+
+All eight new entries live in the pack `auto` already downloads, so for anyone on the
+default they cost nothing: no download, and moving between them is the same engine
+rebuild over cached files that moving between zh and ja already was.
+
+What is left out is not lost. Of the 40 locales, 13 more are broad-coverage and 8
+need fine-tuning before they transcribe at all; either is still a case, a code and a
+display name away.
 
 ## 10. References
 

@@ -127,12 +127,16 @@ Latin-script pack · 583 MB
 Español  Français  Italiano  Português  Deutsch
 ──────────────
 Full vocabulary · 633 MB
-中文  日本語
+Nederlands  Türkçe  Русский  العربية  हिन्दी
+日本語  한국어  Tiếng Việt  Українська  中文
 ```
 
 The groups are the downloads. The multilingual model ships as two vocabularies —
-a pruned Latin-script pack and the full one, which zh/ja need and which
-auto-detect also takes, having to decode anything. Moving within a group is
+a pruned Latin-script pack and the full one, which every language outside the six
+needs and which auto-detect also takes, having to decode anything. Script is not
+the split: Dutch, Turkish and Vietnamese are Latin-script and still sit in the
+second group, because the pruned pack was built for the six languages upstream
+names and its 2828 tokens cover nothing beyond them. Moving within a group is
 instant; crossing between them fetches the other pack. Measured here at RTF
 0.08–0.11 on French, the same as Nemotron 560 on English.
 
@@ -266,9 +270,12 @@ Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
 - **Multilingual on auto-detect** is the default. The EOU variants are the ones
   measured; Nemotron 1120 / 2240 are wired but barely tested.
 - Non-English needs the **Multilingual** variant; the other six are English-only
-  checkpoints. Its eight languages are the ones exposed here — the model itself
-  reaches ~40 via `prompt_id`, and adding one is a menu entry plus a FLEURS-style
-  code.
+  checkpoints. Its sixteen languages are NVIDIA's transcription-ready tier — the
+  19 locales its card calls accurate out of the box, 15 languages once the
+  regional pairs are folded together — plus Mandarin, which sits a tier down.
+  The checkpoint itself reaches ~40 locales via `prompt_id`; the remainder are
+  broad-coverage or need fine-tuning first, and adding one is a menu entry plus a
+  FLEURS-style code. None of them are measured here.
 - Singing is speech as far as the VAD is concerned, so vocal music will be
   transcribed as lyrics.
 - Speaker-change breaks are **retrospective**: diarization needs ~1 s of warmup and

@@ -78,7 +78,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron1120: return "612 MB · punctuated · the trained chunk size"
         case .nemotron2240: return "612 MB · punctuated · highest throughput"
         case .unified: return "595 MB · punctuated · 2.08 s · Nemotron is faster"
-        case .multilingual: return "583–633 MB · default · 8 languages · punctuated"
+        case .multilingual: return "583–633 MB · default · 16 languages · punctuated"
         }
     }
 
@@ -133,14 +133,28 @@ enum FluidVariant: String, CaseIterable {
 ///
 /// The repo ships two vocabularies and the download follows the language, not the
 /// user: the six Latin-script languages share a pruned 2828-token pack (583 MB),
-/// while zh/ja — and `auto`, which must be able to decode anything — need the full
-/// 13087-token pack (633 MB). Switching within a pack is free; crossing between
-/// them is another download, which is why the two groups are kept visibly apart in
-/// the menu.
+/// while every other language — and `auto`, which must be able to decode anything
+/// — needs the full 13087-token pack (633 MB). Switching within a pack is free;
+/// crossing between them is another download, which is why the two groups are kept
+/// visibly apart in the menu.
+///
+/// Script is not the split, despite the name upstream gives it: Dutch, Turkish and
+/// Vietnamese are Latin-script and still take the full pack, because the pruned one
+/// was built for the six languages upstream lists and its 2828 tokens cover nothing
+/// beyond them.
+///
+/// The set is NVIDIA's transcription-ready tier — the 19 locales the model card
+/// calls accurate out of the box, which collapse to 15 languages once the regional
+/// pairs (en-US/en-GB, pt-BR/pt-PT, …) are folded together — plus Mandarin, which
+/// sits a tier down. The checkpoint reaches ~40 locales in all; the rest are
+/// broad-coverage or need fine-tuning first, and each is one `code` away.
 enum FluidLanguage: String, CaseIterable {
     case auto
     case en, es, fr, it, pt, de
-    case zh, ja
+    case nl, tr, ru, ar, hi, ja, ko, vi, uk
+    /// Broad-coverage rather than transcription-ready, unlike the rest of these.
+    /// Kept because it shipped first and the pack it needs is downloaded anyway.
+    case zh
 
     /// FLEURS-style code the model's prompt dictionary is keyed on.
     var code: String {
@@ -152,8 +166,16 @@ enum FluidLanguage: String, CaseIterable {
         case .it: return "it-IT"
         case .pt: return "pt-BR"
         case .de: return "de-DE"
-        case .zh: return "zh-CN"
+        case .nl: return "nl-NL"
+        case .tr: return "tr-TR"
+        case .ru: return "ru-RU"
+        case .ar: return "ar-AR"
+        case .hi: return "hi-IN"
         case .ja: return "ja-JP"
+        case .ko: return "ko-KR"
+        case .vi: return "vi-VN"
+        case .uk: return "uk-UA"
+        case .zh: return "zh-CN"
         }
     }
 
@@ -166,8 +188,16 @@ enum FluidLanguage: String, CaseIterable {
         case .it: return "Italiano"
         case .pt: return "Português"
         case .de: return "Deutsch"
-        case .zh: return "中文"
+        case .nl: return "Nederlands"
+        case .tr: return "Türkçe"
+        case .ru: return "Русский"
+        case .ar: return "العربية"
+        case .hi: return "हिन्दी"
         case .ja: return "日本語"
+        case .ko: return "한국어"
+        case .vi: return "Tiếng Việt"
+        case .uk: return "Українська"
+        case .zh: return "中文"
         }
     }
 
@@ -176,7 +206,7 @@ enum FluidLanguage: String, CaseIterable {
     var usesLatinPack: Bool {
         switch self {
         case .en, .es, .fr, .it, .pt, .de: return true
-        case .auto, .zh, .ja: return false
+        case .auto, .nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .zh: return false
         }
     }
 }

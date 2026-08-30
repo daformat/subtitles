@@ -518,7 +518,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         // Language is the top level, because it is the first decision and for most
         // people the only one. Auto-detect leads as the default; English is the one
-        // language with a choice of models behind it, the other seven being served
+        // language with a choice of models behind it, the other fifteen being served
         // by the multilingual checkpoint alone.
         sub.addItem(autoDetectItem(checked: onMultilingual && language == .auto))
 
@@ -538,7 +538,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         sub.addItem(.separator())
         sub.addItem(groupHeader("Full vocabulary · 633 MB"))
-        for entry in [FluidLanguage.zh, .ja] {
+        // The order the model card lists its transcription-ready tier in, with
+        // Mandarin last because it sits a tier below the rest. Not alphabetical:
+        // these are endonyms, so sorting them — 中文, 日本語, Русский — orders by
+        // codepoint, which is no order at all to the eye doing the reading.
+        for entry in [FluidLanguage.nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .zh] {
             sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
         }
 
