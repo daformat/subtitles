@@ -78,7 +78,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron1120: return "612 MB · punctuated · the trained chunk size"
         case .nemotron2240: return "612 MB · punctuated · highest throughput"
         case .unified: return "595 MB · punctuated · 2.08 s · Nemotron is faster"
-        case .multilingual: return "583–633 MB · default · 9 languages · punctuated"
+        case .multilingual: return "583–633 MB · default · 8 languages · punctuated"
         }
     }
 

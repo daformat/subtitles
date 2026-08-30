@@ -6,7 +6,7 @@ primary design constraint and everything below is subordinate to it.
 
 **Status:** FluidAudio only — sherpa-onnx removed (§13). Silero VAD in (§17).
 First-run download is visible and interruptible (§18); default is Multilingual,
-auto-detecting. Per-app capture actually switches as of §19; nine languages, §20.
+auto-detecting. Per-app capture actually switches as of §19; eight languages, §20.
 The menu bar badge says what is actually happening (§21).
 Phase 3 complete, published to a repo.
 Remaining before this is shippable: stable signing identity, real-world WER,
