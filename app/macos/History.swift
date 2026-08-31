@@ -164,6 +164,15 @@ final class HistoryController {
     private static let fadeHeight: CGFloat = 150
 
     private let panel = HistoryPanel()
+
+    /// Whether the stack is captured by screen recording and sharing. Follows the
+    /// live box: the two are one overlay as far as anyone watching is concerned,
+    /// and hiding one while the other stays visible would be worse than hiding
+    /// neither.
+    var isVisibleInScreenShare = true {
+        didSet { panel.sharingType = isVisibleInScreenShare ? .readOnly : .none }
+    }
+
     private let scroll = HistoryScrollView()
     private let document = NSView()
 

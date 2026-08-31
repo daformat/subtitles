@@ -146,11 +146,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onSelectVariant: ((FluidVariant) -> Void)?
     var onSelectLanguage: ((FluidLanguage) -> Void)?
     var currentLanguageID: () -> String = { FluidLanguage.auto.rawValue }
+    /// nil turns translation off. Only offered on macOS 15, where the framework
+    /// this runs on exists at all.
+    var onSelectTranslation: ((FluidLanguage?) -> Void)?
+    var currentTranslationID: () -> String? = { nil }
+    var onSelectTranslationMode: ((TranslationMode) -> Void)?
+    var currentTranslationMode: () -> TranslationMode = { .hybrid }
     var onToggleSpeakerBreaks: (() -> Void)?
     var onToggleVAD: (() -> Void)?
     var vadEnabled: () -> Bool = { true }
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
+    var onToggleScreenShare: (() -> Void)?
+    var screenShareEnabled: () -> Bool = { true }
     var onToggleHistory: (() -> Void)?
     var historyEnabled: () -> Bool = { true }
     var speakerBreaksEnabled: () -> Bool = { false }
@@ -397,6 +405,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         menu.addItem(sourceMenuItem())
         menu.addItem(modelMenuItem())
+        if #available(macOS 15, *) {
+            menu.addItem(translateMenuItem())
+            menu.addItem(translationModeMenuItem())
+        }
+        // Divides what the recogniser does from what the overlay looks like. That
+        // split holds with or without the translation entries, so it is not tied
+        // to their availability.
+        menu.addItem(.separator())
         menu.addItem(textSizeMenuItem())
 
         let vad = NSMenuItem(title: "Skip Non-Speech (VAD)",
@@ -412,6 +428,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         speakers.state = speakerBreaksEnabled() ? .on : .off
         speakers.toolTip = "Runs a second model on the Neural Engine"
         menu.addItem(speakers)
+
+        let share = NSMenuItem(title: "Show Overlay In Screen Share / Capture",
+                               action: #selector(toggleScreenShare), keyEquivalent: "")
+        share.target = self
+        share.state = screenShareEnabled() ? .on : .off
+        menu.addItem(share)
 
         let reveal = NSMenuItem(title: "Fade Away Under Pointer",
                                 action: #selector(toggleReveal), keyEquivalent: "")
@@ -632,6 +654,83 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     // MARK: text size
 
+    // MARK: translation
+
+    /// Target language for live translation, or off.
+    ///
+    /// The targets are this app's own sixteen rather than everything Apple can
+    /// do — probed on this machine, the framework supports all sixteen and every
+    /// one of the 240 ordered pairs between them, so the recogniser's list is the
+    /// binding constraint and offering a longer one here would only promise
+    /// targets nothing can be transcribed into.
+    @available(macOS 15, *)
+    private func translateMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Translate To", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentTranslationID()
+
+        let off = NSMenuItem(title: "Off", action: #selector(selectTranslation(_:)),
+                             keyEquivalent: "")
+        off.target = self
+        off.representedObject = ""            // empty stands for off
+        off.state = current == nil ? .on : .off
+        sub.addItem(off)
+        sub.addItem(.separator())
+
+        // Same grouping the recogniser's menu uses, so the two lists read alike.
+        for entry in FluidLanguage.allCases where entry != .auto {
+            let row = NSMenuItem(title: entry.displayName,
+                                 action: #selector(selectTranslation(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = entry.rawValue
+            row.state = current == entry.rawValue ? .on : .off
+            // Translating into the language being recognised is a no-op, and
+            // showing it as a choice invites the question of what it would do.
+            row.isEnabled = entry.rawValue != currentLanguageID()
+            sub.addItem(row)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    /// How far ahead of the speaker the translator is allowed to guess.
+    ///
+    /// Greyed out with translation off: it is the only setting here that does
+    /// nothing on its own, and leaving it live invites a change with no visible
+    /// effect.
+    @available(macOS 15, *)
+    private func translationModeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Translation Timing", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentTranslationMode()
+        let on = currentTranslationID() != nil
+        for mode in TranslationMode.allCases {
+            let row = NSMenuItem(title: mode.displayName,
+                                 action: #selector(selectTranslationMode(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = mode.rawValue
+            row.state = mode == current ? .on : .off
+            row.attributedTitle = NSAttributedString(
+                string: "\(mode.displayName)\n\(mode.note)",
+                attributes: [.font: NSFont.menuFont(ofSize: 0)])
+            sub.addItem(row)
+        }
+        item.submenu = sub
+        item.isEnabled = on
+        return item
+    }
+
+    @objc private func selectTranslation(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        onSelectTranslation?(raw.isEmpty ? nil : FluidLanguage(rawValue: raw))
+    }
+
+    @objc private func selectTranslationMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = TranslationMode(rawValue: raw) else { return }
+        onSelectTranslationMode?(mode)
+    }
+
     private func textSizeMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Text Size", action: nil, keyEquivalent: "")
         let sub = NSMenu()
@@ -646,6 +745,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         item.submenu = sub
         return item
     }
+
+    @objc private func toggleScreenShare() { onToggleScreenShare?() }
 
     @objc private func selectSize(_ sender: NSMenuItem) {
         guard let size = sender.representedObject as? CGFloat else { return }

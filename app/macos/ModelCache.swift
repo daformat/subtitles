@@ -123,6 +123,64 @@ enum ModelCache {
         }
     }
 
+    // MARK: repair
+
+    /// Files CoreML needs inside a compiled bundle before it will load one.
+    ///
+    /// Confirmed against every healthy bundle on disk — recogniser, diarizer and
+    /// VAD alike all carry `analytics`, `coremldata.bin`, `model.mil`, `weights`.
+    /// An interrupted download leaves the two large directories behind and the two
+    /// small files missing, which is exactly what a half-finished fetch looks like
+    /// and precisely what CoreML refuses.
+    private static let requiredInBundle = ["coremldata.bin", "model.mil"]
+
+    /// Compiled bundles under `root` that cannot load, because a download did not
+    /// finish. Recursive: encoders sit a level down (`encoder/encoder_int8.mlmodelc`)
+    /// and the multilingual pack nests a folder per language.
+    static func incompleteBundles(under root: URL) -> [URL] {
+        let fm = FileManager.default
+        guard let walk = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey])
+        else { return [] }
+        var out: [URL] = []
+        for case let url as URL in walk where url.pathExtension == "mlmodelc" {
+            let missing = requiredInBundle.contains {
+                !fm.fileExists(atPath: url.appendingPathComponent($0).path)
+            }
+            if missing { out.append(url) }
+        }
+        return out
+    }
+
+    /// Delete the unloadable bundles in `repo` so the downloader fetches them
+    /// again, and say which went.
+    ///
+    /// Only the broken bundles, not the whole repo: a 612 MB variant whose encoder
+    /// alone is truncated should cost one encoder to put right, not the lot.
+    ///
+    /// Without this a partial download is permanent. The load throws every time,
+    /// the app produces no transcript at all, and nothing says why — the only
+    /// visible symptom is an overlay that never appears, which reads as any of a
+    /// dozen unrelated faults.
+    @discardableResult
+    static func repair(repo: Repo) -> [String] {
+        let root = directory.appendingPathComponent(repo.folderName, isDirectory: true)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return [] }
+
+        let base = directory.standardizedFileURL.path
+        var removed: [String] = []
+        for bundle in incompleteBundles(under: root) {
+            // Same guard the deliberate deletions use: nothing outside the models
+            // directory is ever passed to removeItem.
+            let path = bundle.standardizedFileURL.path
+            guard path.hasPrefix(base + "/") else { continue }
+            guard (try? FileManager.default.removeItem(at: bundle)) != nil else { continue }
+            removed.append(bundle.lastPathComponent)
+        }
+        return removed
+    }
+
     static func format(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file

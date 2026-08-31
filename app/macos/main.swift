@@ -113,6 +113,9 @@ enum Defaults {
     static let language = "engine.language"
     static let speakerBreaks = "engine.speakerBreaks"
     static let useVAD = "engine.vad"
+    static let screenShare = "overlay.screenShare"
+    static let translateTo = "translate.target"
+    static let translateMode = "translate.mode"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -146,6 +149,13 @@ nonisolated(unsafe) var engineBusyMessage: String?
 nonisolated(unsafe) var engineBusyProgress: Double = 0
 /// Rolling real-time factor reported by the engine; > 0.8 means trouble.
 nonisolated(unsafe) var lastRTF: Float = 0
+/// Set when the recogniser could not be loaded at all. Persistent, unlike
+/// `engineBusyMessage`, because the condition is: there is no transcript and
+/// there will not be one until something changes. Until this existed the only
+/// sign was a line on stderr and an overlay that never appeared, which is
+/// indistinguishable from no audio, a missing permission, or a bug anywhere else
+/// in the pipeline.
+nonisolated(unsafe) var engineFailure: String?
 /// Fraction of gated-on audio the VAD called speech; -1 until known.
 nonisolated(unsafe) var lastSpeechFraction: Double = -1
 /// Break the subtitle page when the speaker changes. Off by default: it is a
@@ -157,6 +167,18 @@ nonisolated(unsafe) var speakerBreaksEnabled =
 /// recogniser stops chewing through backing tracks.
 nonisolated(unsafe) var useVAD =
     UserDefaults.standard.object(forKey: Defaults.useVAD) as? Bool ?? true
+/// Target language for live translation, or nil for off. A `FluidLanguage` rather
+/// than a `Locale.Language` so the setting survives on 14.2, where the framework
+/// that would consume it does not exist.
+nonisolated(unsafe) var translateTo: FluidLanguage?
+nonisolated(unsafe) var translationMode: TranslationMode = .hybrid
+/// Live translation, while a target is set. Typed `AnyObject?` because a global of
+/// a macOS 15 type cannot be declared on a 14.2 floor; every use casts inside an
+/// `#available` check.
+nonisolated(unsafe) var translationBox: AnyObject?
+
+@available(macOS 15, *)
+var translation: TranslationController? { translationBox as? TranslationController }
 
 if let saved = UserDefaults.standard.object(forKey: Defaults.fontSize) as? Double {
     fontSize = CGFloat(saved)
@@ -170,6 +192,14 @@ if let override = variantOverride {
 if let raw = UserDefaults.standard.string(forKey: Defaults.language),
    let l = FluidLanguage(rawValue: raw) {
     currentLanguage = l
+}
+if let raw = UserDefaults.standard.string(forKey: Defaults.translateMode),
+   let m = TranslationMode(rawValue: raw) {
+    translationMode = m
+}
+if let raw = UserDefaults.standard.string(forKey: Defaults.translateTo),
+   let l = FluidLanguage(rawValue: raw) {
+    translateTo = l
 }
 
 if listModels {
@@ -192,6 +222,20 @@ if listModels {
         }
         let total = removable.reduce(0) { $0 + $1.bytes }
         print("\ntotal \(ModelCache.format(total))")
+    }
+
+    // Broken bundles are worth naming here even though the engine now clears them
+    // on its own: this is the one place to ask what is on disk without starting
+    // anything, and "the model you picked cannot load" is the single most useful
+    // thing the cache can tell you.
+    let broken = ModelCache.incompleteBundles(under: ModelCache.directory)
+    if broken.isEmpty {
+        print("\nall compiled models look complete")
+    } else {
+        print("\nincomplete — will be refetched on next load:")
+        for url in broken {
+            print("  \(url.path.replacingOccurrences(of: ModelCache.directory.path + "/", with: ""))")
+        }
     }
     exit(0)
 }
@@ -238,7 +282,31 @@ final class Renderer {
     /// with the audio time of every word — which is what the overlay pages on.
     func setWords(_ words: [TimedWord]) {
         line = words.map(\.text).joined(separator: " ")
-        overlay?.showWords(words)
+        // With translation on the overlay is driven by the pipeline instead, which
+        // calls back once the target-language text exists. The terminal line below
+        // stays in the source language: it is the transcript, not the subtitle.
+        // `assumeIsolated` rather than a hop: every caller here is already on the
+        // main thread (the engine's callbacks all land through DispatchQueue.main),
+        // and hopping would reorder these against the overlay updates beside them.
+        //
+        // `isReady` is false while a language pack downloads, which takes minutes.
+        // Falling back to the source language for that stretch is the difference
+        // between "not translated yet" and an app that looks broken.
+        // The overlay is handed the spoken transcript unconditionally, whether or
+        // not it is what gets drawn: ⌃ shows the original, and it has to be there
+        // the moment the key goes down rather than at the next word.
+        overlay?.setSourceWords(words)
+        var translated = false
+        if #available(macOS 15, *), let t = translation {
+            translated = MainActor.assumeIsolated {
+                guard t.isReady else { return false }
+                t.ingest(words)
+                return true
+            }
+        }
+        if #available(macOS 15, *) {
+            TranslationPipeline.trace("setWords \(words.count) routed=\(translated ? "pipeline" : "overlay")")
+        }
         FileHandle.standardOutput.write("\r\(clearLine)\(line)".data(using: .utf8)!)
     }
 
@@ -249,6 +317,7 @@ final class Renderer {
             FileHandle.standardOutput.write("\r\(clearLine)\(trimmed)\n".data(using: .utf8)!)
         }
         line = ""
+        if #available(macOS 15, *) { MainActor.assumeIsolated { translation?.finish() } }
         overlay?.endUtterance()
     }
 
@@ -272,6 +341,7 @@ final class Renderer {
     }
 
     func pause() {
+        if #available(macOS 15, *) { MainActor.assumeIsolated { translation?.finish() } }
         overlay?.markPause()
     }
 
@@ -414,6 +484,10 @@ nonisolated(unsafe) var loadTask: Task<Void, Never>?
 func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     loadGeneration += 1
     let generation = loadGeneration
+    // Before anything else: the variant decides what language the transcript will
+    // be in, so the translator has to hear about it.
+    currentVariant = variant
+    refreshTranslationSource()
     // Abandon whatever was loading. The user has asked for something else, and a
     // download for a model they no longer want should neither hold up the new one
     // nor keep writing to the status line.
@@ -424,7 +498,6 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         Task { await previous.shutdown() }
     }
 
-    currentVariant = variant
     UserDefaults.standard.set(variant.rawValue, forKey: Defaults.variant)
 
     engineBusyMessage = "Loading \(variant.displayName)…"
@@ -491,9 +564,26 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 guard generation == loadGeneration else { return }
                 err(ok ? "engine ready: \(variant.displayName)"
                        : "\(red)engine failed to load\(reset)")
+                engineFailure = ok
+                    ? nil
+                    : "\(variant.displayName) failed to load — pick another model"
                 engineBusyMessage = nil
                 engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
+            }
+        },
+        onLanguage: { code in
+            DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
+                guard let detected = FluidLanguage.matching(code: code) else { return }
+                err("detected \(detected.displayName)")
+                // Only meaningful on auto-detect: with the language pinned, the
+                // translator was already told and the model is only confirming it.
+                guard currentLanguage == .auto else { return }
+                if #available(macOS 15, *) {
+                    // Untrusted on purpose: see `setSource(_:trusted:)`.
+                    MainActor.assumeIsolated { translation?.setSource(detected.locale) }
+                }
             }
         },
         onRTF: { rtf in
@@ -558,7 +648,100 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 func applyLanguage(_ language: FluidLanguage) {
     currentLanguage = language
     UserDefaults.standard.set(language.rawValue, forKey: Defaults.language)
+    // Translating from a language into itself is not a thing to do.
+    if translateTo == language { applyTranslation(nil) }
+    refreshTranslationSource()
     applyVariant(.multilingual)
+}
+
+/// The language the recogniser will actually produce, when that is known without
+/// having to listen.
+///
+/// Seven of the eight variants are English checkpoints and can emit nothing else,
+/// so with one of those selected the source is English no matter what the
+/// language menu says — that setting only applies to the multilingual model. Nil
+/// means genuinely unknown: multilingual on auto-detect.
+var effectiveSource: Locale.Language? {
+    guard currentVariant.isMultilingual else { return FluidLanguage.en.locale }
+    return currentLanguage == .auto ? nil : currentLanguage.locale
+}
+
+/// True when `effectiveSource` is a fact rather than a guess — see
+/// `TranslationController.setSource(_:trusted:)`.
+var effectiveSourceIsTrusted: Bool {
+    !currentVariant.isMultilingual || currentLanguage != .auto
+}
+
+/// Turn live translation on for a target language, or off with nil.
+///
+/// Rebuilds the controller rather than retargeting one: changing target changes
+/// the session's configuration, which restarts it anyway, and a fresh controller
+/// also drops the half-translated transcript belonging to the old language.
+func applyTranslation(_ target: FluidLanguage?) {
+    translateTo = target
+    if let target {
+        UserDefaults.standard.set(target.rawValue, forKey: Defaults.translateTo)
+    } else {
+        UserDefaults.standard.removeObject(forKey: Defaults.translateTo)
+    }
+    guard #available(macOS 15, *) else { return }
+    MainActor.assumeIsolated {
+        guard let target else {
+            translationBox = nil
+            renderer.overlay?.prefersTranslation = false
+            // Whatever is on screen is in the old target language; the next words
+            // are the source language again, so do not leave the two mixed.
+            renderer.overlay?.markPause()
+            return
+        }
+        let controller = TranslationController(
+            target: target.locale,
+            // `auto` leaves the source unset and lets the framework identify it.
+            // Worth knowing that it is identifying per request, on one sentence at
+            // a time, which is the weakest position to ask it from.
+            source: effectiveSource,
+            trustedSource: effectiveSourceIsTrusted,
+            mode: translationMode,
+            onTranslated: { words, speculative, chunkStarts in
+                renderer.overlay?.setTranslatedWords(words, speculative: speculative,
+                                                     chunkStarts: chunkStarts)
+            },
+            onStatus: { message in err(message) },
+            onProgress: { fraction, headline in
+                engineBusyMessage = headline.isEmpty ? nil : headline
+                engineBusyProgress = fraction
+                statusMenu?.updateHealthIndicator()
+            })
+        translationBox = controller
+        renderer.overlay?.prefersTranslation = true
+        err("translating to \(target.displayName) · \(translationMode.displayName)")
+        Task { @MainActor in
+            let state = await controller.prepare()
+            if state == .unsupported {
+                err("\(red)translation unavailable for this pair\(reset)")
+            }
+        }
+    }
+}
+
+/// Re-point the translator after anything that changes what the recogniser will
+/// produce — a variant switch as much as a language switch. Without the variant
+/// half, selecting an English-only model while translating to English left the
+/// translator believing the source was still whatever the language menu said, and
+/// every request was refused as source-equals-target.
+func refreshTranslationSource() {
+    guard #available(macOS 15, *) else { return }
+    MainActor.assumeIsolated {
+        translation?.setSource(effectiveSource, trusted: effectiveSourceIsTrusted)
+    }
+}
+
+func applyTranslationMode(_ mode: TranslationMode) {
+    translationMode = mode
+    UserDefaults.standard.set(mode.rawValue, forKey: Defaults.translateMode)
+    guard #available(macOS 15, *) else { return }
+    MainActor.assumeIsolated { translation?.mode = mode }
+    err("translation timing: \(mode.displayName)")
 }
 
 /// Point the tap at a different source. One path, shared by the menu and by
@@ -630,6 +813,11 @@ if useOverlay {
     // a key that was never written, which would ship the feature off by default
     // for everyone who has not touched the menu.
     var revealEnabled = UserDefaults.standard.object(forKey: Defaults.reveal) as? Bool ?? true
+    // Defaults on: an overlay that silently vanishes from a screen share is the
+    // surprising behaviour, so hiding it should be something the user chose.
+    var screenShareEnabled =
+        UserDefaults.standard.object(forKey: Defaults.screenShare) as? Bool ?? true
+    controller.isVisibleInScreenShare = screenShareEnabled
     controller.isRevealEnabled = revealEnabled
     var historyEnabled = UserDefaults.standard.object(forKey: Defaults.history) as? Bool ?? true
     controller.isHistoryEnabled = historyEnabled
@@ -782,6 +970,9 @@ if useOverlay {
     menu.engineProgress = { engineBusyProgress }
     menu.statusLine = {
         if let busy = engineBusyMessage { return (busy, .normal) }
+        // Above pause and audio health: with no recogniser loaded, neither of
+        // those is the reason nothing is on screen.
+        if let failure = engineFailure { return (failure, .warning) }
         // Paused outranks the rest. Receiving no audio while paused is the tap
         // being stopped on purpose, not a fault, and it is certainly not the app
         // listening. A model load still shows through above: that carries on
@@ -807,12 +998,22 @@ if useOverlay {
     menu.onSelectVariant = { applyVariant($0) }
     menu.onSelectLanguage = { applyLanguage($0) }
     menu.currentLanguageID = { currentLanguage.rawValue }
+    menu.onSelectTranslation = { applyTranslation($0) }
+    menu.currentTranslationID = { translateTo?.rawValue }
+    menu.onSelectTranslationMode = { applyTranslationMode($0) }
+    menu.currentTranslationMode = { translationMode }
     menu.speakerBreaksEnabled = { speakerBreaksEnabled }
     menu.vadEnabled = { useVAD }
     menu.onToggleVAD = {
         useVAD.toggle()
         UserDefaults.standard.set(useVAD, forKey: Defaults.useVAD)
         applyVariant(currentVariant)   // detector is built with the engine
+    }
+    menu.screenShareEnabled = { screenShareEnabled }
+    menu.onToggleScreenShare = {
+        screenShareEnabled.toggle()
+        controller.isVisibleInScreenShare = screenShareEnabled
+        UserDefaults.standard.set(screenShareEnabled, forKey: Defaults.screenShare)
     }
     menu.revealEnabled = { revealEnabled }
     menu.onToggleReveal = {
@@ -847,6 +1048,10 @@ if useOverlay {
     }
     renderer.onStatusRefresh = { [weak menu] in menu?.updateHealthIndicator() }
     statusMenu = menu
+
+    // Restore a saved target now rather than at load time: the controller needs
+    // the overlay and the menu, both of which exist only here.
+    if let target = translateTo { applyTranslation(target) }
 
     // ⌥⌘S. Carbon, so it needs no Accessibility permission — see Hotkey.swift.
     hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }

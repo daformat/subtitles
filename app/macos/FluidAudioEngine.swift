@@ -329,6 +329,10 @@ actor FluidAudioEngine {
     /// Rolling real-time factor. The core can no longer measure this — it does not
     /// transcribe — so the health signal has to come from here.
     private let onRTF: @Sendable (Float) -> Void
+    /// The language the multilingual checkpoint says it is hearing, as a
+    /// FLEURS-style code (`fr-FR`). Fires only when it changes, and only for that
+    /// variant — the rest are pinned to one language by construction.
+    private let onLanguage: @Sendable (String) -> Void
 
     private var processedSeconds = 0.0
     private var computeSeconds = 0.0
@@ -337,6 +341,10 @@ actor FluidAudioEngine {
     /// Counts frames discarded because the engine was not loaded yet, so the
     /// "nothing is happening" case is observable instead of silent.
     private var droppedWhileLoading = 0
+
+    /// Last value reported through `onLanguage`, so an unchanged detection does
+    /// not re-fire. The model surfaces its language tag on nearly every decode.
+    private var reportedLanguage: String?
 
     /// Bound on queued audio, mirroring the core's ring backlog rule: falling
     /// behind should cost a few dropped words once, not permanent latency.
@@ -349,6 +357,7 @@ actor FluidAudioEngine {
          onProgress: @escaping @Sendable (Double, String) -> Void = { _, _ in },
          onFinal: @escaping @Sendable ([TimedWord]) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
+         onLanguage: @escaping @Sendable (String) -> Void = { _ in },
          onRTF: @escaping @Sendable (Float) -> Void,
          speakers: SpeakerTracker? = nil,
          vad: VoiceDetector? = nil) {
@@ -360,6 +369,7 @@ actor FluidAudioEngine {
         self.onFinal = onFinal
         self.onReady = onReady
         self.onRTF = onRTF
+        self.onLanguage = onLanguage
         self.speakers = speakers
         self.vad = vad
     }
@@ -454,6 +464,13 @@ actor FluidAudioEngine {
     /// cold cache, since the models come from HuggingFace.
     func load() async {
         guard !loaded else { return }
+        // A download interrupted partway leaves bundles CoreML will not open, and
+        // nothing retries them: the load throws on every launch from then on. Clear
+        // the broken ones first so the downloader treats them as missing.
+        let repaired = ModelCache.repair(repo: variant.repo) + ModelCache.repair(repo: .vad)
+        if !repaired.isEmpty {
+            onStatus("Repairing \(variant.displayName) — refetching \(repaired.count) incomplete model(s)")
+        }
         onStatus("Loading \(variant.displayName)…")
         do {
             let progress = makeProgressHandler()
@@ -624,6 +641,16 @@ actor FluidAudioEngine {
             let words = await currentWords()
             if !words.isEmpty { onWords(words) }
 
+            // The multilingual checkpoint emits a leading `<xx-XX>` tag and
+            // FluidAudio surfaces it during the streaming decode, not only at the
+            // final pass — so on auto-detect this is known within a word or two of
+            // speech, which is early enough to point a translator at.
+            if let multilingual, let detected = await multilingual.detectedLanguage(),
+               detected != reportedLanguage {
+                reportedLanguage = detected
+                onLanguage(detected)
+            }
+
             if let speakers { await speakers.feed(slice) }
 
             computeSeconds += Date().timeIntervalSince(started)
@@ -734,6 +761,7 @@ actor FluidAudioEngine {
                 await nemotron.reset()
             } else if let multilingual {
                 await multilingual.reset()
+                reportedLanguage = nil
             }
         } catch {
             onStatus("reset failed: \(error.localizedDescription)")

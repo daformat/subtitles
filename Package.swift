@@ -38,6 +38,11 @@ let package = Package(
                 .linkedFramework("CoreML"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("Carbon"),
+                // Weak, not linked: Translation.framework does not exist on the
+                // 14.2 floor this app still targets. A hard link would refuse to
+                // launch there; weak leaves the symbols null and the
+                // `@available(macOS 15, *)` code simply never runs.
+                .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Translation"]),
             ]),
     ]
 )

@@ -337,6 +337,21 @@ final class OverlayController {
     private var lastTextAt = Date.distantPast
     private var lastShownText = ""
     private let textIdleTimeout: TimeInterval = 4
+
+    /// When the page currently on screen was opened.
+    ///
+    /// Gates the clause carried across a page break. Carrying exists for a box
+    /// that turns over before it can be read; a box that has been up as long as
+    /// the idle fade would have allowed has already given the reader that time,
+    /// and repeating its last clause then only spends room in the new box on text
+    /// they are done with.
+    private var pageShownAt = Date.distantPast
+
+    /// Whether the page about to close turned over quickly enough to be worth
+    /// carrying a clause from.
+    private var allowsCarry: Bool {
+        Date().timeIntervalSince(pageShownAt) < textIdleTimeout
+    }
     private var isDraggable = false
 
     /// How solid the box behind the text is, 0…1. The ⌥ stack follows it, a step
@@ -356,6 +371,46 @@ final class OverlayController {
     var revealSize: NSSize {
         get { view.maskSize }
         set { view.maskSize = newValue }
+    }
+
+    /// The untranslated transcript, kept even while the translated one is on
+    /// screen, so ⌃ can show the original without waiting for new speech.
+    private var sourceWords: [TimedWord] = []
+    /// The translated rendering, when there is one: words, the dimmed tail, and
+    /// the chunk boundaries paging carries across a break.
+    private var translatedWords: ([TimedWord], String, [TimeInterval])?
+    /// Set while a translation target is chosen. Without it a stale translation
+    /// would keep being drawn after translation was switched off.
+    var prefersTranslation = false {
+        didSet {
+            guard prefersTranslation != oldValue else { return }
+            if !prefersTranslation { translatedWords = nil }
+            redraw()
+        }
+    }
+    /// ⌃ held: show the original language for as long as it is down.
+    ///
+    /// Polled with ⇧ rather than watched with an event monitor, for the reason in
+    /// the file header: a keyboard monitor would demand Accessibility permission,
+    /// and a second scary prompt to peek at a caption is a bad trade.
+    private var showsSource = false
+
+    /// Whether the overlay is captured by screen recording and sharing.
+    ///
+    /// `sharingType = .none` asks the window server to leave the window out of
+    /// what any other process can read, which is how password managers keep
+    /// themselves out of screenshots. It applies to the capture itself rather than
+    /// to any one app, so it covers Zoom, QuickTime and Screenshot alike without
+    /// naming any of them — and it is not a promise about a camera pointed at the
+    /// screen.
+    ///
+    /// On by default. Subtitles you cannot share are the surprising choice, and a
+    /// setting that hides things should be one the user reached for.
+    var isVisibleInScreenShare = true {
+        didSet {
+            panel.sharingType = isVisibleInScreenShare ? .readOnly : .none
+            history.isVisibleInScreenShare = isVisibleInScreenShare
+        }
     }
 
     /// Whether pointing at the box fades it away. On by default; the menu turns it
@@ -393,7 +448,107 @@ final class OverlayController {
     // Recorded at every point a page closes rather than sampled, because by the
     // time a page is gone from `page` there is nothing left to read it from.
     private let history = HistoryController()
-    private var pastPages: [String] = []
+    /// Pages a stream exactly as the live box does, without drawing it.
+    ///
+    /// Both languages need real page memory, not one reconstructed from the other:
+    /// deriving the original from the span a translated page covered is right only
+    /// where the break happened to fall on a chunk boundary, and wrong by a word
+    /// or two everywhere else. Worse, a span with nothing in it has to fall back
+    /// to the text it was derived from, which puts a translated box in the middle
+    /// of a stack that is meant to be the original.
+    ///
+    /// So each stream keeps its own. The hidden one is paged too, using the same
+    /// fitting rule, so ⌃ finds a stack that was built rather than inferred.
+    private struct StreamPager {
+        private(set) var closed: [String] = []
+        private var anchor: TimeInterval = 0
+        private var latest: TimeInterval = 0
+        private var currentWords: [TimedWord] = []
+        private var freshNext = false
+        /// Where the last closed page actually ended.
+        ///
+        /// Pages overlap on purpose when translating: a page restarts at the last
+        /// clause it showed, so that clause opens the next box and stays readable
+        /// across the break. In the stack that repetition is only noise, since the
+        /// box above still ends with it, so history keeps just what each page
+        /// added past this point.
+        private var previousEnd: TimeInterval = -.greatestFiniteMagnitude
+
+        /// The next words start a page of their own: a pause, or an endpoint.
+        mutating func markFresh() { freshNext = true }
+
+        mutating func clear() {
+            closed.removeAll()
+            anchor = 0
+            latest = 0
+            currentWords = []
+            freshNext = false
+            previousEnd = -.greatestFiniteMagnitude
+        }
+
+        mutating func trim(to depth: Int) {
+            guard closed.count > depth else { return }
+            closed.removeFirst(closed.count - depth)
+        }
+
+        /// `fits` is the caller's measurement: how many of these words fit a box.
+        mutating func ingest(_ words: [TimedWord], chunkStarts: [TimeInterval],
+                             depth: Int, allowCarry: Bool, fits: ([String]) -> Int) {
+            guard let newest = words.last else { return }
+            // A transcript that has gone backwards is a restarted one.
+            if newest.end < latest {
+                anchor = 0
+                latest = 0
+            }
+            if freshNext {
+                freshNext = false
+                append(currentWords, depth: depth)
+                anchor = latest
+                previousEnd = latest
+            }
+            latest = max(latest, newest.end)
+
+            var visible = words.filter { $0.start >= anchor }
+            guard !visible.isEmpty else { return }
+            while true {
+                let fitted = fits(visible.map(\.text))
+                if fitted >= visible.count { break }
+                if fitted <= 0 { break }
+                let spilled = visible[fitted].start
+                let leading = visible[0].start
+                let carried = allowCarry ? chunkStarts.last { $0 > leading && $0 < spilled } : nil
+                // Where the next box starts. History keeps only what will not
+                // reappear there, so the stack runs continuously into the live box
+                // instead of repeating the clause it carried over.
+                let nextAnchor = carried ?? spilled
+                append(visible.filter { $0.start < nextAnchor }, depth: depth)
+                previousEnd = nextAnchor
+                anchor = nextAnchor
+                visible = visible.filter { $0.start >= anchor }
+            }
+            currentWords = visible
+        }
+
+        /// Store only what this page added, so a carried clause is not repeated in
+        /// the box below the one that already ends with it.
+        private mutating func append(_ words: [TimedWord], depth: Int) {
+            guard depth > 0 else { return }
+            let fresh = words.filter { $0.start >= previousEnd }
+            let text = fresh.map(\.text).joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, text != closed.last else { return }
+            closed.append(text)
+            trim(to: depth)
+        }
+    }
+
+    private var sourcePager = StreamPager()
+    private var translatedPager = StreamPager()
+
+    /// The stack for whichever language is on screen.
+    private var pastPages: [String] {
+        showsSource || !prefersTranslation ? sourcePager.closed : translatedPager.closed
+    }
 
     /// How many closed pages ⌥ can reach back through. Adjustable in Settings;
     /// lowering it drops the oldest immediately rather than waiting for the
@@ -402,8 +557,9 @@ final class OverlayController {
     /// having ever meant anything.
     var historyDepth = OverlayController.defaultHistoryDepth {
         didSet {
-            guard historyDepth != oldValue, pastPages.count > historyDepth else { return }
-            pastPages.removeFirst(pastPages.count - historyDepth)
+            guard historyDepth != oldValue else { return }
+            sourcePager.trim(to: historyDepth)
+            translatedPager.trim(to: historyDepth)
         }
     }
 
@@ -526,6 +682,15 @@ final class OverlayController {
             // Not while paused: the panel is invisible then, and making an
             // invisible panel grabbable just means it swallows clicks meant for
             // whatever is underneath.
+            // ⌃ peeks at the original language. Checked before the drag branch
+            // because it changes what is drawn, not how the panel behaves, and the
+            // two are independent: peeking while dragging is fine.
+            let wantsSource = NSEvent.modifierFlags.contains(.control)
+            if wantsSource != self.showsSource {
+                self.showsSource = wantsSource
+                self.redraw()
+            }
+
             let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
@@ -578,13 +743,16 @@ final class OverlayController {
             return
         }
 
-        if history.shown != pastPages {
+        // The stack follows the live box: peeking at the original with ⌃ and
+        // leaving the boxes above it translated would be the worst of both.
+        let entries = pastPages
+        if history.shown != entries {
             let style = HistoryStyle(
                 fontSize: view.fontSize,
                 maxLines: view.maxLines,
                 fill: view.backgroundOpacity * HistoryPillView.recession,
                 textOpacity: historyTextOpacity)
-            history.present(entries: pastPages, style: style,
+            history.present(entries: entries, style: style,
                             anchor: panel.frame, maxWidth: maxWidth)
         } else {
             // The live box resizes on every word; the stack rides along with it.
@@ -652,7 +820,6 @@ final class OverlayController {
            view.lineCount(committed: grown, tentative: text, width: maxWidth) > view.maxLines {
             // Would overflow: clear and restart from the words that caused it, so
             // nothing is lost and nothing scrolls.
-            closePage(grown)
             page = trimLeadingSpace(pendingCommit)
         } else {
             page = grown
@@ -669,9 +836,93 @@ final class OverlayController {
     ///
     /// Fills to `maxLines`, then clears and restarts from the first word that did
     /// not fit — the same behaviour as broadcast subtitles, which never scroll.
-    func showWords(_ words: [TimedWord]) {
+    /// `speculative` is an unfinished tail rendered in the dimmed style — text the
+    /// app expects to replace. Live translation is the first thing to use it: the
+    /// sentence being spoken is translated before it is finished, so it is shown
+    /// as provisional until the settled version arrives. Empty for transcription,
+    /// where the recogniser barely revises at all.
+    /// The transcript as spoken. Always stored, drawn when there is no translation
+    /// to show or while ⌃ is held.
+    func setSourceWords(_ words: [TimedWord]) {
+        sourceWords = words
+        page(&sourcePager, words, chunkStarts: [])
+        guard !prefersTranslation || showsSource || translatedWords == nil else { return }
+        showWords(words)
+    }
+
+    /// The transcript translated. Stored and drawn unless ⌃ is asking for the
+    /// original.
+    func setTranslatedWords(_ words: [TimedWord], speculative: String,
+                            chunkStarts: [TimeInterval]) {
+        translatedWords = (words, speculative, chunkStarts)
+        page(&translatedPager, words, chunkStarts: chunkStarts)
+        guard !showsSource else { return }
+        showWords(words, speculative: speculative, chunkStarts: chunkStarts)
+    }
+
+    /// Run a stream through its own pager, measuring with the live box's geometry
+    /// so the hidden stack breaks where it would have if it were on screen.
+    private func page(_ pager: inout StreamPager, _ words: [TimedWord],
+                      chunkStarts: [TimeInterval]) {
+        pager.ingest(words, chunkStarts: chunkStarts, depth: historyDepth,
+                     allowCarry: allowsCarry) { texts in
+            longestFittingPrefix(texts, from: 0)
+        }
+    }
+
+    /// Draw whichever rendering is currently wanted, from what is already held.
+    ///
+    /// Paging is anchored on audio time and the two renderings do not share one,
+    /// so the anchor is dropped and the page refilled from the start of what is
+    /// available. The overflow loop then lands on the tail, which is what was on
+    /// screen a moment ago.
+    private func redraw() {
+        pageStartTime = 0
+        latestWordEnd = 0
+        lastShownText = ""
+        // Only the live box is redrawn. The stacks are built by the pagers as
+        // words arrive, so a ⌃ toggle picks a different one rather than rebuilding
+        // it, and repainting cannot duplicate anything.
+        defer { updateHistory() }
+        if showsSource || !prefersTranslation || translatedWords == nil {
+            guard !sourceWords.isEmpty else { return }
+            showWords(sourceWords)
+        } else if let (words, speculative, chunks) = translatedWords {
+            showWords(words, speculative: speculative, chunkStarts: chunks)
+        }
+    }
+
+    /// `chunkStarts` are the audio times settled units begin at, when the caller
+    /// has such units. Live translation does: it settles a clause at a time. Given
+    /// them, a page that overflows restarts at the last chunk boundary it showed
+    /// rather than at the word that spilled, so the final clause of the old box
+    /// opens the new one and stays readable across the break. Empty for
+    /// transcription, which pages as it always has.
+    func showWords(_ words: [TimedWord], speculative: String = "",
+                   chunkStarts: [TimeInterval] = []) {
         guard !isSuppressed else { return }
-        guard let newest = words.last else { return }
+        guard let newest = words.last else {
+            // A speculative tail can exist before anything has settled — the first
+            // seconds of live translation are nothing but tail.
+            //
+            // This does the same bookkeeping as the settled path below rather than
+            // handing off to `setTentative`, because `lastTextAt` is what holds the
+            // idle poll off. Routing through `setTentative`, which never sets it,
+            // meant the box faded every 0.5 s while updates kept calling `show()`
+            // to bring it back: one blink per word.
+            guard !speculative.isEmpty else { return }
+            lastTextAt = Date()
+            guard speculative != tentative || !page.isEmpty else { return }
+            page = ""
+            pendingCommit = ""
+            tentative = speculative
+            lastShownText = ""
+            view.committed = ""
+            view.tentative = speculative
+            layout()
+            show()
+            return
+        }
 
         // Time running backwards means the engine restarted its transcript
         // (finish/reset), so the old anchor refers to audio that no longer exists.
@@ -692,8 +943,8 @@ final class OverlayController {
             // Everything already spoken belongs to the page just closed; the new
             // one begins with whatever comes after it. Anchoring on *time* is what
             // stops words arriving in this same update from being skipped.
-            closePage(page)
             pageStartTime = latestWordEnd
+            pageShownAt = Date()
         }
         latestWordEnd = max(latestWordEnd, newest.end)
 
@@ -706,14 +957,31 @@ final class OverlayController {
         }
         guard !visible.isEmpty else { return }
 
-        // Advance the page while the visible text overflows.
+        // Advance the page while the visible text overflows. The speculative tail
+        // takes part in the measurement — it is on screen, so a page sized without
+        // it overflows the moment the tail is drawn.
         while true {
-            let fitted = longestFittingPrefix(visible.map(\.text), from: 0)
+            let fitted = longestFittingPrefix(visible.map(\.text), from: 0,
+                                              tentative: speculative)
             if fitted >= visible.count { break }   // it all fits
             if fitted <= 0 { break }               // one word wider than the box
-            closePage(visible[..<fitted].map(\.text).joined(separator: " "))
-            pageStartTime = visible[fitted].start  // new page starts where it spilled
-            visible = Array(visible[fitted...])
+
+            let spilled = visible[fitted].start
+            // Back up to the last chunk boundary on the closing page, so that
+            // clause reappears at the top of the new one and stays readable across
+            // the break.
+            //
+            // Bounded strictly by the *first visible word*, not by `pageStartTime`:
+            // a boundary at or before the leading word filters nothing out, so the
+            // next pass would compute the same spill and the same carry and never
+            // terminate. Anchoring past it guarantees at least one word leaves, and
+            // with a single chunk filling the box there is nothing to carry and the
+            // spill is used unchanged.
+            let leading = visible[0].start
+            let carried = allowsCarry ? chunkStarts.last { $0 > leading && $0 < spilled } : nil
+            pageStartTime = carried ?? spilled
+            pageShownAt = Date()
+            visible = visible.filter { $0.start >= pageStartTime }
         }
 
         let text = visible.map(\.text).joined(separator: " ")
@@ -728,25 +996,30 @@ final class OverlayController {
         // Worse, `show()` interrupting the fade meant its completion handler kept
         // seeing a non-zero alpha and never cleared the page, so the next speaker
         // appended to text that should long since have gone.
-        guard text != lastShownText else { return }
+        // The tail is part of what is on screen, so an unchanged transcript with a
+        // changed tail is still new information. Comparing only `text` here left
+        // the live translation frozen on its first guess.
+        guard text != lastShownText || speculative != tentative else { return }
         lastShownText = text
         lastTextAt = Date()
 
         page = text
         pendingCommit = ""
-        tentative = ""
+        tentative = speculative
         view.committed = page
-        view.tentative = ""
+        view.tentative = speculative
         layout()
         show()
     }
 
     /// Index one past the last word that still fits within `maxLines`.
-    private func longestFittingPrefix(_ words: [String], from start: Int) -> Int {
+    private func longestFittingPrefix(_ words: [String], from start: Int,
+                                      tentative: String = "") -> Int {
         var end = start
         while end < words.count {
             let candidate = words[start...end].joined(separator: " ")
-            if view.lineCount(committed: candidate, tentative: "", width: maxWidth) > view.maxLines {
+            if view.lineCount(committed: candidate, tentative: tentative,
+                              width: maxWidth) > view.maxLines {
                 return end
             }
             end += 1
@@ -763,6 +1036,7 @@ final class OverlayController {
     func markPause() {
         if !pendingCommit.isEmpty { setTentative("") }
         startFreshOnNextText = true
+        markPagersFresh()
     }
 
     /// Utterance finished: keep it on screen briefly, then fade. The next words
@@ -776,6 +1050,7 @@ final class OverlayController {
             setTentative("")
         }
         startFreshOnNextText = true
+        markPagersFresh()
     }
 
     /// A page just left the screen. Keep it for ⌥.
@@ -783,14 +1058,10 @@ final class OverlayController {
     /// Deduplicated against the last entry: a page can close by more than one
     /// route in the same beat — an overflow immediately after a pause, say — and
     /// two identical boxes in the stack read as a stutter, not as history.
-    private func closePage(_ text: String) {
-        guard historyDepth > 0 else { return }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != pastPages.last else { return }
-        pastPages.append(trimmed)
-        if pastPages.count > historyDepth {
-            pastPages.removeFirst(pastPages.count - historyDepth)
-        }
+    /// The next words begin a page of their own, in both languages.
+    private func markPagersFresh() {
+        sourcePager.markFresh()
+        translatedPager.markFresh()
     }
 
     private func trimLeadingSpace(_ s: String) -> String {
@@ -889,7 +1160,8 @@ final class OverlayController {
         // is the one moment this must not fire.
         guard history.shown.isEmpty else { return }
         guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
-        pastPages.removeAll()
+        sourcePager.clear()
+        translatedPager.clear()
     }
 
     private func fadeIfTextIdle() {
@@ -909,7 +1181,7 @@ final class OverlayController {
             // clean one instead of resuming a paragraph nobody can still see —
             // but keep it for ⌥ first. Fading is precisely when someone looks
             // away and wants it back.
-            self.closePage(self.page)
+            self.markPagersFresh()
             self.page = ""
             self.pendingCommit = ""
             self.tentative = ""
@@ -951,7 +1223,7 @@ final class OverlayController {
             // box already on screen would simply be clipped.
             if !page.isEmpty,
                view.lineCount(committed: page, tentative: "", width: maxWidth) > view.maxLines {
-                closePage(page)
+                markPagersFresh()
                 page = ""
                 view.committed = ""
                 startFreshOnNextText = true
@@ -966,7 +1238,7 @@ final class OverlayController {
         // at 52pt, and without this the box would simply clip.
         if !page.isEmpty,
            view.lineCount(committed: page, tentative: "", width: maxWidth) > view.maxLines {
-            closePage(page)
+            markPagersFresh()
             page = ""
             view.committed = ""
             startFreshOnNextText = true
@@ -997,7 +1269,8 @@ final class OverlayController {
         // The history goes with it. It survives the idle fade on purpose, but a
         // pause or a model switch is the user saying this transcript is over, and
         // ⌥ offering the last thing a since-replaced model heard is a puzzle.
-        pastPages.removeAll()
+        sourcePager.clear()
+        translatedPager.clear()
         history.dismiss()
         lastShownText = ""
         lastTextAt = .distantPast
