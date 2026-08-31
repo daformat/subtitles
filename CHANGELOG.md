@@ -4,6 +4,59 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.0 · 2026-08-31
+
+**Live translation, on device.** Captions can now be translated as they are spoken,
+into any of the sixteen languages the picker already offers. It runs through Apple's
+Translation framework, so nothing leaves the machine and the app keeps the property
+it was built around.
+
+- Every ordered pair works, not just the ones involving English. That is what ruled
+  out doing this in the recogniser: NVIDIA's canary checkpoint translates speech
+  directly, but only to or from English, and half this app's languages are not in its
+  set at all. Apple's covers all 240 pairs of the sixteen.
+- Two timings, because the interesting cost is not compute. Translating a sentence
+  takes 40 to 125 ms here, so the only real question is what to show while a sentence
+  is still being spoken. *Live, Then Settle* translates the last second of speech on
+  every update and dims it until it settles. *Always Live* retranslates everything
+  each update: no lag, and anything on screen may still change.
+- Whole clauses are translated, never the box. The overlay breaks pages wherever the
+  text happens to overflow, which is routinely mid-sentence, and a fragment translated
+  alone loses the case, the gender agreement, or the verb it had not reached yet.
+  Translation units and display units are now separate things.
+- Boxes overlap by a clause when translating. A page that fills up restarts at the
+  last clause it showed rather than at the word that spilled, so there is something
+  to re-anchor on when the box turns over instead of a hard cut. Only from a box
+  that turned over quickly: one that sat there long enough to be read already gave
+  you that time.
+- On auto-detect the source language comes from the recogniser's own language tag
+  rather than from asking the translator to guess per sentence. It is known within a
+  word or two of speech.
+- Hold `⌃` to see the original language, live box and `⌥` stack together, for as
+  long as the key is down. Translation carries on underneath, so letting go shows
+  current text rather than a snapshot. Each language keeps its own page memory, so
+  the stack never mixes the two, and a stacked box holds only what it added rather
+  than repeating the clause carried into the box below it.
+- Translation needs macOS 15. The rest of the app still runs on 14.2, where the menu
+  simply does not appear.
+
+**A ghost mode for screen sharing.** "Show Overlay In Screen Share / Capture", on by
+default, and unchecking it takes the overlay out of anything capturing through macOS:
+calls, recordings, screenshots alike. The `⌥` history stack goes with it. It is not
+a promise against a camera pointed at the screen.
+
+**Interrupted model downloads repair themselves.** A download that stopped partway
+left a compiled bundle that CoreML refuses, and nothing ever retried it: the model
+failed to load on every launch from then on, with no transcript and nothing on screen
+to say why. Those bundles are now detected and refetched, and only the broken ones, so
+a variant whose encoder alone is truncated costs one encoder rather than 600 MB.
+
+- A recogniser that cannot load says so in the menu, in red, instead of leaving
+  "listening" or "no audio" on screen. Both were wrong, and both pointed away from the
+  cause.
+- `--list-models` reports incomplete bundles too, which is the one way to ask what is
+  on disk without starting anything.
+
 ## 1.2.0 · 2026-08-30
 
 **Sixteen languages in the picker, up from eight.** The multilingual checkpoint is
