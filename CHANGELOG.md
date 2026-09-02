@@ -4,6 +4,62 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.1 · 2026-09-02
+
+Fixes for the translation overlay shipped in 1.3.0, and a test suite for the
+paging logic underneath it.
+
+- Holding `⌃` no longer brings back a caption that had already faded. The stored
+  transcripts outlive the box on purpose, since that is what makes the language
+  swap instant, but a repaint is not new speech and should not put an old caption
+  back on screen.
+- Toggling `⌃` repeatedly no longer eats the transcript. Each repaint re-paged
+  from the top and consumed carry state as it went, so every toggle broke the
+  pages somewhere new and left the box further along than it found it. The
+  anchor is now kept across a swap, which is both correct and idempotent.
+- The `⌥` stack shows up when the audio is already in the target language.
+  Translating a language into itself is refused outright by the framework, so
+  the box falls back to the original; the stack was still pointed at the empty
+  translated stack and showed nothing at all.
+- The stack expires again after its grace period. The same oversight left the
+  check looking at whichever stack was visible, so with a target chosen it could
+  sit on an empty one and never clear the other.
+- Boxes reach the stack when they leave the screen, not a clause later, and no
+  longer repeat words the box below already shows. The box and the stack are the
+  same boxes seen at different moments, and each used to decide where the pages
+  fell for itself; they agreed until something moved one of them, and holding `⌃`
+  moved exactly one. There is one page break now, and both read it.
+- Switching translation on or off clears the box, rather than leaving half a
+  sentence in the language you just left until new words push it out, and turning
+  it on no longer flashes a line of the original before the first translation
+  lands.
+- The box fills with the words still being spoken and turns over when it is full.
+  The unsettled tail used to take room without being paged, so it pushed out
+  clauses you had not finished reading and replaced itself instead of filling the
+  box.
+- The overlay never sits blank waiting on a translation that is not coming. It
+  shows the original instead, immediately when translation is known to be idle,
+  and after a few seconds otherwise.
+- The stack holds still. It followed the live box's frame, which rounds its
+  origin and hugs its text, so its midpoint moved by a point as the width changed
+  parity and the stack stepped sideways on every word. It now hangs off what the
+  box is anchored to.
+- Swapping the stack's language with `⌃` redraws it in place. Every box changes
+  text at once, so the usual rule of animating only what is new staged the whole
+  stack in again on a keypress. Opening and closing still animate.
+- A clause is carried into the next box and no further, and never out of a box
+  that has already faded.
+- A stored setting that makes no sense no longer breaks the overlay. A negative
+  history depth used to ask the stack to drop more boxes than it holds, which
+  crashes, and a box allowed zero lines could never fit a word so it never paged
+  and simply clipped. Both are clamped where they are read.
+- `swift test` covers the caption pipeline: 75 cases, most of them a bug that
+  shipped. Paging is covered from both ends, the box and the `⌥` stack; the model
+  cache's deletion is tested against a temporary directory, since it is the only
+  code here that removes anything and it removes gigabytes; and the language table
+  is pinned, including the count the model menu writes out and the six languages
+  the pruned vocabulary pack actually covers.
+
 ## 1.3.0 · 2026-08-31
 
 **Live translation, on device.** Captions can now be translated as they are spoken,
