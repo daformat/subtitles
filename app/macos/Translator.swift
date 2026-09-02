@@ -26,6 +26,7 @@
 // Work reaches it through the channel; the session never escapes.
 
 import AppKit
+import CaptionCore
 import SwiftUI
 import Translation
 
@@ -312,22 +313,6 @@ final class Translator {
     }
 }
 
-extension FluidLanguage {
-    /// The framework keys on ISO 639-1, which is exactly this enum's raw value —
-    /// not the FLEURS-style `code` the recogniser's prompt dictionary wants.
-    var locale: Locale.Language { Locale.Language(identifier: rawValue) }
-
-    /// Match what the multilingual checkpoint reports it is hearing — a
-    /// FLEURS-style `fr-FR`, which is this enum's `code`, not its raw value.
-    /// Falls back to the bare language subtag so a locale we do not list
-    /// (`en-GB` against our `en-US`) still resolves.
-    static func matching(code: String) -> FluidLanguage? {
-        if let exact = allCases.first(where: { $0.code == code }) { return exact }
-        let base = code.split(separator: "-").first.map(String.init) ?? code
-        return allCases.first { $0 != .auto && $0.rawValue == base }
-    }
-}
-
 /// Everything the app needs to hold on to for live translation, in one object so
 /// `main.swift` carries a single optional rather than a translator, a pipeline
 /// and a language.
@@ -361,7 +346,7 @@ final class TranslationController {
          source: Locale.Language?,
          trustedSource: Bool = false,
          mode: TranslationMode,
-         onTranslated: @escaping ([TimedWord], String, [TimeInterval]) -> Void,
+         onTranslated: @escaping ([TimedWord], TimeInterval, [TimeInterval]) -> Void,
          onStatus: @escaping (String) -> Void,
          onProgress: @escaping (Double, String) -> Void) {
         self.target = target

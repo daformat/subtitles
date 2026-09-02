@@ -14,6 +14,7 @@
 // that is exactly what must not happen while a model is loaded from it.
 
 import AppKit
+import CaptionCore
 import FluidAudio
 
 enum ModelCache {
@@ -89,66 +90,25 @@ enum ModelCache {
     /// unrecoverable.
     @discardableResult
     static func remove(_ entries: [Entry]) -> [String] {
-        let fm = FileManager.default
-        let root = directory.standardizedFileURL.path
+        let root = directory
         var failed: [String] = []
         for entry in entries {
-            let path = entry.url.standardizedFileURL.path
-            guard path.hasPrefix(root + "/"), path != root else {
+            // The containment check and the deletion both live in ModelStore, so
+            // the one guard that actually matters is written once, in one place,
+            // and can be tested against a directory that is not the real one.
+            guard ModelStore.remove([entry.url], root: root).count == 1 else {
                 failed.append(entry.name)
                 continue
             }
-            do {
-                try fm.removeItem(at: entry.url)
-                pruneEmptyParents(of: entry.url)
-            } catch {
-                failed.append(entry.name)
-            }
+            ModelStore.pruneEmptyParents(of: entry.url, root: root)
         }
         return failed
     }
 
-    /// Repos nested a level down — `nemotron-streaming/560ms` — leave an empty
-    /// parent behind once the last tier goes. Removed only while genuinely empty,
-    /// and never above the models directory itself.
-    private static func pruneEmptyParents(of url: URL) {
-        let fm = FileManager.default
-        let root = directory.standardizedFileURL.path
-        var parent = url.deletingLastPathComponent().standardizedFileURL
-        while parent.path.hasPrefix(root + "/") {
-            let contents = try? fm.contentsOfDirectory(atPath: parent.path)
-            guard let contents, contents.isEmpty else { return }
-            try? fm.removeItem(at: parent)
-            parent = parent.deletingLastPathComponent().standardizedFileURL
-        }
-    }
 
-    // MARK: repair
-
-    /// Files CoreML needs inside a compiled bundle before it will load one.
-    ///
-    /// Confirmed against every healthy bundle on disk — recogniser, diarizer and
-    /// VAD alike all carry `analytics`, `coremldata.bin`, `model.mil`, `weights`.
-    /// An interrupted download leaves the two large directories behind and the two
-    /// small files missing, which is exactly what a half-finished fetch looks like
-    /// and precisely what CoreML refuses.
-    private static let requiredInBundle = ["coremldata.bin", "model.mil"]
-
-    /// Compiled bundles under `root` that cannot load, because a download did not
-    /// finish. Recursive: encoders sit a level down (`encoder/encoder_int8.mlmodelc`)
-    /// and the multilingual pack nests a folder per language.
+    /// Compiled bundles under `root` that a download left unloadable.
     static func incompleteBundles(under root: URL) -> [URL] {
-        let fm = FileManager.default
-        guard let walk = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey])
-        else { return [] }
-        var out: [URL] = []
-        for case let url as URL in walk where url.pathExtension == "mlmodelc" {
-            let missing = requiredInBundle.contains {
-                !fm.fileExists(atPath: url.appendingPathComponent($0).path)
-            }
-            if missing { out.append(url) }
-        }
-        return out
+        ModelStore.incompleteBundles(under: root)
     }
 
     /// Delete the unloadable bundles in `repo` so the downloader fetches them
@@ -168,17 +128,8 @@ enum ModelCache {
         guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
               isDirectory.boolValue else { return [] }
 
-        let base = directory.standardizedFileURL.path
-        var removed: [String] = []
-        for bundle in incompleteBundles(under: root) {
-            // Same guard the deliberate deletions use: nothing outside the models
-            // directory is ever passed to removeItem.
-            let path = bundle.standardizedFileURL.path
-            guard path.hasPrefix(base + "/") else { continue }
-            guard (try? FileManager.default.removeItem(at: bundle)) != nil else { continue }
-            removed.append(bundle.lastPathComponent)
-        }
-        return removed
+        return ModelStore.remove(ModelStore.incompleteBundles(under: root),
+                                 root: directory).map(\.lastPathComponent)
     }
 
     static func format(_ bytes: Int64) -> String {

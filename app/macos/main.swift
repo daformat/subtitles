@@ -12,6 +12,7 @@
 // delivers all-zero audio with no error anywhere — PLAN.md §8b.
 
 import AppKit
+import CaptionCore
 import CSubs
 import Carbon.HIToolbox
 import Darwin
@@ -295,15 +296,22 @@ final class Renderer {
         // The overlay is handed the spoken transcript unconditionally, whether or
         // not it is what gets drawn: ⌃ shows the original, and it has to be there
         // the moment the key goes down rather than at the next word.
-        overlay?.setSourceWords(words)
         var translated = false
         if #available(macOS 15, *), let t = translation {
             translated = MainActor.assumeIsolated {
+                // The overlay needs to know whether to expect translated words at
+                // all: not ready means a pack still downloading, or audio already
+                // in the target language, and in both cases the original is what
+                // should be on screen.
+                overlay?.translationProducesOutput = t.isReady
                 guard t.isReady else { return false }
                 t.ingest(words)
                 return true
             }
+        } else {
+            overlay?.translationProducesOutput = false
         }
+        overlay?.setSourceWords(words)
         if #available(macOS 15, *) {
             TranslationPipeline.trace("setWords \(words.count) routed=\(translated ? "pipeline" : "overlay")")
         }
@@ -702,8 +710,8 @@ func applyTranslation(_ target: FluidLanguage?) {
             source: effectiveSource,
             trustedSource: effectiveSourceIsTrusted,
             mode: translationMode,
-            onTranslated: { words, speculative, chunkStarts in
-                renderer.overlay?.setTranslatedWords(words, speculative: speculative,
+            onTranslated: { words, speculativeFrom, chunkStarts in
+                renderer.overlay?.setTranslatedWords(words, speculativeFrom: speculativeFrom,
                                                      chunkStarts: chunkStarts)
             },
             onStatus: { message in err(message) },
@@ -834,10 +842,17 @@ if useOverlay {
             ?? Double(defaultSize.width),
         height: UserDefaults.standard.object(forKey: Defaults.revealHeight) as? Double
             ?? Double(defaultSize.height))
-    controller.historyDepth = UserDefaults.standard.object(forKey: Defaults.historyDepth) as? Int
-        ?? OverlayController.defaultHistoryDepth
-    controller.maxLines = UserDefaults.standard.object(forKey: Defaults.maxLines) as? Int
-        ?? SubtitleView.defaultMaxLines
+    // Clamped on the way in, like the expiry below it. These arrive as bare
+    // `as? Int` from a plist anyone can edit, and neither has a sane reading
+    // below its floor: a depth under zero asks the stack to drop more boxes than
+    // it holds, and a box allowed zero lines can never fit a word, so it never
+    // pages and simply clips whatever it is given.
+    controller.historyDepth = max(
+        UserDefaults.standard.object(forKey: Defaults.historyDepth) as? Int
+            ?? OverlayController.defaultHistoryDepth, 0)
+    controller.maxLines = max(
+        UserDefaults.standard.object(forKey: Defaults.maxLines) as? Int
+            ?? SubtitleView.defaultMaxLines, 1)
     controller.historyExpiry = (UserDefaults.standard.object(forKey: Defaults.historyExpiry)
         as? Double).map { max($0, 0) } ?? OverlayController.defaultHistoryExpiry
     controller.isHistoryExpiryEnabled =

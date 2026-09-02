@@ -9,6 +9,7 @@
 // after you cache it.
 
 import AppKit
+import CaptionCore
 
 /// How loudly the status line is speaking.
 ///

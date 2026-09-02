@@ -244,8 +244,18 @@ final class HistoryController {
     /// Boxes already on screen keep their position and stay put; anything new
     /// animates in. That is what makes this safe to call from the poll whenever
     /// the transcript pages while ⌥ is still held.
-    func present(entries: [String], style: HistoryStyle,
-                 anchor: NSRect, maxWidth: CGFloat) {
+    /// `animated` is false when the boxes are not new, only re-worded: swapping
+    /// the stack between languages with ⌃ replaces every string at once, so the
+    /// usual "animate what was not here before" rule would stage the entire stack
+    /// in again on a keypress. Opening and closing still animate.
+    /// `centreX` is where the live box is *anchored*, not where its frame
+    /// happens to sit. The two differ by up to a point: the box rounds its origin
+    /// and hugs its text, so its midpoint flips back and forth as the width
+    /// changes parity on every word. Following the frame passed that on to the
+    /// stack, which twitched sideways under the reader for the whole of an
+    /// utterance.
+    func present(entries: [String], style: HistoryStyle, anchor: NSRect,
+                 centreX: CGFloat, maxWidth: CGFloat, animated: Bool = true) {
         guard !entries.isEmpty else { dismiss(); return }
         guard let screen = Self.screen(for: anchor) else { return }
 
@@ -310,7 +320,7 @@ final class HistoryController {
         }
 
         placedAbove = above
-        let fits = place(anchor: anchor)
+        let fits = place(anchor: anchor, centreX: centreX)
 
         // Stick to the newest box if that is where the reader already was, so a
         // page closing brings the new box into view. If they had scrolled back to
@@ -327,7 +337,9 @@ final class HistoryController {
         }
         updateFade()
 
-        animateIn(pills, ordered: ordered, alreadyShowing: alreadyShowing, above: above)
+        if animated {
+            animateIn(pills, ordered: ordered, alreadyShowing: alreadyShowing, above: above)
+        }
 
         shown = entries
         if !isVisible {
@@ -342,9 +354,9 @@ final class HistoryController {
     }
 
     /// Follow the live box as it resizes under a new word, without rebuilding.
-    func reposition(anchor: NSRect) {
+    func reposition(anchor: NSRect, centreX: CGFloat) {
         guard isVisible else { return }
-        place(anchor: anchor)
+        place(anchor: anchor, centreX: centreX)
     }
 
     /// Size and position the panel against the live box as it stands now.
@@ -358,7 +370,7 @@ final class HistoryController {
     ///
     /// Returns false when there is no longer anywhere to put it.
     @discardableResult
-    private func place(anchor: NSRect) -> Bool {
+    private func place(anchor: NSRect, centreX: CGFloat) -> Bool {
         guard contentHeight > 0, let screen = Self.screen(for: anchor) else { return false }
 
         let room = Self.room(above: placedAbove, anchor: anchor, screen: screen)
@@ -378,7 +390,7 @@ final class HistoryController {
         // already right for the first event after a resize.
         scroll.verticalScrollElasticity = contentHeight > size.height + 1 ? .allowed : .none
         let origin = NSPoint(
-            x: (anchor.midX - size.width / 2).rounded(),
+            x: (centreX - size.width / 2).rounded(),
             y: (placedAbove
                 ? anchor.maxY - SubtitleView.pad + Self.gap
                 : anchor.minY + SubtitleView.pad - Self.gap - size.height).rounded())
