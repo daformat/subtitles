@@ -4,6 +4,21 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.2 · 2026-09-03
+
+Text no longer comes back after a pause.
+
+- A box that has faded leaves nothing behind. Words from before it were turning up
+  at the top of the next box, and that box then kept filling without ever turning
+  over. Whatever the translator still owes for a faded box is dropped with it.
+- A clause the speaker never finishes now settles on length as well as on age, so
+  a box fills and turns over instead of growing forever. Text that has not settled
+  yet cannot be paged at all, because it is retranslated whole on every update and
+  its words shift each time, so a page break inside it does not stay put.
+- Pages break at the edge of the unsettled text rather than inside it, which is
+  what made the same few words appear in three boxes in a row while nothing new
+  was said.
+
 ## 1.3.1 · 2026-09-02
 
 Fixes for the translation overlay shipped in 1.3.0, and a test suite for the
