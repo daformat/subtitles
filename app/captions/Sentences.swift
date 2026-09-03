@@ -43,6 +43,17 @@ public struct SentenceBuffer {
     /// object — and reads worse than the live tail it replaced.
     private static let minSettleWords = 5
 
+    /// Most words that may sit unsettled at once.
+    ///
+    /// Unsettled text cannot be paged: it is retranslated whole on every update
+    /// and its word times move with it, so a page broken inside it does not hold.
+    /// A clause long enough to fill the box therefore fills it and then goes on
+    /// filling it, with no new box ever starting. Settling on length as well as on
+    /// age gives it stable times, after which it pages like anything else.
+    ///
+    /// Roughly a boxful at the default text size.
+    private static let maxPendingWords = 10
+
     /// Newly stable sentences. `ended` is set at an endpoint or a pause, which
     /// releases the trailing fragment even without a terminator.
     ///
@@ -106,6 +117,18 @@ public struct SentenceBuffer {
                 }
             }
         }
+        // Length, once age has had its turn. A single clause can outrun the box
+        // without ever crossing the age limit, if the speaker does not pause.
+        if settleAfter != nil, !ended, words.count - consumed > Self.maxPendingWords {
+            let limit = words.count - Self.maxPendingWords - 1
+            if limit >= consumed {
+                let cut = Self.boundary(in: words, from: consumed, through: limit) ?? limit
+                if let sentence = Self.make(Array(words[consumed...cut])) {
+                    out.append(sentence)
+                    consumed = cut + 1
+                }
+            }
+        }
         return out
     }
 
@@ -131,6 +154,14 @@ public struct SentenceBuffer {
     }
 
     public mutating func reset() { consumed = 0 }
+
+    /// Treat everything seen so far as dealt with, without replaying it.
+    ///
+    /// For a box that faded: the words behind it are gone from the screen and
+    /// must never come back, but the recogniser keeps one growing transcript
+    /// across a whole utterance, so `reset` would settle it all again from the
+    /// beginning. Skipping forward drops the past instead of repeating it.
+    public mutating func skip(to count: Int) { consumed = max(consumed, count) }
 }
 
 /// How much the translator is allowed to guess ahead of the speaker.

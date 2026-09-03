@@ -91,6 +91,9 @@ final class TranslationPipeline {
     private var tailStart: TimeInterval = 0
     private var tailEnd: TimeInterval = 0
 
+    /// How much of the transcript has been seen, so a discard can skip past it
+    /// rather than settling it all again.
+    private var seenWords = 0
     private var inFlight = false
     /// Set when the framework has refused this pair outright. Without it the
     /// retry below turns a permanent error into a hot loop: the request fails,
@@ -134,6 +137,7 @@ final class TranslationPipeline {
     func ingest(_ words: [TimedWord], ended: Bool = false) {
         guard !words.isEmpty else { return }
         Self.trace("ingest \(words.count) words mode=\(mode.rawValue) ended=\(ended)")
+        seenWords = words.count
 
         if mode == .speculative {
             // No settled text at all: the whole transcript is provisional and is
@@ -181,6 +185,26 @@ final class TranslationPipeline {
 
     /// Allow sending again after a refusal, without discarding the transcript.
     func resume() { suspended = false }
+
+    /// The box faded: everything pending goes, and nothing said before this can
+    /// ever be shown again.
+    ///
+    /// Not `reset`, which rewinds the buffer to the start of a transcript the
+    /// recogniser is still growing and would settle the whole utterance a second
+    /// time. This skips past what has been seen: the settled chunks, the clause in
+    /// progress and any translation of it are dropped, and settling resumes with
+    /// whatever is said next.
+    func discardPending() {
+        buffer.skip(to: seenWords)
+        queued.removeAll()
+        order.removeAll()
+        done.removeAll()
+        tail = ""
+        tailSource = ""
+        translatedTail = ""
+        pendingReset = false
+        suspended = false
+    }
 
     /// A new utterance begins: what follows is unrelated to what came before.
     func reset() {

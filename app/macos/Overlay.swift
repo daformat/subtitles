@@ -601,8 +601,12 @@ final class OverlayController {
     private var pageStartTime: TimeInterval = 0
     /// Latest word end seen, so "start fresh" means "from here on in the audio".
 
-    /// Fired once the overlay has faded because no new text arrived. The engine
-    /// uses it to drop a context that may be full of music.
+    /// Fired once the overlay has faded because no new text arrived.
+    ///
+    /// The engine uses it to drop a context that may be full of music, and the
+    /// translator to drop everything it has not delivered: a box that has gone
+    /// takes its pending work with it, or that work arrives into the next box as
+    /// text from before the pause.
     var onFaded: (() -> Void)?
 
     /// Remembered across launches once the user drags the panel somewhere.
@@ -866,7 +870,8 @@ final class OverlayController {
                             chunkStarts: [TimeInterval]) {
         translatedWords = (words, speculativeFrom, chunkStarts)
         lastTranslatedAt = Date()
-        let visible = page(.translated, words, chunkStarts: chunkStarts)
+        let visible = page(.translated, words, chunkStarts: chunkStarts,
+                           speculativeFrom: speculativeFrom)
         guard !showsSource else { return }
         showWords(visible, speculativeFrom: speculativeFrom)
     }
@@ -895,13 +900,15 @@ final class OverlayController {
     /// runtime. It crashed on the first translated word after a pause, and neither
     /// the compiler nor the test suite could see it.
     private func page(_ stream: CaptionStreams.Stream, _ words: [TimedWord],
-                      chunkStarts: [TimeInterval]) -> [TimedWord] {
+                      chunkStarts: [TimeInterval],
+                      speculativeFrom: TimeInterval = .greatestFiniteMagnitude) -> [TimedWord] {
         if startFreshOnNextText {
             startFreshOnNextText = false
             streams.markFresh()
         }
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
-                                   depth: historyDepth, allowCarry: allowsCarry) { texts in
+                                   depth: historyDepth, allowCarry: allowsCarry,
+                                   speculativeFrom: speculativeFrom) { texts in
             longestFittingPrefix(texts, from: 0)
         }
         if paged.brokePage { pageShownAt = Date() }
@@ -1162,6 +1169,12 @@ final class OverlayController {
             // away and wants it back.
             self.markPagersFresh()
             self.boxIsCleared = true
+            // The stored transcripts go too. They outlive the box on purpose so ⌃
+            // can swap language instantly, but everything in them predates the
+            // fade, so keeping them is keeping exactly what must never be shown
+            // again.
+            self.sourceWords = []
+            self.translatedWords = nil
             self.page = ""
             self.pendingCommit = ""
             self.tentative = ""

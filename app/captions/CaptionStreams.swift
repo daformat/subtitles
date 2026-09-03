@@ -91,16 +91,20 @@ public struct CaptionStreams {
     /// without it is what made the stack lag a clause behind the screen.
     public mutating func ingest(_ stream: Stream, words: [TimedWord],
                                 chunkStarts: [TimeInterval], depth: Int,
-                                allowCarry: Bool, fits: ([String]) -> Int) -> Page {
+                                allowCarry: Bool,
+                                speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
+                                fits: ([String]) -> Int) -> Page {
         let before = closed(stream).count
         let visible: [TimedWord]
         switch stream {
         case .source:
             visible = sourcePager.ingest(words, chunkStarts: chunkStarts, depth: depth,
-                                         allowCarry: allowCarry, fits: fits)
+                                         allowCarry: allowCarry,
+                                         speculativeFrom: speculativeFrom, fits: fits)
         case .translated:
             visible = translatedPager.ingest(words, chunkStarts: chunkStarts, depth: depth,
-                                             allowCarry: allowCarry, fits: fits)
+                                             allowCarry: allowCarry,
+                                             speculativeFrom: speculativeFrom, fits: fits)
         }
         return Page(visible: visible, brokePage: closed(stream).count != before)
     }

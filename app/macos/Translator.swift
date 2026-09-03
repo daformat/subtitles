@@ -417,6 +417,13 @@ final class TranslationController {
 
     /// End of utterance or a pause: release the trailing fragment, then clear the
     /// accumulated transcript once the last translation has landed.
+    /// The box faded. Drop everything not yet on screen so the next box cannot
+    /// open with something said before it.
+    func discardPending() {
+        lastWords = []
+        pipeline.discardPending()
+    }
+
     func finish() {
         if !lastWords.isEmpty { pipeline.ingest(lastWords, ended: true) }
         lastWords = []

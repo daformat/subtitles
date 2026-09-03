@@ -54,9 +54,10 @@ public struct StreamPager {
     @discardableResult
     public mutating func ingest(_ words: [TimedWord], chunkStarts: [TimeInterval],
                                 depth: Int, allowCarry: Bool,
+                                speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                                 fits: ([String]) -> Int) -> [TimedWord] {
-        let page = anchor.page(words, chunkStarts: chunkStarts,
-                               allowCarry: allowCarry, fits: fits)
+        let page = anchor.page(words, chunkStarts: chunkStarts, allowCarry: allowCarry,
+                               speculativeFrom: speculativeFrom, fits: fits)
         for box in page.closed { append(box, depth: depth) }
         return page.visible
     }

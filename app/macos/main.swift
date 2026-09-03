@@ -1060,6 +1060,12 @@ if useOverlay {
     // a backing track cannot swallow the first words of whoever speaks next.
     controller.onFaded = {
         if let fluid = fluidEngine { Task { await fluid.resetContext() } }
+        // The translator owes nothing for a box that has gone. Anything still in
+        // flight would arrive into the *next* box, which is text from before a
+        // pause turning up after it.
+        if #available(macOS 15, *) {
+            MainActor.assumeIsolated { translation?.discardPending() }
+        }
     }
     renderer.onStatusRefresh = { [weak menu] in menu?.updateHealthIndicator() }
     statusMenu = menu

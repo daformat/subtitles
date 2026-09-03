@@ -126,4 +126,69 @@ final class SentenceBufferTests: XCTestCase {
         let out = buffer.ingest(words(["fresh"]), ended: true)
         XCTAssertEqual(texts(out), ["fresh"])
     }
+
+    /// A speaker who does not pause can produce a clause longer than the box.
+    /// Unsettled text cannot be paged, so left alone it fills the box and keeps
+    /// filling it, and no new box ever starts.
+    func testALongClauseSettlesOnLengthEvenWithoutPunctuation() {
+        var buffer = SentenceBuffer()
+        var accumulated: [TimedWord] = []
+        var released: [Sentence] = []
+        for index in 0..<40 {
+            accumulated.append(contentsOf: words(["w\(index)"], from: Double(index) * 0.1))
+            released += buffer.ingest(accumulated, ended: false, settleAfter: 60)
+        }
+        XCTAssertFalse(released.isEmpty,
+                       "nothing settled, so the tail grows without limit")
+        let pending = accumulated.count - buffer.released
+        XCTAssertLessThanOrEqual(pending, 12, "too much left unsettled: \(pending) words")
+    }
+
+    /// Age still does the work when the speaker leaves gaps; length is the backstop.
+    func testShortClausesAreNotCutByTheLengthLimit() {
+        var buffer = SentenceBuffer()
+        let run = words(["one", "two", "three."])
+        _ = buffer.ingest(run, ended: false, settleAfter: 60)
+        XCTAssertEqual(buffer.released, 0, "nothing here is long enough or old enough")
+    }
+
+    // MARK: discarding what a faded box leaves behind
+
+    /// A fade means the words behind it are gone. `reset` would rewind to the
+    /// start of a transcript the recogniser is still growing and settle the whole
+    /// utterance a second time, so the past is skipped rather than replayed.
+    func testSkipDropsThePastWithoutReplayingIt() {
+        var buffer = SentenceBuffer()
+        let sofar = words(["one", "two", "three.", "four", "five"])
+        _ = buffer.ingest(sofar, ended: false, settleAfter: 1)
+
+        buffer.skip(to: sofar.count)
+        let grown = sofar + words(["six", "seven"], from: 10)
+        let out = buffer.ingest(grown, ended: true)
+
+        XCTAssertEqual(texts(out), ["six seven"])
+        for sentence in out {
+            XCTAssertFalse(sentence.text.contains("one"), "the past was replayed")
+        }
+    }
+
+    /// Where `reset` does replay it, which is why skipping exists.
+    func testResetReplaysAGrowingTranscript() {
+        var buffer = SentenceBuffer()
+        let sofar = words(["one", "two", "three.", "four", "five"])
+        _ = buffer.ingest(sofar, ended: false, settleAfter: 1)
+
+        buffer.reset()
+        let out = buffer.ingest(sofar + words(["six"], from: 10), ended: true)
+        XCTAssertTrue(out.contains { $0.text.contains("one") },
+                      "reset is expected to start over; skip is the one that does not")
+    }
+
+    func testSkipNeverGoesBackwards() {
+        var buffer = SentenceBuffer()
+        _ = buffer.ingest(words(["a", "b", "c"]), ended: true)
+        XCTAssertEqual(buffer.released, 3)
+        buffer.skip(to: 1)
+        XCTAssertEqual(buffer.released, 3, "skipping to an earlier point would replay")
+    }
 }

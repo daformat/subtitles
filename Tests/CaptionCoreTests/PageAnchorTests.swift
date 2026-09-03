@@ -225,4 +225,132 @@ final class PageAnchorTests: XCTestCase {
         let page = anchor.page(words, chunkStarts: starts, allowCarry: true, fits: fits(3))
         XCTAssertFalse(page.visible.isEmpty)
     }
+
+    // MARK: the unsettled tail
+
+    /// Reproduces what the log showed: only the tail is being translated, it grows
+    /// a word at a time, and it is re-spread across the audio it covers on every
+    /// update, so every one of its words gets a new time each pass. Breaking
+    /// inside that cannot hold, and the same words came back box after box while
+    /// the speaker added nothing.
+    func testAGrowingTailDoesNotRepeatItself() {
+        let settled = stream([sample[0], sample[1]])
+        var anchor = PageAnchor()
+        var seen: [String] = []
+
+        let tailWords = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        for count in 1...tailWords.count {
+            // The tail spans a fixed stretch of audio and is spread across it, so
+            // adding a word moves every word already in it.
+            let span = 5.0
+            let step = span / Double(count)
+            let tail = (0..<count).map { index in
+                TimedWord(text: tailWords[index], start: 100 + step * Double(index),
+                          end: 100 + step * Double(index + 1))
+            }
+            let page = anchor.page(settled.words + tail, chunkStarts: settled.starts,
+                                   allowCarry: true, speculativeFrom: 100, fits: fits(6))
+            seen.append(contentsOf: page.closed.map { $0.map(\.text).joined(separator: " ") })
+        }
+
+        for box in seen {
+            for word in box.split(separator: " ") {
+                XCTAssertFalse(tailWords.contains(String(word)),
+                               "unsettled word '\(word)' left the screen in box '\(box)'")
+            }
+        }
+    }
+
+    /// The page may reach the tail but never pass into it, however little of the
+    /// box the settled text occupies.
+    func testThePageNeverBreaksInsideTheTail() {
+        let settled = stream([sample[0], sample[1], sample[2]])
+        let tail = (0..<12).map {
+            TimedWord(text: "t\($0)", start: 100 + Double($0) * 0.1,
+                      end: 100 + Double($0) * 0.1 + 0.1)
+        }
+        var anchor = PageAnchor()
+        for _ in 0..<10 {
+            _ = anchor.page(settled.words + tail, chunkStarts: settled.starts,
+                            allowCarry: true, speculativeFrom: 100, fits: fits(4))
+            XCTAssertLessThanOrEqual(anchor.start, 100,
+                                     "the anchor moved into provisional text")
+        }
+    }
+
+    /// With no tail declared, paging is unchanged.
+    func testAbsentTailLeavesPagingAlone() {
+        let (words, starts) = stream(sample)
+        var bounded = PageAnchor()
+        var plain = PageAnchor()
+        let a = bounded.page(words, chunkStarts: starts, allowCarry: true,
+                             speculativeFrom: .greatestFiniteMagnitude, fits: fits(5))
+        let b = plain.page(words, chunkStarts: starts, allowCarry: true, fits: fits(5))
+        XCTAssertEqual(text(a), text(b))
+    }
+
+    // MARK: nothing comes back from a box that has gone
+
+    /// A fade closes the box, and what was in it is gone as far as the reader is
+    /// concerned. The tail spans the fade, though, and is re-timed on every
+    /// update, so words that sat before the anchor drifted after it and reappeared
+    /// at the top of the next box.
+    func testAFadedBoxDoesNotComeBackThroughTheTail() {
+        let settled = stream([sample[0]])
+        let stale = sample[1]
+
+        /// The tail always begins at 10 and is spread across however much audio it
+        /// has reached, so every word in it moves as it grows.
+        func tail(_ count: Int) -> [TimedWord] {
+            let step = 8.0 / Double(count)
+            return (0..<count).map { index in
+                TimedWord(text: stale[index], start: 10 + step * Double(index),
+                          end: 10 + step * Double(index) + 0.4)
+            }
+        }
+
+        var anchor = PageAnchor()
+        _ = anchor.page(settled.words + tail(1), chunkStarts: settled.starts,
+                        allowCarry: true, speculativeFrom: 10, fits: fits(20))
+        anchor.markFresh()                       // the box faded
+
+        for count in 2...stale.count {
+            let page = anchor.page(settled.words + tail(count), chunkStarts: settled.starts,
+                                   allowCarry: true, speculativeFrom: 10, fits: fits(20))
+            let shown = text(page).split(separator: " ").map(String.init)
+            for word in stale {
+                XCTAssertFalse(shown.contains(word),
+                               "'\(word)' returned from a faded box as '\(text(page))'")
+            }
+            for word in sample[0] {
+                XCTAssertFalse(shown.contains(word),
+                               "settled '\(word)' returned from a faded box")
+            }
+        }
+    }
+
+    /// Nothing settled from before the fade comes back either.
+    func testAFadedBoxDoesNotComeBackThroughSettledText() {
+        let (words, starts) = stream(sample)
+        var anchor = PageAnchor()
+        _ = anchor.page(words, chunkStarts: starts, allowCarry: true, fits: fits(50))
+        anchor.markFresh()
+
+        let page = anchor.page(words + [TimedWord(text: "after", start: 100, end: 100.5)],
+                               chunkStarts: starts, allowCarry: true, fits: fits(50))
+        XCTAssertEqual(text(page), "after")
+    }
+
+    /// Once the speaker has produced a tail that begins after the fade, it shows.
+    func testAFreshTailAfterAFadeIsShown() {
+        let (words, starts) = stream(sample)
+        var anchor = PageAnchor()
+        _ = anchor.page(words, chunkStarts: starts, allowCarry: true, fits: fits(50))
+        anchor.markFresh()
+
+        let fresh = [TimedWord(text: "nouveau", start: 100, end: 100.5)]
+        let page = anchor.page(words + fresh, chunkStarts: starts, allowCarry: true,
+                               speculativeFrom: 100, fits: fits(50))
+        XCTAssertEqual(text(page), "nouveau")
+    }
 }
