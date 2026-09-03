@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.4 · 2026-09-03
+
+- Re-vendored the site's caption demo for the welcome window. It brings the demo's
+  menu bar — the Apple mark, the app in front, the first menus — and a desktop
+  with some colour in it, along with the waveform fitter the podcast scene now
+  relies on, which the vendor script had been leaving behind.
+- The demo screen's corners are tighter in the welcome window than on the site,
+  so they no longer crop the Apple mark at one end of the menu bar and the clock
+  at the other.
+
 ## 1.3.3 · 2026-09-03
 
 - Choosing a target language whose pack is not installed now asks for it. It used
