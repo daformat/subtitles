@@ -4,6 +4,17 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.3 · 2026-09-03
+
+- Choosing a target language whose pack is not installed now asks for it. It used
+  to produce nothing at all: no download, no prompt, and the original left on
+  screen. The translator was being built without a source language, and without
+  one it cannot tell whether a pair needs downloading, so it never asked.
+- The language the recogniser detects is remembered rather than only reported when
+  it changes. By the time a target is picked, the detection that matters is usually
+  minutes old and will not happen again, which is what left the translator with
+  nothing to go on.
+
 ## 1.3.2 · 2026-09-03
 
 Text no longer comes back after a pause.
