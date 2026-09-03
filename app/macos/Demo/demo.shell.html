@@ -39,6 +39,13 @@
      window it lands on the window's own material and reads as grime, so it is
      replaced with the hairline that frames it. */
   .demo-screen { box-shadow: none; }
+
+  /* The site rounds the screen generously, and its menu bar now starts with
+     the Apple mark hard against the corner. At this window's width a 20px
+     radius eats into it, and the clock at the other end, so the corner is
+     tightened. The hairline frame is drawn with border-radius: inherit and
+     follows on its own. */
+  .demo-screen { border-radius: 14px; }
 </style>
 </head>
 <body>

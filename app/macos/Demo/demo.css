@@ -7,23 +7,29 @@
 
 :root {
   --bg:            #ffffff;
-  --bg-alt:        #f6f6f8;
+  --bg-alt:        #f7f7f9;
   --surface:       #ffffff;
-  --surface-2:     #fbfbfc;
-  --text:          #131316;
-  --text-dim:      #61616b;
-  --text-faint:    #6c6c76;
-  --border:        rgba(18, 18, 24, 0.10);
-  --border-strong: rgba(18, 18, 24, 0.16);
+  --surface-2:     #f4f4f7;
+  --text:          #111114;
+  --text-dim:      #5f6068;
+  --text-faint:    #7a7b85;
+  --border:        rgba(17, 17, 24, 0.08);
+  --border-strong: rgba(17, 17, 24, 0.14);
   --accent:        #5150d4;
   --accent-soft:   rgba(88, 86, 214, 0.10);
   --accent-text:   #4a48c9;
+  --btn-bg:        #5150d4;
   --btn-fg:        #ffffff;
+  --panel:         #0f0f12;
+  --panel-text:    #f3f3f5;
+  --panel-dim:     #9a9aa6;
+  --panel-line:    rgba(255, 255, 255, 0.10);
+  --glow:          rgba(81, 80, 212, 0.22);
   --shadow-sm:     0 1px 2px rgba(16, 16, 28, 0.05), 0 1px 3px rgba(16, 16, 28, 0.04);
-  --shadow-lg:     0 24px 60px -20px rgba(16, 16, 28, 0.28), 0 8px 20px -12px rgba(16, 16, 28, 0.16);
-  --header-bg:     rgba(255, 255, 255, 0.72);
+  --shadow-lg:     0 30px 80px -24px rgba(16, 16, 28, 0.30), 0 12px 28px -14px rgba(16, 16, 28, 0.18);
+  --header-bg:     rgba(255, 255, 255, 0.70);
 
-  --radius:        14px;
+  --radius:        12px;
   --radius-lg:     20px;
   --wrap:          1120px;
 
@@ -36,44 +42,56 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:            #0a0a0c;
-    --bg-alt:        #101013;
-    --surface:       #141417;
+    --bg:            #08080a;
+    --bg-alt:        #0d0d10;
+    --surface:       #111114;
     --surface-2:     #17171b;
-    --text:          #f3f3f5;
-    --text-dim:      #a0a0ac;
-    --text-faint:    #8a8a95;
-    --border:        rgba(255, 255, 255, 0.10);
-    --border-strong: rgba(255, 255, 255, 0.18);
+    --text:          #f2f2f4;
+    --text-dim:      #9b9ca6;
+    --text-faint:    #7c7d88;
+    --border:        rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
     --accent:        #7a78ff;
-    --accent-soft:   rgba(122, 120, 255, 0.14);
+    --accent-soft:   rgba(122, 120, 255, 0.16);
     --accent-text:   #9d9bff;
-    --btn-fg:        #0a0a0c;
-    --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lg:     0 30px 70px -24px rgba(0, 0, 0, 0.8), 0 10px 24px -14px rgba(0, 0, 0, 0.6);
-    --header-bg:     rgba(10, 10, 12, 0.72);
+    --btn-bg:        #5b59e6;
+    --btn-fg:        #ffffff;
+    --panel:         #121216;
+    --panel-text:    #f3f3f5;
+    --panel-dim:     #9a9aa6;
+    --panel-line:    rgba(255, 255, 255, 0.10);
+    --glow:          rgba(122, 120, 255, 0.30);
+    --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-lg:     0 40px 100px -30px rgba(0, 0, 0, 0.9), 0 14px 30px -14px rgba(0, 0, 0, 0.7);
+    --header-bg:     rgba(8, 8, 10, 0.70);
 
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg:            #0a0a0c;
-  --bg-alt:        #101013;
-  --surface:       #141417;
+  --bg:            #08080a;
+  --bg-alt:        #0d0d10;
+  --surface:       #111114;
   --surface-2:     #17171b;
-  --text:          #f3f3f5;
-  --text-dim:      #a0a0ac;
-  --text-faint:    #8a8a95;
-  --border:        rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(255, 255, 255, 0.18);
+  --text:          #f2f2f4;
+  --text-dim:      #9b9ca6;
+  --text-faint:    #7c7d88;
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
   --accent:        #7a78ff;
-  --accent-soft:   rgba(122, 120, 255, 0.14);
+  --accent-soft:   rgba(122, 120, 255, 0.16);
   --accent-text:   #9d9bff;
-  --btn-fg:        #0a0a0c;
-  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-lg:     0 30px 70px -24px rgba(0, 0, 0, 0.8), 0 10px 24px -14px rgba(0, 0, 0, 0.6);
-  --header-bg:     rgba(10, 10, 12, 0.72);
+  --btn-bg:        #5b59e6;
+  --btn-fg:        #ffffff;
+  --panel:         #121216;
+  --panel-text:    #f3f3f5;
+  --panel-dim:     #9a9aa6;
+  --panel-line:    rgba(255, 255, 255, 0.10);
+  --glow:          rgba(122, 120, 255, 0.30);
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-lg:     0 40px 100px -30px rgba(0, 0, 0, 0.9), 0 14px 30px -14px rgba(0, 0, 0, 0.7);
+  --header-bg:     rgba(8, 8, 10, 0.70);
 
   color-scheme: dark;
 }
@@ -122,9 +140,11 @@
      macOS puts the difference. */
   --content-dim: saturate(0.75) brightness(0.99);
   --desktop-bg:
-    radial-gradient(60% 70% at 22% 8%, rgb(150 156 255 / 0.5), transparent 70%),
-    radial-gradient(52% 60% at 88% 96%, rgb(255 176 150 / 0.45), transparent 72%),
-    linear-gradient(158deg, #cdd6f2 0%, #e6e6f4 46%, #f2eef0 100%);
+    radial-gradient(55% 60% at 16% 10%, rgb(112 100 255 / 0.62), transparent 64%),
+    radial-gradient(48% 55% at 86% 18%, rgb(255 110 170 / 0.5), transparent 66%),
+    radial-gradient(58% 50% at 72% 96%, rgb(255 168 100 / 0.66), transparent 66%),
+    radial-gradient(42% 46% at 12% 90%, rgb(80 196 235 / 0.5), transparent 66%),
+    linear-gradient(160deg, #c7c2ff 0%, #ead6f4 48%, #ffd8c2 100%);
   --scene-bg:
     radial-gradient(42% 58% at 26% 32%, rgb(150 146 255 / 0.42), transparent 66%),
     radial-gradient(38% 52% at 74% 28%, rgb(255 176 150 / 0.4), transparent 68%),
@@ -158,9 +178,11 @@
     --played: rgb(157 153 255 / 0.9);
     --content-dim: brightness(0.86);
     --desktop-bg:
-      radial-gradient(60% 70% at 22% 8%, rgb(120 116 255 / 0.34), transparent 70%),
-      radial-gradient(52% 60% at 88% 96%, rgb(78 74 190 / 0.3), transparent 72%),
-      linear-gradient(158deg, #2a2b45 0%, #191a2a 46%, #101019 100%);
+      radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
+      radial-gradient(48% 55% at 86% 18%, rgb(225 70 150 / 0.36), transparent 66%),
+      radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
+      radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
+      linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
       radial-gradient(42% 58% at 26% 32%, rgb(112 108 255 / 0.44), transparent 66%),
       radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
@@ -186,9 +208,11 @@
     --recess-deep: rgb(0 0 0 / 0.42);
     --played: rgb(157 153 255 / 0.9);
     --desktop-bg:
-      radial-gradient(60% 70% at 22% 8%, rgb(120 116 255 / 0.34), transparent 70%),
-      radial-gradient(52% 60% at 88% 96%, rgb(78 74 190 / 0.3), transparent 72%),
-      linear-gradient(158deg, #2a2b45 0%, #191a2a 46%, #101019 100%);
+      radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
+      radial-gradient(48% 55% at 86% 18%, rgb(225 70 150 / 0.36), transparent 66%),
+      radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
+      radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
+      linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
       radial-gradient(42% 58% at 26% 32%, rgb(112 108 255 / 0.44), transparent 66%),
       radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
@@ -276,6 +300,12 @@
   color: rgb(var(--ink) / 0.72);
 }
 .mb-right { display: inline-flex; align-items: center; gap: calc(1.48 * var(--u)); }
+/* The left half reads like the real bar: the mark, the app in bold, then the
+   first menus. All of it sits at the bar's own size, which follows --u. */
+.mb-left { display: inline-flex; align-items: center; gap: calc(1.55 * var(--u)); color: rgb(var(--ink) / 0.82); }
+.mb-apple { width: calc(1.35 * var(--u)); height: calc(1.6 * var(--u)); margin-inline-end: calc(0.2 * var(--u)); }
+.mb-app { font-weight: 700; }
+.mb-menu { color: rgb(var(--ink) / 0.72); }
 
 /* The glyph keeps its colour; the badge is a separate 6pt dot on the glyph's
    top-right corner, exactly as the app draws it. */
@@ -388,6 +418,9 @@
   right:  clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
   bottom: clamp(5.85cqw, 4.77692cqw + 9.44308px, 6.3cqw);   /* 10.5% ->  9.75% */
   left:   clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
+  /* Five per cent narrower than the insets alone give, taken evenly from both
+     sides so it keeps its centre. */
+  margin-inline: 1.85cqw;
 }
 .win-notes {
   --z: 1;
@@ -554,6 +587,9 @@
     linear-gradient(150deg, #6b68ff 0%, #a95cff 52%, #ff8a6a 100%);
   box-shadow: var(--art-shadow);
 }
+/* The demo sits in the hero, which centres its text; a window's content reads
+   from the start like the real thing. */
+.win-content { text-align: start; }
 .pod-meta { display: grid; gap: 2px; min-width: 0; }
 .pod-meta em {
   font-style: normal;
@@ -604,7 +640,12 @@
    stretching is what put the bars on a fractional pitch in the first place, and
    that means the pitch has to be revisited whenever the podcast window is
    resized. Too wide and the row is clipped; too narrow and it floats short of
-   the right edge. */
+   the right edge.
+
+   With script.js running, waveFit() takes over: it measures the row in device
+   pixels and sets each bar and gap inline to a whole number of them, so the
+   row fills its width exactly and every bar paints the same. What follows is
+   the layout before that runs, and the whole of it where scripts are off. */
 .pod-wave {
   display: flex;
   align-items: center;
@@ -676,7 +717,7 @@
 }
 .pod-ep:first-child i { background: rgb(var(--ink) / 0.22); }
 .pod-ep em {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-style: normal;
   font-size: calc(0.97 * var(--u));
   color: rgb(var(--ink) / 0.34);
@@ -1369,3 +1410,14 @@
 @media (hover: hover) and (pointer: fine) {
   .demo-caption-try { display: block; }
 }
+
+/* The demo in its frame. The screen inside keeps every rule it had; only the
+   box around it changed, and the og card, which draws its own composition
+   from the same markup, never carries this class. */
+.demo-frame {
+  max-width: 1000px;
+  margin-inline: auto;
+}
+/* The screen keeps its own corners, hairline and shadow; the scene bar and
+   the help lines sit under it in the open, as they always did. */
+.demo-frame .demo-screen { max-width: none; }

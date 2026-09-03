@@ -13,6 +13,39 @@ const I18N = (() => {
   return (name, fallback) => map[name] || fallback;
 })();
 
+// The podcast waveform, fitted to its row in whole device pixels. Laid out by
+// CSS the bars sat on a fractional pitch, so each one was painted a device pixel
+// wider or narrower than its neighbour and the row read as a beat of thick and
+// thin; sized to --u instead, it stopped short of the right edge. Measuring the
+// row in device pixels, giving every bar and every gap a whole number of them
+// and handing the remainder to the first few gaps, one pixel each, fills the
+// row exactly and paints every bar the same.
+(function waveFit() {
+  const wave = document.getElementById('pod-wave');
+  if (!wave || !('ResizeObserver' in window)) return;
+  const bars = [...wave.children];
+  const n = bars.length;
+  if (n < 2) return;
+  const fit = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.floor(wave.clientWidth * dpr);
+    if (width < n * 2) return;
+    // Bars four times the gap, as the stylesheet draws them.
+    const unit = width / (n * 4 + (n - 1));
+    const gap = Math.max(1, Math.round(unit));
+    const bar = Math.max(1, Math.floor((width - (n - 1) * gap) / n));
+    const spare = width - n * bar - (n - 1) * gap;
+    wave.style.gap = '0px';
+    bars.forEach((b, i) => {
+      b.style.width = bar / dpr + 'px';
+      b.style.marginInlineEnd = i < n - 1 ? (gap + (i < spare ? 1 : 0)) / dpr + 'px' : '0px';
+    });
+  };
+  new ResizeObserver(fit).observe(wave);
+  window.addEventListener('resize', fit);
+  fit();
+})();
+
 (function menuBarClock() {
   const el = document.getElementById('mb-time');
   if (!el) return;
@@ -190,9 +223,14 @@ const I18N = (() => {
     });
   };
 
+  const mbApp = document.getElementById('mb-app');
+  const APP_NAMES = { meeting: 'Meetings', notes: 'Notes', player: 'Player' };
   const front = (app) => {
     frontApp = app;
     restack(app);
+    // The menu bar names the app in front, as the real one does, with the
+    // same name the switcher shows for it.
+    if (mbApp) mbApp.textContent = I18N('app.' + app, APP_NAMES[app]);
     windows.forEach((w) => w.classList.toggle('is-front', w.dataset.app === app));
     // Both on the same rule as the class above, and neither on being in front:
     // fronting the notes leaves whichever was playing still playing behind them.
