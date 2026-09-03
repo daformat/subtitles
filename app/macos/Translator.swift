@@ -272,14 +272,20 @@ final class Translator {
     /// gets, and for the same reason: work is happening and its length is unknown.
     func prepare() async -> Readiness {
         guard let target else { return .unsupported }
-        // With no source there is no pair to ask about, and inventing one is
-        // worse than not asking: defaulting to English probes en → target, which
-        // for an English target is `.unsupported` — so auto-detect began every
-        // session declared unavailable and showed untranslated captions until the
-        // first detection arrived. Report ready and let the framework identify
-        // per request; the pack question is settled either by the first real
-        // request or by `setSource` once the recogniser names a language.
-        guard let source else { return .ready }
+        // With no source there is no pair to ask about, so this cannot say whether
+        // a pack is missing and must not pretend otherwise. Claiming ready here is
+        // what let someone pick a language whose pack was not installed and get
+        // nothing at all: no download was ever requested, and the requests that
+        // followed had no window to raise a consent sheet on.
+        //
+        // Inventing a source is worse still. Defaulting to English probes
+        // en → target, which for an English target is `.unsupported`, and that
+        // declared every auto-detect session unavailable from the outset.
+        //
+        // So: not ready, briefly. The original is shown meanwhile, and the moment
+        // the recogniser names a language `setSource` asks this again with a real
+        // pair, which is a word or two of speech away.
+        guard let source else { return .unsupported }
         let state = await Self.readiness(from: source, to: target)
         guard state == .needsDownload else {
             onProgress(0, "")

@@ -171,6 +171,14 @@ nonisolated(unsafe) var useVAD =
 /// Target language for live translation, or nil for off. A `FluidLanguage` rather
 /// than a `Locale.Language` so the setting survives on 14.2, where the framework
 /// that would consume it does not exist.
+/// The last language the multilingual checkpoint said it was hearing.
+///
+/// Kept because the engine only reports a *change*: by the time a translation
+/// target is picked, the detection that matters has usually already happened and
+/// will not happen again. Without this the translator was built with no source at
+/// all, which meant it could not check whether the pair needed downloading, so
+/// picking a language whose pack was missing quietly produced nothing.
+nonisolated(unsafe) var lastDetectedLanguage: FluidLanguage?
 nonisolated(unsafe) var translateTo: FluidLanguage?
 nonisolated(unsafe) var translationMode: TranslationMode = .hybrid
 /// Live translation, while a target is set. Typed `AnyObject?` because a global of
@@ -584,6 +592,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
             DispatchQueue.main.async {
                 guard generation == loadGeneration else { return }
                 guard let detected = FluidLanguage.matching(code: code) else { return }
+                lastDetectedLanguage = detected
                 err("detected \(detected.displayName)")
                 // Only meaningful on auto-detect: with the language pinned, the
                 // translator was already told and the model is only confirming it.
@@ -671,7 +680,10 @@ func applyLanguage(_ language: FluidLanguage) {
 /// means genuinely unknown: multilingual on auto-detect.
 var effectiveSource: Locale.Language? {
     guard currentVariant.isMultilingual else { return FluidLanguage.en.locale }
-    return currentLanguage == .auto ? nil : currentLanguage.locale
+    guard currentLanguage == .auto else { return currentLanguage.locale }
+    // On auto, whatever was last heard. A guess, and marked as one below, but a
+    // guess is enough to ask whether the pair needs downloading, and nil is not.
+    return lastDetectedLanguage?.locale
 }
 
 /// True when `effectiveSource` is a fact rather than a guess — see
