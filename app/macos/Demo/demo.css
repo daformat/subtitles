@@ -130,6 +130,8 @@
   --tile-bg: linear-gradient(150deg, #fdfdff, #e9ebf2);
   --controls-bg: rgb(250 250 252 / 0.96);
   --panel-bg: rgb(248 248 252 / 0.55);
+  --menu-bg: rgb(240 240 245 / 0.9);
+  --menu-accent: #2f6cf6;
   --recess: rgb(0 0 0 / 0.045);
   --recess-deep: rgb(0 0 0 / 0.06);
   --played: #5856d6;
@@ -154,6 +156,11 @@
      are deep because they fall on a near-black desktop, where only a heavy
      shadow reads at all; the same shadow on a light one is a smear. These are
      the same shapes at about a third of the weight. */
+  /* macOS draws no border on a window: a 1px translucent ring, dark even in
+     light mode, sits outside the edge and takes the wallpaper's colour, and in
+     dark mode a faint light ring inside it marks the edge against the black. */
+  --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  --window-inner: transparent;
   --window-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 10px 24px -12px rgb(0 0 0 / 0.2);
   --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.1), 0 20px 44px -14px rgb(0 0 0 / 0.28);
   --art-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.35);
@@ -173,6 +180,8 @@
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
     --controls-bg: rgb(9 9 12 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
+    --menu-bg: rgb(44 44 50 / 0.9);
+    --menu-accent: #3b7cf7;
     --recess: rgb(0 0 0 / 0.3);
     --recess-deep: rgb(0 0 0 / 0.42);
     --played: rgb(157 153 255 / 0.9);
@@ -188,6 +197,8 @@
       radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
+    --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.6);
+    --window-inner: rgb(255 255 255 / 0.1);
     --window-shadow: 0 2px 6px rgb(0 0 0 / 0.34), 0 14px 34px -10px rgb(0 0 0 / 0.6);
     --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.36), 0 26px 60px -10px rgb(0 0 0 / 0.72);
     --art-shadow: 0 10px 26px -8px rgb(0 0 0 / 0.8);
@@ -204,6 +215,8 @@
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
     --controls-bg: rgb(9 9 12 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
+    --menu-bg: rgb(44 44 50 / 0.9);
+    --menu-accent: #3b7cf7;
     --recess: rgb(0 0 0 / 0.3);
     --recess-deep: rgb(0 0 0 / 0.42);
     --played: rgb(157 153 255 / 0.9);
@@ -218,6 +231,8 @@
       radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
+    --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.6);
+    --window-inner: rgb(255 255 255 / 0.1);
     --window-shadow: 0 2px 6px rgb(0 0 0 / 0.34), 0 14px 34px -10px rgb(0 0 0 / 0.6);
     --window-shadow-front: 0 2px 6px rgb(0 0 0 / 0.36), 0 26px 60px -10px rgb(0 0 0 / 0.72);
     --art-shadow: 0 10px 26px -8px rgb(0 0 0 / 0.8);
@@ -355,8 +370,7 @@
   border-radius: calc(1.25 * var(--u));
   overflow: hidden;
   background: var(--window-bg);
-  border: 1px solid rgb(var(--ink) / 0.11);
-  box-shadow: var(--window-shadow);
+  box-shadow: var(--window-ring), var(--window-shadow);
   transition: box-shadow 0.28s ease;
   /* A window is a drawing of a window, not a button, and tapping one on a phone
      flashed a grey box over the whole thing. The tap does something, so the
@@ -442,7 +456,18 @@
    the two behind fall back on markup order, and this rule would beat the --z on
    the base selector anyway. Being in front is now only how it is lit. */
 .demo-window.is-front {
-  box-shadow: var(--window-shadow-front);
+  box-shadow: var(--window-ring), var(--window-shadow-front);
+}
+/* The inner ring is drawn over the content, since an inset shadow would sit
+   under the title bar. */
+.demo-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 0.5px var(--window-inner);
+  pointer-events: none;
 }
 /* macOS greys the traffic lights out on an inactive window. */
 .demo-window:not(.is-front) .lights i { background: rgb(var(--ink) / 0.26); }

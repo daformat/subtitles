@@ -46,6 +46,151 @@ const I18N = (() => {
   fit();
 })();
 
+// Writing, in every window that is a document. While such a window is in
+// front the caret moves: a notes page or a Word, Docs or Granola document
+// grows a line under the last one, the code editor adds tokens to a new line,
+// Numbers fills the selected cell and steps down the column. Nothing is
+// typed in words, so nothing here needs translating; the skeleton lines grow
+// the way the ones already there were drawn. Behind another window a document
+// holds still, as it does on a real desktop with the focus elsewhere.
+(function liveWriting() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+  // Whether a demo is on screen, so nothing is drawn where nobody can see it.
+  const onScreen = new WeakMap();
+  const watch = 'IntersectionObserver' in window
+    ? new IntersectionObserver((entries) => entries.forEach((e) => onScreen.set(e.target, e.isIntersecting)), { threshold: 0.15 })
+    : null;
+  const screenOf = (el) => el.closest('.demo-screen');
+  const awake = (win) => {
+    const screen = screenOf(win);
+    if (!screen) return false;
+    if (watch && !onScreen.has(screen)) { onScreen.set(screen, true); watch.observe(screen); }
+    return win.classList.contains('is-front') && !document.hidden && onScreen.get(screen) !== false;
+  };
+
+  // A writer is a function returning the delay before its next step.
+  const run = (win, step) => {
+    const tick = () => {
+      const wait = awake(win) ? step() : 300;
+      setTimeout(tick, wait);
+    };
+    setTimeout(tick, rand(400, 1200));
+  };
+
+  // ── documents: a line grows under the caret ──────────────────────────
+  document.querySelectorAll('.notes-doc, .lw-doc').forEach((doc) => {
+    const caret = doc.querySelector(':scope > .notes-caret');
+    const win = doc.closest('.demo-window');
+    if (!caret || !win) return;
+    // The section being written: the run of lines just above the caret. It
+    // may grow by two before the oldest line goes, so the page keeps its height.
+    const section = () => {
+      const out = [];
+      let el = row.previousElementSibling;
+      while (el && el.tagName === 'I') { out.unshift(el); el = el.previousElementSibling; }
+      return out;
+    };
+    const row = document.createElement('span');
+    row.className = 'lw-write';
+    const line = document.createElement('i');
+    line.style.width = '0%';
+    row.append(line, caret);
+    doc.append(row);
+    const limit = section().length + 2;
+    let width = 0;
+    let target = rand(55, 96);
+    run(win, () => {
+      width = Math.min(target, width + rand(2.5, 6.5));
+      line.style.width = width + '%';
+      if (width < target) return rand(110, 190);
+      // The line is done: it joins the page, and a fresh one starts.
+      const done = line.cloneNode();
+      row.before(done);
+      const lines = section();
+      if (lines.length > limit) lines[0].remove();
+      width = 0;
+      line.style.width = '0%';
+      target = Math.random() < 0.15 ? rand(28, 50) : rand(55, 96);
+      return rand(350, 700);
+    });
+  });
+
+  // ── the code editor: tokens land on a new line ───────────────────────
+  document.querySelectorAll('.lw-lines').forEach((lines) => {
+    const win = lines.closest('.demo-window');
+    if (!win) return;
+    const limit = lines.children.length;
+    const caret = document.createElement('span');
+    caret.className = 'notes-caret lw-caret-code';
+    let current = null;
+    let count = 0;
+    let want = 0;
+    run(win, () => {
+      if (!current) {
+        current = document.createElement('span');
+        current.className = 'lw-line';
+        current.style.paddingLeft = pick([6, 12, 12, 18]) + '%';
+        current.append(caret);
+        lines.append(current);
+        while (lines.children.length > limit) lines.firstElementChild.remove();
+        count = 0;
+        want = Math.floor(rand(2, 6));
+        return rand(200, 400);
+      }
+      const tok = document.createElement('i');
+      tok.className = 'lw-tok-' + pick(['p', 'p', 'p', 'k', 't', 'f', 's', 'n']);
+      tok.style.width = rand(3, 12).toFixed(1) + '%';
+      caret.before(tok);
+      count++;
+      if (count < want) return rand(220, 420);
+      // Line finished; a beat, then the next one.
+      current = null;
+      return rand(450, 900);
+    });
+  });
+
+  // ── the spreadsheet: the selected cell fills, then the one below ─────
+  document.querySelectorAll('.lw-sheet').forEach((sheet) => {
+    const win = sheet.closest('.demo-window');
+    const label = sheet.querySelector('.lw-formula-bar span');
+    const bar = sheet.querySelector('.lw-formula-bar i');
+    const cells = [...sheet.querySelectorAll('.lw-cell')];
+    const cols = 6;
+    if (!win || !cells.length) return;
+    let at = cells.findIndex((c) => c.classList.contains('is-sel'));
+    if (at === -1) at = 0;
+    let fill = cells[at].querySelector('i');
+    let width = parseFloat(fill.style.width) || 0;
+    let target = width || rand(40, 75);
+    let phase = 'fill';
+    const name = (i) => 'ABCDEF'[i % cols] + (Math.floor(i / cols) + 1);
+    run(win, () => {
+      if (phase === 'fill') {
+        width = Math.min(target, width + rand(4, 9));
+        fill.style.width = width + '%';
+        if (bar) bar.style.width = (width * 0.6) + '%';
+        if (width < target) return rand(90, 160);
+        phase = 'move';
+        return rand(400, 800);
+      }
+      // Return: the selection steps down the column, wrapping at the bottom.
+      cells[at].classList.remove('is-sel');
+      at = (at + cols) % cells.length;
+      cells[at].classList.add('is-sel');
+      if (label) label.textContent = name(at);
+      fill = cells[at].querySelector('i');
+      width = 0;
+      fill.style.width = '0%';
+      target = rand(40, 75);
+      phase = 'fill';
+      return rand(200, 350);
+    });
+  });
+})();
+
 (function menuBarClock() {
   const el = document.getElementById('mb-time');
   if (!el) return;
@@ -568,6 +713,9 @@ const I18N = (() => {
       };
       win.classList.add('is-held');
       win.style.inset = 'auto';
+      // The position below is absolute; a margin the window was centred with
+      // would move it by that much the moment it is picked up.
+      win.style.marginInline = '0';
       win.style.width = (windowGrab.width * 100) + '%';
       win.style.height = (windowGrab.height * 100) + '%';
       win.style.left = ((box2.left - bounds.left) / bounds.width * 100) + '%';
