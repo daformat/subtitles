@@ -4,6 +4,13 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.3.5 · 2026-09-05
+
+- In the welcome window's demo, a window no longer jumps when you click it to
+  bring it forward.
+- The demo's notes window writes while it is in front, as the site's now does, and
+  its windows carry the thin ring macOS draws around a real one.
+
 ## 1.3.4 · 2026-09-03
 
 - Re-vendored the site's caption demo for the welcome window. It brings the demo's
