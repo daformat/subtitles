@@ -564,15 +564,36 @@ final class OverlayController {
     /// lowering it drops the oldest immediately rather than waiting for the
     /// buffer to be pushed down to the new size. Zero keeps none at all, which
     /// is how someone turns the whole thing off without losing the ⌥ gesture
-    /// having ever meant anything.
+    /// having ever meant anything. `unlimitedHistoryDepth` keeps every box,
+    /// within `historyDepthCap`.
+    ///
+    /// Only the count. How long a silence forgets the stack is `historyExpiry`,
+    /// and the two are deliberately not tied: someone who asks for every box
+    /// has said nothing about how long they want them for.
     var historyDepth = OverlayController.defaultHistoryDepth {
         didSet {
             guard historyDepth != oldValue else { return }
-            streams.trim(to: historyDepth)
+            streams.trim(to: effectiveHistoryDepth)
         }
     }
 
-    static let defaultHistoryDepth = 15
+    /// The slider's last stop: keep everything. A sentinel rather than the cap
+    /// itself, so a plist written at today's cap does not turn into a fixed
+    /// number the day the cap moves.
+    static let unlimitedHistoryDepth = Int.max
+
+    /// Everything, out of the box. The expiry is what keeps the stack about
+    /// what was just said; a count on top of it only ever lost a box someone
+    /// was scrolling back for.
+    static let defaultHistoryDepth = unlimitedHistoryDepth
+
+    /// What "everything" comes to in practice. A page is a sentence or two, so
+    /// this is a few hundred kilobytes of text at the very most — and a stack
+    /// nobody could scroll to the end of long before then.
+    static let historyDepthCap = 2000
+
+    /// The depth the pagers are actually asked to keep.
+    private var effectiveHistoryDepth: Int { min(historyDepth, Self.historyDepthCap) }
 
     /// How bright the ⌥ stack's text is against the live box's white.
     var historyTextOpacity = HistoryPillView.defaultTextOpacity
@@ -746,10 +767,16 @@ final class OverlayController {
     /// leaves boxes that were already up alone and animates only the new one.
     private func updateHistory() {
         let flags = NSEvent.modifierFlags
+        // Same poll, same reason: an outside click unpins the search, and the
+        // mouse buttons are as pollable as the modifiers.
+        history.noticeClicks()
         // Never alongside ⇧: that is the drag gesture, and a second panel over
-        // the box while it is being picked up just gets in the way.
+        // the box while it is being picked up just gets in the way. Pinned by
+        // the search, the stack stays whatever the keys are doing: that is what
+        // pinning is for.
+        let held = flags.contains(.option) && !flags.contains(.shift)
         let wants = isHistoryEnabled && !isSuppressed && !pastPages.isEmpty
-            && flags.contains(.option) && !flags.contains(.shift)
+            && (held || history.isPinned)
         guard wants else {
             history.dismiss()
             return
@@ -781,7 +808,8 @@ final class OverlayController {
     ///
     /// ⌥ suppresses it for a different reason: the pointer has to be over the
     /// stack to scroll it, and a hole punched through the live box under the
-    /// cursor while the user is reading the history above it is pure noise.
+    /// cursor while the user is reading the history above it is pure noise. A
+    /// stack pinned by its search is being read the same way, with ⌥ released.
     /// `frame` is the panel frame to measure against, for the case where the
     /// panel is about to be given one and has not got it yet.
     private func updateMask(for frame: NSRect? = nil) {
@@ -790,7 +818,8 @@ final class OverlayController {
         guard isRevealEnabled,
               panel.alphaValue > 0,
               !flags.contains(.shift),
-              !flags.contains(.option) else {
+              !flags.contains(.option),
+              !history.isPinned else {
             view.maskCenter = nil
             return
         }
@@ -907,7 +936,7 @@ final class OverlayController {
             streams.markFresh()
         }
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
-                                   depth: historyDepth, allowCarry: allowsCarry,
+                                   depth: effectiveHistoryDepth, allowCarry: allowsCarry,
                                    speculativeFrom: speculativeFrom) { texts in
             longestFittingPrefix(texts, from: 0)
         }

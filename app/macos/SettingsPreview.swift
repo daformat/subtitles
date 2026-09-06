@@ -577,9 +577,14 @@ final class SettingsPreview: NSView {
             guard style.historyEnabled, style.historyDepth > 0 else {
                 return "⌥ brings nothing back. Finished boxes are gone once they clear."
             }
-            return style.historyDepth == 1
-                ? "⌥ brings back the last box."
-                : "⌥ brings back the last \(style.historyDepth) boxes, newest first, and scrolls through them."
+            switch style.historyDepth {
+            case 1:
+                return "⌥ brings back the last box."
+            case OverlayController.unlimitedHistoryDepth:
+                return "⌥ brings back every box, newest first, and scrolls through them."
+            case let n:
+                return "⌥ brings back the last \(n) boxes, newest first, and scrolls through them."
+            }
         case .dimness:
             return "The stack's text sits at \(pct(style.historyTextOpacity)) against the live box's white."
         case .expiry:
@@ -688,6 +693,8 @@ final class SettingsPreview: NSView {
     /// The document holds every box the depth allows, not only the ones that
     /// fit: what does not fit is what the wheel is for.
     private func layoutStack(above top: CGFloat) {
+        // Unlimited is a sentinel far beyond anything `closed` holds, and
+        // `suffix` is happy to be asked for more than there is.
         let depth = style.historyEnabled ? style.historyDepth : 0
         // Newest first, so index 0 is the box against the live one — which is
         // where the eye goes, so where the animation starts and where the scroll

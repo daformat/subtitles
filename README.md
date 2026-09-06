@@ -77,7 +77,7 @@ The app lives in the menu bar (no Dock icon).
 |---|---|
 | **⌥⌘S** | pause / resume |
 | **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
-| **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older |
+| **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older, or ⌥F and type to filter them — the stack then stays up until Escape |
 | **⌘,** | settings — from the menu bar |
 | Menu bar | model, source, text size, overlay position, permission state |
 
@@ -91,8 +91,8 @@ panes:
 
 - **UI** — how many lines a box fills before it clears, how solid it is, how much
   of it the pointer dissolves and how far that reach extends, and how many
-  finished boxes ⌥ brings back and how far behind the live one they sit, and how
-  long a silence forgets them — thirty seconds by default, a slider out to five
+  finished boxes ⌥ brings back — a number, or all of them — and how far behind
+  the live one they sit, and how long a silence forgets them — thirty seconds by default, a slider out to five
   minutes, a field for anything else, or off to keep them until you pause or
   quit. Every control applies to the overlay as you drag it, and the pane opens
   onto a small screen of its own that shows what each one does.

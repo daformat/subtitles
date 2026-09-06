@@ -739,17 +739,28 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.background)
             })
 
+        // The track runs one stop past the last number, and that stop is
+        // Unlimited. The setting itself is a sentinel there, not this stop's
+        // ordinal, so the slider maps in both directions — and `SliderRow`'s
+        // clamp already pins a sentinel-sized value to the end of the track.
+        let unlimitedStop = 31.0
         let depth = SliderRow(
-            "Keep", range: 0...30, value: Double(historyDepth()), snaps: true,
+            "Keep", range: 0...unlimitedStop,
+            value: historyDepth() == OverlayController.unlimitedHistoryDepth
+                ? unlimitedStop : Double(historyDepth()),
+            snaps: true,
             format: {
                 switch Int($0.rounded()) {
                 case 0: return "Off"
                 case 1: return "1 box"
+                case Int(unlimitedStop): return "∞"
                 case let n: return "\(n) boxes"
                 }
             },
             apply: { [weak self] in
-                self?.onHistoryDepth?(Int($0.rounded()))
+                let stop = Int($0.rounded())
+                self?.onHistoryDepth?(stop == Int(unlimitedStop)
+                                      ? OverlayController.unlimitedHistoryDepth : stop)
                 self?.syncPreview(.keep)
             })
 

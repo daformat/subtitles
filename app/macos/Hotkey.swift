@@ -18,18 +18,29 @@ final class Hotkey {
     private var handlerRef: EventHandlerRef?
     fileprivate let action: () -> Void
 
+    private let id: UInt32
+
     /// `keyCode` is a virtual key code (`kVK_ANSI_S` etc.); `modifiers` uses the
-    /// Carbon constants (`cmdKey`, `optionKey`, …).
-    init?(keyCode: Int, modifiers: Int, action: @escaping () -> Void) {
+    /// Carbon constants (`cmdKey`, `optionKey`, …). `id` tells this hotkey's
+    /// events from another's: every handler installed here hears every hotkey
+    /// the app registers, and only the one whose id matches acts.
+    init?(keyCode: Int, modifiers: Int, id: UInt32 = 1, action: @escaping () -> Void) {
         self.action = action
+        self.id = id
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed))
 
-        let callback: EventHandlerUPP = { _, _, userData in
-            guard let userData else { return noErr }
-            Unmanaged<Hotkey>.fromOpaque(userData).takeUnretainedValue().action()
+        let callback: EventHandlerUPP = { _, event, userData in
+            guard let userData, let event else { return noErr }
+            let hotkey = Unmanaged<Hotkey>.fromOpaque(userData).takeUnretainedValue()
+            var pressed = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject),
+                              EventParamType(typeEventHotKeyID), nil,
+                              MemoryLayout<EventHotKeyID>.size, nil, &pressed)
+            guard pressed.id == hotkey.id else { return noErr }
+            hotkey.action()
             return noErr
         }
 
@@ -37,8 +48,8 @@ final class Hotkey {
         guard InstallEventHandler(GetApplicationEventTarget(), callback, 1, &eventType,
                                   selfPtr, &handlerRef) == noErr else { return nil }
 
-        let id = EventHotKeyID(signature: OSType(0x5355_4253 /* "SUBS" */), id: 1)
-        guard RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), id,
+        let hotkeyID = EventHotKeyID(signature: OSType(0x5355_4253 /* "SUBS" */), id: id)
+        guard RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID,
                                   GetApplicationEventTarget(), 0, &ref) == noErr else {
             if let handlerRef { RemoveEventHandler(handlerRef) }
             return nil

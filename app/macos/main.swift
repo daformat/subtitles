@@ -858,7 +858,9 @@ if useOverlay {
     // `as? Int` from a plist anyone can edit, and neither has a sane reading
     // below its floor: a depth under zero asks the stack to drop more boxes than
     // it holds, and a box allowed zero lines can never fit a word, so it never
-    // pages and simply clips whatever it is given.
+    // pages and simply clips whatever it is given. No ceiling on the depth: the
+    // slider's Unlimited stop is stored as `unlimitedHistoryDepth`, and the
+    // overlay caps what it actually keeps.
     controller.historyDepth = max(
         UserDefaults.standard.object(forKey: Defaults.historyDepth) as? Int
             ?? OverlayController.defaultHistoryDepth, 0)

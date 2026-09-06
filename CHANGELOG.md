@@ -4,6 +4,27 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## Unreleased
+
+- The Keep slider in Settings runs one stop further, to Unlimited, shown as ∞,
+  and that is now the default. There the ⌥ stack keeps every box that closes, up
+  to two thousand, rather than the last fifteen. Only the count changes: how long
+  a silence forgets the stack is the setting it always was, and the two are not
+  tied to each other.
+- The ⌥ stack can be searched. A small field sits at the edge of the stack
+  touching the live box, styled as one more box. Click it, or press ⌥F while the
+  stack is up, and type — ⌥ is stripped from what is typed, so the first letters
+  can go in with it still held. Typing narrows the stack to the boxes containing
+  the text, ignoring case and accents, lights the matches and scrolls to the
+  newest one; a circled ✕ at the end of the field clears it. While the field has
+  the keyboard the stack is pinned: it stays up with ⌥ released, clearing the
+  field to try another word keeps it, and pages that close meanwhile join it and
+  are filtered the same way. Escape or a click anywhere outside the stack unpins
+  it, and the stack goes back to living under ⌥; a filtered stack fades out as it
+  was, and comes back whole.
+- The stack no longer re-measures every box each time it is rebuilt. It was a
+  hitch at the depths the slider now allows.
+
 ## 1.3.5 · 2026-09-05
 
 - In the welcome window's demo, a window no longer jumps when you click it to
