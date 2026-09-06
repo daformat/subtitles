@@ -1341,14 +1341,22 @@
    approach the end and the class comes off entirely once you reach it. The
    direction is the only part CSS decides, because it follows the side the stack
    took: older boxes are above when the stack is above, and below when it is
-   below. Never the near edge, which holds the newest box, the one being read. */
+   below. The near edge, which holds the newest box, the one being read, gets a
+   much shorter band in `--near-fade`, and only once the stack has been scrolled
+   away from the live box: then that edge hides newer boxes too, and the band
+   says so without dimming what is being read. It is zero when parked, and a
+   zero-length ramp at the very end of the gradient is the same as no ramp. */
 .demo-history.is-clipped {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em));
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em));
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em),
+      #000 calc(100% - var(--near-fade, 0px)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em),
+      #000 calc(100% - var(--near-fade, 0px)), transparent);
 }
 .demo-history.is-below.is-clipped {
-  -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em));
-  mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em));
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em),
+      #000 calc(100% - var(--near-fade, 0px)), transparent);
+  mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em),
+      #000 calc(100% - var(--near-fade, 0px)), transparent);
 }
 
 /* No room left on the chosen side. It stays built, so the next page shrinking

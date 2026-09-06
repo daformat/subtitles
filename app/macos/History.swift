@@ -574,6 +574,12 @@ final class HistoryController {
     /// than swallowing a whole box to announce it.
     private static let fadeHeight: CGFloat = 150
 
+    /// Ceiling on the fade at the near edge, there only once the reader has
+    /// scrolled away from the live box. Much shorter than the far one: that edge
+    /// is where the newest boxes are, and the band is a hint that they are just
+    /// out of sight, not an invitation to keep going.
+    private static let nearFadeHeight: CGFloat = 60
+
     private let panel = HistoryPanel()
 
     /// Whether the stack is captured by screen recording and sharing. Follows the
@@ -1220,13 +1226,15 @@ final class HistoryController {
 
     // MARK: fade
 
-    /// Fade the edge that has boxes beyond it — and only that one.
+    /// Fade each edge that has boxes beyond it — and only those.
     ///
-    /// The far edge, never the near one: the box against the live one is the
-    /// newest, the one being read, and dimming it would be backwards. So the
-    /// fade is at the top when the stack is drawn above the live box and at the
-    /// bottom when it is drawn below, which are the only directions older boxes
-    /// can be in.
+    /// The far edge carries the tall fade: it is at the top when the stack is
+    /// drawn above the live box and at the bottom when it is drawn below, which
+    /// are the only directions older boxes can be in. The near edge gets a much
+    /// shorter one, and only once the reader has scrolled away from the live
+    /// box, because until then the box against it is the newest, the one being
+    /// read, and dimming it would be backwards. Scrolled, that edge hides newer
+    /// boxes, and the short band says so without swallowing what is being read.
     ///
     /// Driven by the clip view's bounds notification, so it tracks the wheel
     /// rather than only the moment the stack is built.
@@ -1236,18 +1244,24 @@ final class HistoryController {
 
         let visible = clip.bounds
         let content = document.frame.height
-        let hidden = placedAbove ? content - visible.maxY : visible.minY
+        let farHidden = placedAbove ? content - visible.maxY : visible.minY
+        let nearHidden = placedAbove ? visible.minY : content - visible.maxY
 
-        // Nothing behind that edge — including the case where the whole stack
+        // Nothing behind either edge — including the case where the whole stack
         // fits, when there is no edge to speak of. A fade with nothing behind it
         // promises more to see and then does not deliver it.
-        guard visible.height > 0, content > visible.height + 1, hidden > 0.5 else {
+        guard visible.height > 0, content > visible.height + 1,
+              farHidden > 0.5 || nearHidden > 0.5 else {
             if clip.layer?.mask != nil { clip.layer?.mask = nil }
             return
         }
 
-        let fade = min(min(Self.fadeHeight, hidden), visible.height / 2)
-        let stop = fade / visible.height
+        // Each band is capped at half the height, so the two can meet but never
+        // cross.
+        let far = farHidden > 0.5 ? min(min(Self.fadeHeight, farHidden), visible.height / 2) : 0
+        let near = nearHidden > 0.5 ? min(min(Self.nearFadeHeight, nearHidden), visible.height / 2) : 0
+        let farStop = far / visible.height
+        let nearStop = near / visible.height
 
         // No implicit animation: the mask is recomputed on every scroll event,
         // and CoreAnimation's default quarter-second interpolation would leave
@@ -1264,13 +1278,30 @@ final class HistoryController {
         fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         let clear = NSColor.clear.cgColor
         let solid = NSColor.black.cgColor
-        if placedAbove {
-            fadeMask.colors = [solid, solid, clear]
-            fadeMask.locations = [0, NSNumber(value: Double(1 - stop)), 1]
+        // Bottom to top. Above the live box the far edge is the top and the near
+        // edge the bottom; below, the other way round. A band of zero is left
+        // out rather than written as a zero-width ramp, which would put a clear
+        // stop on the very edge row.
+        let bottom = placedAbove ? nearStop : farStop
+        let top = placedAbove ? farStop : nearStop
+        var colors: [CGColor] = []
+        var locations: [NSNumber] = []
+        if bottom > 0 {
+            colors += [clear, solid]
+            locations += [0, NSNumber(value: Double(bottom))]
         } else {
-            fadeMask.colors = [clear, solid, solid]
-            fadeMask.locations = [0, NSNumber(value: Double(stop)), 1]
+            colors.append(solid)
+            locations.append(0)
         }
+        if top > 0 {
+            colors += [solid, clear]
+            locations += [NSNumber(value: Double(1 - top)), 1]
+        } else {
+            colors.append(solid)
+            locations.append(1)
+        }
+        fadeMask.colors = colors
+        fadeMask.locations = locations
         if clip.layer?.mask !== fadeMask { clip.layer?.mask = fadeMask }
         CATransaction.commit()
     }

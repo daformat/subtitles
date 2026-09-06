@@ -709,6 +709,9 @@ final class SettingsPreview: NSView {
     /// it grows with the amount actually hidden, so a stack overflowing by ten
     /// points gets a ten-point fade rather than swallowing a whole box.
     private static let fadeHeight: CGFloat = 150
+    /// Ceiling on the near edge's fade, matching `HistoryController`: there only
+    /// once the stack has been scrolled away from the live box, and much shorter.
+    private static let nearFadeHeight: CGFloat = 60
 
     // ── what is on the box ──
     private var page = ""
@@ -1186,17 +1189,25 @@ final class SettingsPreview: NSView {
     private func updateFade() {
         let clip = scroll.contentView
         let visible = clip.bounds
-        let hidden = contentHeight - visible.maxY
+        // The stack always sits above the live box here, so the far edge is the
+        // top and the near edge the bottom.
+        let farHidden = contentHeight - visible.maxY
+        let nearHidden = visible.minY
 
-        // Nothing behind that edge — including the case where the whole stack
+        // Nothing behind either edge — including the case where the whole stack
         // fits. A fade with nothing behind it promises more and does not deliver.
-        guard visible.height > 0, contentHeight > visible.height + 1, hidden > 0.5 else {
+        guard visible.height > 0, contentHeight > visible.height + 1,
+              farHidden > 0.5 || nearHidden > 0.5 else {
             if clip.layer?.mask != nil { clip.layer?.mask = nil }
             return
         }
 
-        let fade = min(min(Self.fadeHeight, hidden), visible.height / 2)
-        let stop = fade / visible.height
+        // Each band is capped at half the height, so the two can meet but never
+        // cross.
+        let far = farHidden > 0.5 ? min(min(Self.fadeHeight, farHidden), visible.height / 2) : 0
+        let near = nearHidden > 0.5 ? min(min(Self.nearFadeHeight, nearHidden), visible.height / 2) : 0
+        let farStop = far / visible.height
+        let nearStop = near / visible.height
 
         // No implicit animation: this is recomputed on every scroll event, and
         // CoreAnimation's default quarter-second interpolation would leave the
@@ -1211,8 +1222,26 @@ final class SettingsPreview: NSView {
         fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         let clear = NSColor.clear.cgColor
         let solid = NSColor.black.cgColor
-        fadeMask.colors = [solid, solid, clear]
-        fadeMask.locations = [0, NSNumber(value: Double(1 - stop)), 1]
+        // Bottom to top. A band of zero is left out rather than written as a
+        // zero-width ramp, which would put a clear stop on the very edge row.
+        var colors: [CGColor] = []
+        var locations: [NSNumber] = []
+        if nearStop > 0 {
+            colors += [clear, solid]
+            locations += [0, NSNumber(value: Double(nearStop))]
+        } else {
+            colors.append(solid)
+            locations.append(0)
+        }
+        if farStop > 0 {
+            colors += [solid, clear]
+            locations += [NSNumber(value: Double(1 - farStop)), 1]
+        } else {
+            colors.append(solid)
+            locations.append(1)
+        }
+        fadeMask.colors = colors
+        fadeMask.locations = locations
         if clip.layer?.mask !== fadeMask { clip.layer?.mask = fadeMask }
         CATransaction.commit()
     }

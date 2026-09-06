@@ -1385,18 +1385,23 @@ const stackSearch = (() => {
     history.scrollTop = placedAbove ? max - clamped : clamped;
   };
 
-  // Fade the edge that still has boxes beyond it, and only that one.
+  // Fade each edge that still has boxes beyond it, and only those.
   //
-  // The far edge, never the near one: the box against the live one is the
-  // newest and the one being read, so dimming it would be backwards.
+  // The far edge carries the tall fade. The near edge gets a much shorter one,
+  // and only once the reader has scrolled away from the live box: parked, the
+  // box against the live one is the newest and the one being read, so dimming
+  // it would be backwards; scrolled, that edge hides newer boxes, and the short
+  // band says so without swallowing what is being read.
   //
   // And only while something is genuinely hidden there. Scroll to the end and
   // the fade goes with it, because a fade with nothing behind it advertises
-  // content that is not there. The band is sized to the amount actually hidden,
+  // content that is not there. Each band is sized to the amount actually hidden,
   // so a stack overflowing by ten pixels gets a ten-pixel fade rather than
-  // swallowing a whole box to announce it, and it never takes more than half
-  // the visible height.
+  // swallowing a whole box to announce it, and neither takes more than half
+  // the visible height, so the two can meet but never cross.
   const FADE_MAX = 2.2;
+  // The app's 60pt against its 150pt far fade.
+  const NEAR_FADE_MAX = FADE_MAX * 0.4;
 
   // Only the depth moves. `is-clipped` is deliberately left alone here and set
   // from layout in placeHistory instead: it carries the mask, and adding or
@@ -1407,9 +1412,18 @@ const stackSearch = (() => {
   const updateFade = () => {
     if (!history) return;
     const em = parseFloat(getComputedStyle(history).fontSize) || 16;
-    const hidden = Math.max(0, maxScroll() - nearDistance());
+    const near = Math.max(0, nearDistance());
+    const hidden = Math.max(0, maxScroll() - near);
     const fade = Math.min(em * FADE_MAX, hidden, history.clientHeight / 2);
+    // Parked, the near band is zero whatever the geometry says. A box rising in
+    // at the near end is translated for the length of its entrance, and a
+    // transformed box widens the scrollable overflow it sits in, so for those
+    // frames the near distance reads as the displacement and the band flashed
+    // on and snapped off with the animation. The far band is unaffected: that
+    // growth lands at both ends of its measurement and cancels.
+    const nearFade = parked ? 0 : Math.min(em * NEAR_FADE_MAX, near, history.clientHeight / 2);
     history.style.setProperty('--fade', fade.toFixed(1) + 'px');
+    history.style.setProperty('--near-fade', nearFade.toFixed(1) + 'px');
   };
 
   // Follows the wheel, not just the moment the stack is built: scrolling is
