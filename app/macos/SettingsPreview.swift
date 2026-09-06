@@ -69,18 +69,36 @@ private struct DesktopPalette {
     /// Things drawn *on* a surface, at whatever alpha each one wants — the
     /// stylesheet's `--ink`, and the reason its alphas hold across the swap.
     let ink: NSColor
-    /// Three stops, top to bottom.
+    /// Three stops, top to bottom, and where the middle one sits.
     let wallpaper: [NSColor]
-    let glowA: NSColor
-    let glowB: NSColor
+    let wallpaperMid: CGFloat
+    /// The wallpaper's soft ellipses, `--desktop-bg`'s radial gradients in the
+    /// order the stylesheet lists them: position and radii as fractions of the
+    /// screen, in CSS's y-down, and the fraction of the radius the colour runs
+    /// out at.
+    struct Glow {
+        let at: NSPoint
+        let radii: NSSize
+        let color: NSColor
+        let stop: CGFloat
+    }
+    let glows: [Glow]
+    /// `--bar-bg`: the menu bar, without the blur it has on the site.
+    let bar: NSColor
     let window: NSColor
     /// Ink alphas: the title bar's gradient, and the hairline it ends on.
     let barTop: CGFloat
     let barBottom: CGFloat
     let line: CGFloat
-    /// Ink alpha for the page of text inside the window.
-    let content: CGFloat
-    /// `--border-strong`, around the screen and the window.
+    /// `--meeting-bg`, `--tile-bg` (two stops) and `--recess`.
+    let meeting: NSColor
+    let tile: [NSColor]
+    let recess: NSColor
+    /// `--window-ring` and `--window-inner`: the translucent line outside a
+    /// window's edge, and the faint light one inside it that dark mode adds.
+    let ring: NSColor
+    let inner: NSColor
+    /// `--border-strong`, around the screen.
     let edge: NSColor
     /// Shadows are the one thing that does not survive a palette swap: the dark
     /// one is deep because it falls on a near-black desktop, where nothing less
@@ -90,32 +108,66 @@ private struct DesktopPalette {
     static let light = DesktopPalette(
         ink: NSColor(srgbRed: 0.086, green: 0.090, blue: 0.110, alpha: 1),   // 22 23 28
         wallpaper: [
-            NSColor(srgbRed: 0.804, green: 0.839, blue: 0.949, alpha: 1),    // #cdd6f2
-            NSColor(srgbRed: 0.902, green: 0.902, blue: 0.957, alpha: 1),    // #e6e6f4
-            NSColor(srgbRed: 0.949, green: 0.933, blue: 0.941, alpha: 1),    // #f2eef0
+            NSColor(srgbRed: 0.780, green: 0.761, blue: 1, alpha: 1),        // #c7c2ff
+            NSColor(srgbRed: 0.918, green: 0.839, blue: 0.957, alpha: 1),    // #ead6f4
+            NSColor(srgbRed: 1, green: 0.847, blue: 0.761, alpha: 1),        // #ffd8c2
         ],
-        glowA: NSColor(srgbRed: 0.588, green: 0.612, blue: 1, alpha: 0.50),
-        glowB: NSColor(srgbRed: 1, green: 0.690, blue: 0.588, alpha: 0.45),
+        wallpaperMid: 0.48,
+        glows: [
+            Glow(at: NSPoint(x: 0.16, y: 0.10), radii: NSSize(width: 0.55, height: 0.60),
+                 color: NSColor(srgbRed: 0.439, green: 0.392, blue: 1, alpha: 0.62), stop: 0.64),
+            Glow(at: NSPoint(x: 0.86, y: 0.18), radii: NSSize(width: 0.48, height: 0.55),
+                 color: NSColor(srgbRed: 1, green: 0.431, blue: 0.667, alpha: 0.50), stop: 0.66),
+            Glow(at: NSPoint(x: 0.72, y: 0.96), radii: NSSize(width: 0.58, height: 0.50),
+                 color: NSColor(srgbRed: 1, green: 0.659, blue: 0.392, alpha: 0.66), stop: 0.66),
+            Glow(at: NSPoint(x: 0.12, y: 0.90), radii: NSSize(width: 0.42, height: 0.46),
+                 color: NSColor(srgbRed: 0.314, green: 0.769, blue: 0.922, alpha: 0.50), stop: 0.66),
+        ],
+        bar: NSColor(srgbRed: 0.965, green: 0.965, blue: 0.980, alpha: 0.35),
         window: NSColor(srgbRed: 0.992, green: 0.992, blue: 1, alpha: 1),    // #fdfdff
         barTop: 0.06, barBottom: 0.13, line: 0.13,
-        content: 0.13,
+        meeting: NSColor(srgbRed: 0.945, green: 0.949, blue: 0.965, alpha: 1), // #f1f2f6
+        tile: [
+            NSColor(srgbRed: 0.992, green: 0.992, blue: 1, alpha: 1),        // #fdfdff
+            NSColor(srgbRed: 0.914, green: 0.922, blue: 0.949, alpha: 1),    // #e9ebf2
+        ],
+        recess: NSColor(white: 0, alpha: 0.045),
+        ring: NSColor(white: 0, alpha: 0.08),
+        inner: .clear,
         edge: NSColor(srgbRed: 0.071, green: 0.071, blue: 0.094, alpha: 0.16),
-        shadow: 0.20)
+        shadow: 0.28)
 
     static let dark = DesktopPalette(
         ink: .white,
         wallpaper: [
-            NSColor(srgbRed: 0.165, green: 0.169, blue: 0.271, alpha: 1),    // #2a2b45
-            NSColor(srgbRed: 0.098, green: 0.102, blue: 0.165, alpha: 1),    // #191a2a
-            NSColor(srgbRed: 0.063, green: 0.063, blue: 0.098, alpha: 1),    // #101019
+            NSColor(srgbRed: 0.090, green: 0.078, blue: 0.184, alpha: 1),    // #17142f
+            NSColor(srgbRed: 0.169, green: 0.106, blue: 0.251, alpha: 1),    // #2b1b40
+            NSColor(srgbRed: 0.227, green: 0.118, blue: 0.169, alpha: 1),    // #3a1e2b
         ],
-        glowA: NSColor(srgbRed: 0.471, green: 0.455, blue: 1, alpha: 0.34),
-        glowB: NSColor(srgbRed: 0.306, green: 0.290, blue: 0.745, alpha: 0.30),
+        wallpaperMid: 0.50,
+        glows: [
+            Glow(at: NSPoint(x: 0.16, y: 0.10), radii: NSSize(width: 0.55, height: 0.60),
+                 color: NSColor(srgbRed: 0.408, green: 0.345, blue: 1, alpha: 0.50), stop: 0.64),
+            Glow(at: NSPoint(x: 0.86, y: 0.18), radii: NSSize(width: 0.48, height: 0.55),
+                 color: NSColor(srgbRed: 0.882, green: 0.275, blue: 0.588, alpha: 0.36), stop: 0.66),
+            Glow(at: NSPoint(x: 0.72, y: 0.96), radii: NSSize(width: 0.58, height: 0.50),
+                 color: NSColor(srgbRed: 1, green: 0.541, blue: 0.298, alpha: 0.36), stop: 0.66),
+            Glow(at: NSPoint(x: 0.12, y: 0.90), radii: NSSize(width: 0.42, height: 0.46),
+                 color: NSColor(srgbRed: 0.157, green: 0.627, blue: 0.882, alpha: 0.32), stop: 0.66),
+        ],
+        bar: NSColor(srgbRed: 0.094, green: 0.098, blue: 0.114, alpha: 0.55),
         window: NSColor(srgbRed: 0.063, green: 0.067, blue: 0.086, alpha: 1), // #101116
         barTop: 0.09, barBottom: 0.045, line: 0.045,
-        content: 0.13,
+        meeting: NSColor(srgbRed: 0.086, green: 0.090, blue: 0.114, alpha: 1), // #16171d
+        tile: [
+            NSColor(srgbRed: 0.149, green: 0.157, blue: 0.220, alpha: 1),    // #262838
+            NSColor(srgbRed: 0.098, green: 0.102, blue: 0.141, alpha: 1),    // #191a24
+        ],
+        recess: NSColor(white: 0, alpha: 0.30),
+        ring: NSColor(white: 0, alpha: 0.60),
+        inner: NSColor(white: 1, alpha: 0.10),
         edge: NSColor(white: 1, alpha: 0.18),
-        shadow: 0.55)
+        shadow: 0.60)
 
     /// The palette a view should be drawing in right now.
     static func matching(_ appearance: NSAppearance) -> DesktopPalette {
@@ -155,77 +207,205 @@ private final class PreviewStage: NSView {
         onResize?()
     }
 
-    /// A desktop for the subtitles to sit on, and a window for the pointer
-    /// reveal to reveal. A hole punched onto the settings window's own
-    /// background would show nothing being uncovered, which is the one thing
-    /// that control is about.
+    // ── the call ──
+
+    /// Who is talking, handed round the tiles the way it goes in a real call:
+    /// never straight back to the same person, and held for an uneven beat,
+    /// because a fixed rotation reads as a carousel rather than a conversation.
+    /// The beats are the site demo's.
+    private static let people: [(initials: String, name: String, face: [NSColor])] = [
+        ("AO", "Amara", [NSColor(srgbRed: 0.435, green: 0.416, blue: 0.902, alpha: 1),
+                         NSColor(srgbRed: 0.310, green: 0.294, blue: 0.753, alpha: 1)]),
+        ("YT", "Yuki",  [NSColor(srgbRed: 0.851, green: 0.478, blue: 0.306, alpha: 1),
+                         NSColor(srgbRed: 0.694, green: 0.333, blue: 0.184, alpha: 1)]),
+        ("TR", "Tomás", [NSColor(srgbRed: 0.298, green: 0.616, blue: 0.549, alpha: 1),
+                         NSColor(srgbRed: 0.200, green: 0.459, blue: 0.416, alpha: 1)]),
+        ("LK", "Lena",  [NSColor(srgbRed: 0.541, green: 0.435, blue: 0.722, alpha: 1),
+                         NSColor(srgbRed: 0.373, green: 0.290, blue: 0.541, alpha: 1)]),
+    ]
+    private var speaking = 0
+    /// How far each tile's ring has faded in, 0…1. The demo transitions the
+    /// border over a quarter second, so handing the ring on is a fade, not a
+    /// jump.
+    private var rings: [CGFloat] = [1, 0, 0, 0]
+    private var nextHand: TimeInterval = 0
+    private var lastFrame: TimeInterval = 0
+    private var frames: Timer?
+    private static let fps: TimeInterval = 1 / 30
+
+    /// Still rings and no hand-off under Reduce Motion, as the demo does: it is
+    /// who is speaking, not an animation.
+    private var calm: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    /// The pulses run while the stage is in a window and stop with it, for the
+    /// same reason the preview's own loop does.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        frames?.invalidate()
+        frames = nil
+        guard window != nil else { return }
+        let now = CACurrentMediaTime()
+        lastFrame = now
+        nextHand = now + 1.9
+        let timer = Timer(timeInterval: Self.fps, repeats: true) { [weak self] _ in
+            self?.advance()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        frames = timer
+    }
+
+    deinit { frames?.invalidate() }
+
+    private func advance() {
+        let now = CACurrentMediaTime()
+        let dt = now - lastFrame
+        lastFrame = now
+        if !calm, now >= nextHand {
+            speaking = (speaking + 1 + Int.random(in: 0..<(Self.people.count - 1))) % Self.people.count
+            nextHand = now + 2.1 + Double.random(in: 0..<1.7)
+        }
+        for i in rings.indices {
+            let target: CGFloat = i == speaking ? 1 : 0
+            let step = CGFloat(dt / 0.25)
+            rings[i] = target > rings[i] ? min(target, rings[i] + step) : max(target, rings[i] - step)
+        }
+        needsDisplay = true
+    }
+
+    // ── drawing ──
+
+    /// One hundredth of the screen's width, near enough: the demo draws every
+    /// piece of its chrome in multiples of this, so the same multiples here are
+    /// what keep the model to scale. 0.91 rather than 1 for the reason the
+    /// stylesheet gives — that slope reaches the demo's cap at the width the
+    /// demo tops out at.
+    private var u: CGFloat { bounds.width * 0.0091 }
+    /// Where the desktop starts: the stack rises to the menu bar's edge and no
+    /// further, because on a Mac a window does not go over the menu bar and
+    /// neither does the stack.
+    var menuBarHeight: CGFloat { 2.95 * u }
+    /// One screen pixel in overlay points: hairlines are drawn in these, since a
+    /// half-point line scaled to a third of itself is not a line.
+    private var px: CGFloat { 1 / max(contentScale, 0.01) }
+
+    /// A desktop for the subtitles to sit on, with a menu bar over it and a
+    /// window in the middle of it for the pointer reveal to reveal. A hole
+    /// punched onto the settings window's own background would show nothing
+    /// being uncovered, which is the one thing that control is about.
     ///
-    /// The wallpaper is the site demo's: the same two glows over the same
-    /// three-stop ground, in whichever of its two palettes matches the
-    /// appearance this window is being drawn in.
-    ///
-    /// Everything here is in overlay points, which are the simulated screen's
-    /// own points — so the title bar is 28 of them and the traffic lights 12
-    /// across, exactly as they are on the Mac this is pretending to be, and the
-    /// stage's scale takes them down with everything else.
+    /// All of it is the site demo's: the same wallpaper, the same bar and the
+    /// same call, in whichever of its two palettes matches the appearance this
+    /// window is being drawn in. Everything here is in overlay points, which are
+    /// the simulated screen's own points, and the stage's scale takes them down
+    /// with everything else.
     override func draw(_ dirtyRect: NSRect) {
         let palette = DesktopPalette.matching(effectiveAppearance)
+        let now = CACurrentMediaTime()
         drawDesktop(palette)
-        drawWindow(palette)
+        let bar = drawMenuBar(palette, now: now)
+        drawCall(palette, below: bar, now: now)
     }
 
     /// Repaint on a change of appearance. The colours are picked in `draw`, so
     /// there is nothing to update — only a reason to draw again.
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        glyphs.removeAll()
         needsDisplay = true
     }
 
     private func drawDesktop(_ palette: DesktopPalette) {
-        NSGradient(colors: palette.wallpaper, atLocations: [0, 0.46, 1], colorSpace: .sRGB)?
-            // CSS measures its 158° clockwise from up; NSGradient measures
+        NSGradient(colors: palette.wallpaper, atLocations: [0, palette.wallpaperMid, 1],
+                   colorSpace: .sRGB)?
+            // CSS measures its 160° clockwise from up; NSGradient measures
             // counter-clockwise from the x axis, which is 90 less than it.
-            .draw(in: bounds, angle: -68)
-
-        glow(at: NSPoint(x: 0.22, y: 0.92), radii: NSSize(width: 0.60, height: 0.70),
-             color: palette.glowA)
-        glow(at: NSPoint(x: 0.88, y: 0.04), radii: NSSize(width: 0.52, height: 0.60),
-             color: palette.glowB)
+            .draw(in: bounds, angle: -70)
+        for glow in palette.glows { draw(glow) }
     }
 
     /// One of the wallpaper's soft ellipses. Position and radii are fractions of
-    /// the stage, the way the stylesheet states them; the colour runs out at 70%
-    /// of the radius, as `transparent 70%` does.
-    private func glow(at unit: NSPoint, radii: NSSize, color: NSColor) {
+    /// the stage, the way the stylesheet states them, with the y turned over
+    /// because the stylesheet counts from the top.
+    private func draw(_ glow: DesktopPalette.Glow) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        let rx = bounds.width * radii.width
-        let ry = bounds.height * radii.height
+        let rx = bounds.width * glow.radii.width
+        let ry = bounds.height * glow.radii.height
         guard rx > 0, ry > 0 else { return }
         guard let gradient = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
-            colors: [color.cgColor, color.withAlphaComponent(0).cgColor] as CFArray,
-            locations: [0, 0.7]) else { return }
+            colors: [glow.color.cgColor, glow.color.withAlphaComponent(0).cgColor] as CFArray,
+            locations: [0, glow.stop]) else { return }
 
         ctx.saveGState()
         // Circular gradients only, so the ellipse comes from squashing the space
         // it is drawn in — the same trick the reveal's mask uses.
-        ctx.translateBy(x: bounds.width * unit.x, y: bounds.height * unit.y)
+        ctx.translateBy(x: bounds.width * glow.at.x, y: bounds.height * (1 - glow.at.y))
         ctx.scaleBy(x: 1, y: ry / rx)
         ctx.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0,
                                endCenter: .zero, endRadius: rx, options: [])
         ctx.restoreGState()
     }
 
-    /// A window with something to read in it, sitting on the desktop with the
-    /// same air above it as below.
-    private func drawWindow(_ palette: DesktopPalette) {
+    /// The bar across the top: the mark, the app in front, its first menus, and
+    /// at the other end this app's own glyph with its live dot, and the clock.
+    /// Returns the bar, so the window knows where the desktop starts.
+    @discardableResult
+    private func drawMenuBar(_ palette: DesktopPalette, now: TimeInterval) -> NSRect {
+        let bar = NSRect(x: 0, y: bounds.maxY - 2.95 * u, width: bounds.width, height: 2.95 * u)
+        palette.bar.setFill()
+        bar.fill()
+
+        let ink = palette.ink
+        let size = 1.25 * u
+        var x = bar.minX + 1.36 * u
+        if let apple = symbol("apple.logo", height: 1.6 * u, color: ink.withAlphaComponent(0.82)) {
+            let w = glyphWidth(apple, height: 1.6 * u)
+            drawGlyph(apple, height: 1.6 * u, center: NSPoint(x: x + w / 2, y: bar.midY))
+            x += w + 0.2 * u + 1.55 * u
+        }
+        x += text("Meetings", at: NSPoint(x: x, y: bar.midY),
+                  font: .systemFont(ofSize: size, weight: .bold),
+                  color: ink.withAlphaComponent(0.82)) + 1.55 * u
+        for menu in ["File", "Edit", "View"] {
+            x += text(menu, at: NSPoint(x: x, y: bar.midY), font: .systemFont(ofSize: size),
+                      color: ink.withAlphaComponent(0.72)) + 1.55 * u
+        }
+
+        // The right half, laid out from the edge inwards.
+        let clock = Date().formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)
+            .hour().minute())
+        let clockFont = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
+        let clockWidth = width(of: clock, font: clockFont)
+        var right = bar.maxX - 1.36 * u - clockWidth
+        text(clock, at: NSPoint(x: right, y: bar.midY), font: clockFont,
+             color: ink.withAlphaComponent(0.72))
+        right -= 1.48 * u
+        if let glyph = statusGlyph(color: ink.withAlphaComponent(0.82)) {
+            let box = NSRect(x: right - 1.7 * u, y: bar.midY - 0.74 * u, width: 1.7 * u, height: 1.48 * u)
+            glyph.image.draw(in: box)
+            // The badge: a separate dot on the glyph's top-right corner, exactly
+            // as the app draws it, pulsing 1.0 → 0.25 and back over 3.6 s.
+            let phase = calm ? 0 : (now.truncatingRemainder(dividingBy: 3.6)) / 3.6
+            let alpha = 0.25 + 0.75 * (0.5 + 0.5 * cos(2 * .pi * phase))
+            let d = 0.57 * u
+            NSColor(srgbRed: 0.345, green: 0.337, blue: 0.839, alpha: alpha).setFill() // #5856d6
+            NSBezierPath(ovalIn: NSRect(x: box.maxX + 0.23 * u - d, y: box.maxY + 0.11 * u - d,
+                                        width: d, height: d)).fill()
+        }
+        return bar
+    }
+
+    /// The call, front and centre: the window the captions are running over.
+    private func drawCall(_ palette: DesktopPalette, below bar: NSRect, now: TimeInterval) {
+        let top: CGFloat = 2.4 * u
         let margin: CGFloat = 42
-        let width = ((bounds.width - 300) * 0.9).rounded()
-        let frame = NSRect(x: ((bounds.width - width) / 2).rounded(), y: margin,
-                           width: width, height: bounds.height - margin * 2)
+        let span = ((bounds.width - 300) * 0.9).rounded()
+        let frame = NSRect(x: ((bounds.width - span) / 2).rounded(), y: margin,
+                           width: span, height: bar.minY - top - margin)
         guard frame.width > 0, frame.height > 0 else { return }
-        let radius: CGFloat = 12
+        let radius = 1.25 * u
         let shape = NSBezierPath(roundedRect: frame, xRadius: radius, yRadius: radius)
+        let ink = palette.ink
 
         NSGraphicsContext.saveGraphicsState()
         let shadow = NSShadow()
@@ -242,50 +422,249 @@ private final class PreviewStage: NSView {
 
         // Title bar: the same two-stop wash the demo's windows wear, and a
         // hairline where it ends rather than a line drawn under it.
-        let bar = NSRect(x: frame.minX, y: frame.maxY - 28, width: frame.width, height: 28)
+        let titleBar = NSRect(x: frame.minX, y: frame.maxY - 2.95 * u, width: frame.width, height: 2.95 * u)
         // Drawn upwards, so `starting` is the bottom edge and `ending` the top.
-        NSGradient(starting: palette.ink.withAlphaComponent(palette.barBottom),
-                   ending: palette.ink.withAlphaComponent(palette.barTop))?.draw(in: bar, angle: 90)
-        // The value that gradient ends on, so the divider is one more row of it
-        // rather than a line drawn under it.
-        palette.ink.withAlphaComponent(palette.line).setFill()
-        NSRect(x: bar.minX, y: bar.minY, width: bar.width, height: 1).fill()
+        NSGradient(starting: ink.withAlphaComponent(palette.barBottom),
+                   ending: ink.withAlphaComponent(palette.barTop))?.draw(in: titleBar, angle: 90)
+        ink.withAlphaComponent(palette.line).setFill()
+        NSRect(x: titleBar.minX, y: titleBar.minY - px, width: titleBar.width, height: px).fill()
 
+        let light = 1.02 * u
         for (i, colour) in [
             NSColor(srgbRed: 1, green: 0.373, blue: 0.341, alpha: 1),      // #ff5f57
             NSColor(srgbRed: 0.996, green: 0.737, blue: 0.180, alpha: 1),  // #febc2e
             NSColor(srgbRed: 0.157, green: 0.784, blue: 0.251, alpha: 1),  // #28c840
         ].enumerated() {
             colour.setFill()
-            let light = NSRect(x: frame.minX + 20 + CGFloat(i) * 20, y: bar.midY - 6,
-                               width: 12, height: 12)
-            NSBezierPath(ovalIn: light).fill()
+            NSBezierPath(ovalIn: NSRect(x: frame.minX + 1.48 * u + CGFloat(i) * (light + 0.68 * u),
+                                        y: titleBar.midY - light / 2, width: light, height: light)).fill()
+        }
+        let titleFont = NSFont.systemFont(ofSize: 1.36 * u, weight: .medium)
+        let title = "Weekly sync · 4 people"
+        text(title, at: NSPoint(x: frame.midX - width(of: title, font: titleFont) / 2, y: titleBar.midY),
+             font: titleFont, color: ink.withAlphaComponent(0.55))
+
+        // The content: the grid of tiles, and the call's buttons under it.
+        let content = NSRect(x: frame.minX, y: frame.minY, width: frame.width,
+                             height: titleBar.minY - px - frame.minY)
+        palette.meeting.setFill()
+        content.fill()
+
+        let button = 2.73 * u
+        let controls = NSRect(x: content.minX, y: content.minY, width: content.width,
+                              height: button + 2.04 * u)
+        palette.recess.setFill()
+        controls.fill()
+        let gap = 1.02 * u
+        var bx = controls.midX - (3 * button + 2 * gap) / 2
+        for (name, fill, tint) in [
+            ("mic.fill", ink.withAlphaComponent(0.13), ink.withAlphaComponent(0.85)),
+            ("video.fill", ink.withAlphaComponent(0.13), ink.withAlphaComponent(0.85)),
+            ("phone.down.fill", NSColor(srgbRed: 0.851, green: 0.282, blue: 0.247, alpha: 1), .white),
+        ] {
+            let circle = NSRect(x: bx, y: controls.midY - button / 2, width: button, height: button)
+            fill.setFill()
+            NSBezierPath(ovalIn: circle).fill()
+            // At one point size for all three, the way the demo draws its three
+            // in one box: the handset is a wide, low shape, and scaled to the
+            // microphone's height it fills the circle.
+            if let icon = symbol(name, height: button * 0.44, color: tint) {
+                drawGlyph(icon, center: NSPoint(x: circle.midX, y: circle.midY))
+            }
+            bx += button + gap
         }
 
-        // Something to read through the hole. Fixed widths rather than random:
-        // this repaints whenever the stage resizes, and a page that reshuffles
-        // itself while the window is being dragged would be a page of confetti.
-        let widths: [CGFloat] = [0.62, 0.88, 0.74, 0.93, 0.51, 0.82, 0.68, 0.90, 0.58]
-        let inset: CGFloat = 34
-        var y = bar.minY - 26
-        var i = 0
-        palette.ink.withAlphaComponent(palette.content).setFill()
-        while y > frame.minY {
-            let w = (frame.width - inset * 2) * widths[i % widths.count]
-            let line = NSRect(x: frame.minX + inset, y: y, width: w, height: 7)
-            NSBezierPath(roundedRect: line, xRadius: 3.5, yRadius: 3.5).fill()
-            y -= 20
-            i += 1
+        let pad = 0.91 * u
+        let between = 0.8 * u
+        let grid = NSRect(x: content.minX + pad, y: controls.maxY + pad,
+                          width: content.width - pad * 2,
+                          height: content.maxY - controls.maxY - pad * 2)
+        let tileSize = NSSize(width: (grid.width - between) / 2, height: (grid.height - between) / 2)
+        // The ring a video app puts round whoever is talking, riding the voice
+        // rather than sitting still: 0.85 s each way between a half-strength
+        // border and a full one, with a faint halo growing under it.
+        let beat = calm ? 1 : 0.5 + 0.5 * cos(.pi * (now / 0.85).truncatingRemainder(dividingBy: 2))
+        for (i, person) in Self.people.enumerated() {
+            let column = CGFloat(i % 2)
+            let row = CGFloat(i / 2)
+            let tile = NSRect(x: grid.minX + column * (tileSize.width + between),
+                              y: grid.maxY - tileSize.height - row * (tileSize.height + between),
+                              width: tileSize.width, height: tileSize.height)
+            drawTile(tile, person: person, ring: rings[i], beat: beat, palette: palette)
         }
 
-        // The frame, drawn over its own contents: a hairline is what says where
-        // the window ends against a wallpaper of about the same weight.
-        palette.edge.setStroke()
-        let edge = NSBezierPath(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5),
-                                xRadius: radius, yRadius: radius)
-        edge.lineWidth = 1
-        edge.stroke()
+        // The inner ring, over the content: dark mode's faint light line inside
+        // the edge, nothing at all in light.
+        palette.inner.setStroke()
+        let inner = NSBezierPath(roundedRect: frame.insetBy(dx: px / 4, dy: px / 4),
+                                 xRadius: radius, yRadius: radius)
+        inner.lineWidth = px / 2
+        inner.stroke()
         NSGraphicsContext.restoreGraphicsState()
+
+        // And the outer one, outside the edge, taking the wallpaper's colour: a
+        // Mac draws no border on a window, and this is what it draws instead.
+        palette.ring.setStroke()
+        let ring = NSBezierPath(roundedRect: frame.insetBy(dx: -px / 4, dy: -px / 4),
+                                xRadius: radius, yRadius: radius)
+        ring.lineWidth = px / 2
+        ring.stroke()
+    }
+
+    private func drawTile(_ tile: NSRect, person: (initials: String, name: String, face: [NSColor]),
+                          ring: CGFloat, beat: CGFloat, palette: DesktopPalette) {
+        let radius = 0.8 * u
+        let shape = NSBezierPath(roundedRect: tile, xRadius: radius, yRadius: radius)
+        NSGradient(colors: palette.tile)?.draw(in: shape, angle: -60)
+
+        // The halo, then the border — both drawn to the ring's fade, so handing
+        // it on is one tile's fading out under another's fading in.
+        if ring > 0 {
+            let halo = NSBezierPath(roundedRect: tile.insetBy(dx: -1.5 * px, dy: -1.5 * px),
+                                    xRadius: radius + px, yRadius: radius + px)
+            halo.lineWidth = 2 * px
+            NSColor(srgbRed: 0.345, green: 0.337, blue: 0.839, alpha: 0.24 * beat * ring).setStroke()
+            halo.stroke()
+            let dim = NSColor(srgbRed: 0.345, green: 0.337, blue: 0.839, alpha: 0.5)   // #5856d6 at ½
+            let lit = NSColor(srgbRed: 0.502, green: 0.494, blue: 1, alpha: 1)         // #807eff
+            let border = NSBezierPath(roundedRect: tile.insetBy(dx: 0.75 * px, dy: 0.75 * px),
+                                      xRadius: radius, yRadius: radius)
+            border.lineWidth = 1.5 * px
+            (dim.blended(withFraction: beat, of: lit) ?? lit).withAlphaComponent(
+                (0.5 + 0.5 * beat) * ring).setStroke()
+            border.stroke()
+        }
+
+        let face = 3.86 * u
+        let circle = NSRect(x: tile.midX - face / 2, y: tile.midY - face / 2, width: face, height: face)
+        NSGradient(colors: person.face)?.draw(in: NSBezierPath(ovalIn: circle), angle: -55)
+        let initialsFont = NSFont.systemFont(ofSize: 1.25 * u, weight: .semibold)
+        text(person.initials, at: NSPoint(x: circle.midX - width(of: person.initials, font: initialsFont) / 2,
+                                          y: circle.midY),
+             font: initialsFont, color: NSColor(white: 1, alpha: 0.92))
+
+        let nameFont = NSFont.systemFont(ofSize: 1.14 * u)
+        text(person.name, at: NSPoint(x: tile.minX + 0.8 * u, y: tile.minY + 0.57 * u + nameFont.capHeight / 2),
+             font: nameFont, color: palette.ink.withAlphaComponent(0.6 + 0.3 * ring))
+    }
+
+    // ── text and images ──
+
+    /// Draw a line of text with its vertical centre on `at.y`, and say how wide
+    /// it was.
+    @discardableResult
+    private func text(_ string: String, at: NSPoint, font: NSFont, color: NSColor) -> CGFloat {
+        let attributed = NSAttributedString(string: string, attributes: [.font: font, .foregroundColor: color])
+        let size = attributed.size()
+        attributed.draw(at: NSPoint(x: at.x, y: at.y - size.height / 2))
+        return size.width
+    }
+
+    private func width(of string: String, font: NSFont) -> CGFloat {
+        NSAttributedString(string: string, attributes: [.font: font]).size().width
+    }
+
+    /// Icons, rasterised and measured, kept between frames: a symbol re-rendered
+    /// thirty times a second would be most of the cost of drawing this.
+    private var glyphs: [String: Glyph] = [:]
+
+    /// A bitmap of an icon at screen resolution, and the bounds of the ink in
+    /// it. A symbol image comes padded, with the glyph sitting on a text
+    /// baseline inside its box, and drawn under the stage's scale it places
+    /// itself by that baseline rather than by the rectangle it is given; a
+    /// plain bitmap goes exactly where it is put, and the ink is what gets
+    /// centred.
+    private struct Glyph {
+        let image: NSImage
+        /// In the image's points.
+        let ink: NSRect
+    }
+
+    /// Pixels per overlay point on the screen this is drawn on, doubled so the
+    /// bitmap has something to spare when it is scaled down onto the pixel grid.
+    private var raster: CGFloat { (window?.backingScaleFactor ?? 2) * max(contentScale, 0.05) * 2 }
+
+    /// An SF Symbol at a point size, in a colour.
+    private func symbol(_ name: String, height: CGFloat, color: NSColor) -> Glyph? {
+        let key = "\(name)|\(height)|\(color)|\(raster)"
+        if let cached = glyphs[key] { return cached }
+        let configuration = NSImage.SymbolConfiguration(pointSize: height, weight: .regular)
+            .applying(.init(paletteColors: [color]))
+        guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return nil }
+        let glyph = rasterise(base, size: base.size, tint: nil)
+        glyphs[key] = glyph
+        return glyph
+    }
+
+    /// This app's own mark, from the bundle, in the bar the way the status item
+    /// draws it.
+    private func statusGlyph(color: NSColor) -> Glyph? {
+        let size = NSSize(width: 1.7 * u, height: 1.48 * u)
+        let key = "status|\(color)|\(size)|\(raster)"
+        if let cached = glyphs[key] { return cached }
+        guard let url = Bundle.main.url(forResource: "StatusIcon", withExtension: "svg"),
+              let base = NSImage(contentsOf: url) else { return nil }
+        let glyph = rasterise(base, size: size, tint: color)
+        glyphs[key] = glyph
+        return glyph
+    }
+
+    /// Render an image into a bitmap `size` points across at the screen's
+    /// resolution, filling it with `tint` if one is given — there, where the
+    /// fill can only land on the glyph — and find the bounds of what it painted.
+    private func rasterise(_ base: NSImage, size: NSSize, tint: NSColor?) -> Glyph? {
+        let wide = Int((size.width * raster).rounded(.up))
+        let high = Int((size.height * raster).rounded(.up))
+        guard wide > 0, high > 0,
+              let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: wide, pixelsHigh: high, bitsPerSample: 8,
+                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        let pixels = NSRect(x: 0, y: 0, width: wide, height: high)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        base.draw(in: pixels)
+        if let tint {
+            tint.set()
+            pixels.fill(using: .sourceAtop)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        var minX = wide, minY = high, maxX = -1, maxY = -1
+        if let data = rep.bitmapData {
+            let row = rep.bytesPerRow
+            for y in 0..<high {
+                for x in 0..<wide where data[y * row + x * 4 + 3] > 16 {
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                }
+            }
+        }
+        // Bitmap rows run top-down; the image's points run bottom-up.
+        let ink = maxX >= minX && maxY >= minY
+            ? NSRect(x: CGFloat(minX) / raster, y: CGFloat(high - 1 - maxY) / raster,
+                     width: CGFloat(maxX - minX + 1) / raster, height: CGFloat(maxY - minY + 1) / raster)
+            : NSRect(origin: .zero, size: size)
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        return Glyph(image: image, ink: ink)
+    }
+
+    /// Draw a glyph with its ink centred on `center`: at its own size, or with
+    /// the ink scaled to `height` when one is given.
+    private func drawGlyph(_ glyph: Glyph, height: CGFloat? = nil, center: NSPoint) {
+        guard glyph.ink.height > 0 else { return }
+        let scale = height.map { $0 / glyph.ink.height } ?? 1
+        glyph.image.draw(in: NSRect(x: center.x - glyph.ink.midX * scale,
+                                    y: center.y - glyph.ink.midY * scale,
+                                    width: glyph.image.size.width * scale,
+                                    height: glyph.image.size.height * scale))
+    }
+
+    private func glyphWidth(_ glyph: Glyph, height: CGFloat) -> CGFloat {
+        glyph.ink.height > 0 ? glyph.ink.width * height / glyph.ink.height : 0
     }
 }
 
@@ -293,7 +672,7 @@ private final class PreviewStage: NSView {
 
 final class SettingsPreview: NSView {
     /// Tall enough for the live box and two or three of the stack above it.
-    static let displayHeight: CGFloat = 164
+    static let displayHeight: CGFloat = 200
 
     private let stage = PreviewStage()
     private let box = SubtitleView(frame: .zero)
@@ -410,13 +789,13 @@ final class SettingsPreview: NSView {
         // Rounded out here rather than on the stage, and this is not a detail:
         // the stage's layer is scaled with its bounds, so a radius set there is
         // in overlay points and comes out at a third of itself — which is how
-        // the corners ended up all but square. This view is unscaled, so 16
-        // points is 16 points, near enough the 20 the site demo wears at its own
-        // width. The hairline is that demo's frame, for the same reason it has
-        // one: at this weight the screen and the window behind the settings need
-        // an edge between them.
+        // the corners ended up all but square. This view is unscaled, so 8
+        // points is 8 points: a little under the welcome window's 14, at a
+        // little under its width. The hairline is that demo's frame, for the
+        // same reason it has one: at this weight the screen and the window
+        // behind the settings need an edge between them.
         layer?.masksToBounds = true
-        layer?.cornerRadius = 16
+        layer?.cornerRadius = 8
         layer?.cornerCurve = .continuous
         layer?.borderWidth = 0.5
         applyFrameColour()
@@ -716,11 +1095,11 @@ final class SettingsPreview: NSView {
             rebuild(visible, style: pillStyle)
         }
 
-        // Room between the live box and the top of the stage. The live box grows
+        // Room between the live box and the menu bar. The live box grows
         // upwards as a sentence wraps, so this shrinks under it — which is why
         // the height is re-derived here rather than set once.
         let bottom = top + Self.gap
-        let room = max(0, stage.bounds.height - bottom)
+        let room = max(0, stage.bounds.height - stage.menuBarHeight - bottom)
         let resized = abs(room - placedHeight) > 0.5
         placedHeight = room
         scroll.frame = NSRect(x: 0, y: bottom.rounded(),
