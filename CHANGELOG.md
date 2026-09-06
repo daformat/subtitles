@@ -4,6 +4,11 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.4.1 · 2026-09-06
+
+- ⌥⌘S pauses again while the ⌥ stack is showing. The stack's own ⌥F shortcut,
+  new in 1.4.0, was swallowing every other shortcut for as long as it was up.
+
 ## 1.4.0 · 2026-09-06
 
 - The Keep slider in Settings runs one stop further, to Unlimited, shown as ∞,
