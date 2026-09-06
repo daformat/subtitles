@@ -490,18 +490,21 @@ final class SpringValue {
     /// Called with each new value, and once more with the target on settling.
     var onTick: ((CGFloat) -> Void)?
 
-    /// A response of about a quarter of a second with a small overshoot: quick
-    /// enough to feel attached to the click, soft enough to read as a spring.
-    private static let stiffness: CGFloat = 700
-    private static let damping: CGFloat = 2 * 0.74 * 700.squareRoot()
+    private let stiffness: CGFloat
+    private let damping: CGFloat
 
     /// The integrator's step. Fixed, and finer than any frame, so the spring
     /// is the same spring whatever the display's rate.
     private static let substep: CGFloat = 1.0 / 480.0
 
-    init(_ value: CGFloat) {
+    /// The defaults are the search pill's: a response of about a quarter of a
+    /// second with a small overshoot, quick enough to feel attached to the
+    /// click, soft enough to read as a spring.
+    init(_ value: CGFloat, stiffness: CGFloat = 700, dampingRatio: CGFloat = 0.74) {
         self.value = value
         self.target = value
+        self.stiffness = stiffness
+        self.damping = 2 * dampingRatio * stiffness.squareRoot()
     }
 
     deinit { link?.invalidate() }
@@ -542,7 +545,7 @@ final class SpringValue {
         var remaining = CGFloat(dt)
         while remaining > 0 {
             let step = min(Self.substep, remaining)
-            let acceleration = -Self.stiffness * (value - target) - Self.damping * velocity
+            let acceleration = -stiffness * (value - target) - damping * velocity
             velocity += acceleration * step
             value += velocity * step
             remaining -= step
@@ -647,6 +650,14 @@ final class HistoryController {
 
     /// The search pill's width, on its way between closed and open.
     private let searchWidthSpring = SpringValue(0)
+
+    /// The panel's origin, on its way to where the live box now wants it. The
+    /// box hugs its text and grows a line at a time, and a stack that jumped a
+    /// line with it read as a jolt; the box itself stays put — it changes
+    /// several times a second and is what is being read — and the stack
+    /// follows it on a stiff spring, a tenth of a second behind, no overshoot.
+    private let originXSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
+    private let originYSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
     /// Where the pill sits vertically as last placed, so the spring's ticks
     /// can lay the frame without re-deriving the panel.
     private var searchY: CGFloat = 0
@@ -721,6 +732,10 @@ final class HistoryController {
         search.onFocus = { [weak self] in self?.searchTookFocus() }
         searchWidthSpring.view = search
         searchWidthSpring.onTick = { [weak self] width in self?.laySearch(width: width) }
+        for spring in [originXSpring, originYSpring] {
+            spring.view = root
+            spring.onTick = { [weak self] _ in self?.followOrigin() }
+        }
         search.onChange = { [weak self] text in self?.queryChanged(text) }
         search.onCancel = { [weak self] in self?.unpin() }
 
@@ -976,7 +991,21 @@ final class HistoryController {
             y: (placedAbove
                 ? anchor.maxY - SubtitleView.pad
                 : anchor.minY + SubtitleView.pad - size.height).rounded())
-        let frame = NSRect(origin: clamp(origin, size: size, to: screen.visibleFrame), size: size)
+        let target = clamp(origin, size: size, to: screen.visibleFrame)
+        // Sprung towards the target while the stack is up; straight there when
+        // it is arriving, since there is nowhere for it to be coming from.
+        let placedOrigin: NSPoint
+        if isVisible, panel.isVisible {
+            originXSpring.animate(to: target.x)
+            originYSpring.animate(to: target.y)
+            placedOrigin = NSPoint(x: originXSpring.value.rounded(),
+                                   y: originYSpring.value.rounded())
+        } else {
+            originXSpring.snap(to: target.x)
+            originYSpring.snap(to: target.y)
+            placedOrigin = target
+        }
+        let frame = NSRect(origin: placedOrigin, size: size)
 
         // Only a change of *height* disturbs the scroller; the live box merely
         // moving does not. Read the reader's position before the resize lands.
@@ -1034,6 +1063,12 @@ final class HistoryController {
 
         updateFade()
         return true
+    }
+
+    /// One frame of the panel following the live box.
+    private func followOrigin() {
+        let origin = NSPoint(x: originXSpring.value.rounded(), y: originYSpring.value.rounded())
+        if origin != panel.frame.origin { panel.setFrameOrigin(origin) }
     }
 
     /// The pill at `width`, centred on the stack.
