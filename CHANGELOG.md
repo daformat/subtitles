@@ -4,6 +4,14 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.4.3 · 2026-09-06
+
+- The ⌥ stack fades its near edge too, once you have scrolled away from the live
+  box: a short band, 60 points against the far edge's 150, saying newer boxes are
+  hidden there. It is gone the moment the stack is back against the live box, so
+  the newest box is never dimmed while you are reading it. The settings preview
+  and the welcome window's demo do the same.
+
 ## 1.4.2 · 2026-09-06
 
 - The settings preview's screen is the demo's again: its coloured desktop, a menu
