@@ -13,13 +13,6 @@ const I18N = (() => {
   return (name, fallback) => map[name] || fallback;
 })();
 
-// The podcast waveform, fitted to its row in whole device pixels. Laid out by
-// CSS the bars sat on a fractional pitch, so each one was painted a device pixel
-// wider or narrower than its neighbour and the row read as a beat of thick and
-// thin; sized to --u instead, it stopped short of the right edge. Measuring the
-// row in device pixels, giving every bar and every gap a whole number of them
-// and handing the remainder to the first few gaps, one pixel each, fills the
-// row exactly and paints every bar the same.
 (function waveFit() {
   const wave = document.getElementById('pod-wave');
   if (!wave || !('ResizeObserver' in window)) return;
@@ -44,6 +37,353 @@ const I18N = (() => {
   new ResizeObserver(fit).observe(wave);
   window.addEventListener('resize', fit);
   fit();
+})();
+
+// ── searching the ⌥ stack ────────────────────────────────────────────────────
+// The app's HistorySearchView, shared by both demos. A field sits at the
+// stack's edge touching the live box, drawn as one more box. Click it, or
+// press ⌥F while the stack is up, and the stack is pinned for as long as the
+// field has the keyboard: it stays up with ⌥ released, so both hands are free
+// to type. Typing narrows the stack to the boxes containing the text, with the
+// matches lit; clearing the field shows every box again and keeps the pin.
+// Escape or a click anywhere outside the stack unpins it, and the stack goes
+// back to living under ⌥. The numbers are the app's, at 30pt of text, so in
+// em of the boxes.
+const stackSearch = (() => {
+  const CALM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // The app's HistorySearch: case and accents fold on both sides, so "ete"
+  // finds "été" and "Zurich" finds "Zürich", and every occurrence counts.
+  // Folded one code point at a time, keeping where each folded unit came
+  // from, so a hit in the folded text maps back to a range of the original.
+  const fold = (ch) => ch.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  const folded = (text) => {
+    let out = '';
+    const starts = [];
+    const ends = [];
+    let at = 0;
+    for (const ch of text) {
+      const f = fold(ch);
+      for (let k = 0; k < f.length; k++) { starts.push(at); ends.push(at + ch.length); }
+      out += f;
+      at += ch.length;
+    }
+    return { text: out, starts: starts, ends: ends };
+  };
+  // Every place `query` occurs in `text`, as [from, to) of the original. An
+  // empty query matches nowhere: an empty field means "show everything", which
+  // is the caller's decision, not a match on every box.
+  const ranges = (query, text) => {
+    const q = folded(query).text;
+    if (!q) return [];
+    const t = folded(text);
+    const hits = [];
+    let from = 0;
+    for (;;) {
+      const i = t.text.indexOf(q, from);
+      if (i < 0) break;
+      hits.push([t.starts[i], t.ends[i + q.length - 1]]);
+      from = i + q.length;
+    }
+    return hits;
+  };
+  const matches = (text, query) => !query || ranges(query, text).length > 0;
+  // `text` into `el`, with the hits wrapped so they can be lit. A background
+  // changes no glyph's advance, so a box measures the same lit or not.
+  const write = (el, text, query) => {
+    el.textContent = '';
+    let at = 0;
+    ranges(query, text).forEach((hit) => {
+      if (hit[0] > at) el.append(text.slice(at, hit[0]));
+      const lit = document.createElement('span');
+      lit.className = 'hist-hit';
+      lit.textContent = text.slice(hit[0], hit[1]);
+      el.append(lit);
+      at = hit[1];
+    });
+    if (at < text.length) el.append(text.slice(at));
+  };
+
+  // The app's SpringValue: one number on a spring, ticked once a frame with
+  // the interval the frame actually took, integrated over fixed substeps so
+  // it is the same spring at 60 and 120 Hz. The defaults are the search
+  // pill's: about a quarter of a second with a small overshoot, quick enough
+  // to feel attached to the click, soft enough to read as a spring. A
+  // retarget mid-flight keeps its velocity, so an Escape halfway through
+  // opening turns round rather than jumping.
+  class Spring {
+    constructor(value, stiffness, ratio) {
+      this.value = value;
+      this.target = value;
+      this.velocity = 0;
+      this.k = stiffness || 700;
+      this.c = 2 * (ratio || 0.74) * Math.sqrt(this.k);
+      this.frame = 0;
+      this.last = 0;
+      this.onTick = null;
+    }
+    snap(value) {
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+      this.velocity = 0;
+      this.value = value;
+      this.target = value;
+    }
+    animate(target) {
+      if (Math.abs(target - this.target) <= 0.5
+          && (this.frame || Math.abs(target - this.value) <= 0.5)) return;
+      this.target = target;
+      if (this.frame) return;
+      this.last = 0;
+      this.frame = requestAnimationFrame((t) => this.tick(t));
+    }
+    tick(now) {
+      // Clamped: the first tick has no predecessor, and a stall must not be
+      // integrated as one enormous step.
+      const dt = this.last ? Math.min(Math.max((now - this.last) / 1000, 1 / 240), 1 / 30) : 1 / 120;
+      this.last = now;
+      let left = dt;
+      while (left > 0) {
+        const step = Math.min(1 / 480, left);
+        this.velocity += (-this.k * (this.value - this.target) - this.c * this.velocity) * step;
+        this.value += this.velocity * step;
+        left -= step;
+      }
+      if (Math.abs(this.value - this.target) < 0.3 && Math.abs(this.velocity) < 8) {
+        this.snap(this.target);
+      } else {
+        this.frame = requestAnimationFrame((t) => this.tick(t));
+      }
+      if (this.onTick) this.onTick(this.value);
+    }
+  }
+
+  let instances = 0;
+
+  // The pill, put in the stage next to `history`. The demo lays it out and
+  // says when the stack is up; this owns the field, the pin and the query.
+  //   onPin()          the field took the keyboard: the stack is now held up
+  //   onQuery()        the text changed: repaint, narrowed to it, parked
+  //   onUnpin(hadQuery) the keyboard went back: the stack answers to ⌥ again
+  const attach = (opts) => {
+    const history = opts.history;
+    const n = ++instances;
+    const el = document.createElement('div');
+    el.className = 'demo-search';
+    el.innerHTML =
+      '<svg class="ds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">'
+      + '<circle cx="10.4" cy="10.4" r="6.8"/><path d="M15.5 15.5 21.4 21.4"/></svg>'
+      + '<input class="ds-field" type="text" placeholder="Search" aria-label="Search" tabindex="-1"'
+      + ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'
+      + '<span class="ds-hint" aria-hidden="true">⌥F</span>'
+      + '<button type="button" class="ds-clear" tabindex="-1" aria-label="Clear">'
+      + '<svg viewBox="0 0 24 24" aria-hidden="true"><mask id="ds-x' + n + '"><rect width="24" height="24" fill="#fff"/>'
+      + '<path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#000" stroke-width="2.4" stroke-linecap="round"/></mask>'
+      + '<circle cx="12" cy="12" r="10" fill="currentColor" mask="url(#ds-x' + n + ')"/></svg></button>'
+      // For measuring the closed pill: the placeholder and the hint in their
+      // own fonts, laid out but never seen.
+      + '<span class="ds-measure" aria-hidden="true">Search</span>'
+      + '<span class="ds-measure ds-hint" aria-hidden="true">⌥F</span>';
+    history.parentNode.insertBefore(el, history);
+    const field = el.querySelector('.ds-field');
+    const icon = el.querySelector('.ds-icon');
+    const clear = el.querySelector('.ds-clear');
+    const measure = el.querySelectorAll('.ds-measure');
+
+    let focused = false;
+    let query = '';
+    let visible = false;
+    let starved = false;
+    const expanded = () => focused || query !== '';
+
+    const spring = new Spring(0);
+    spring.onTick = (w) => { el.style.width = Math.round(w) + 'px'; };
+
+    const num = (v) => parseFloat(v) || 0;
+    const em = () => num(getComputedStyle(history).fontSize) || 16;
+    // Closed: exactly the icon, the word and the hint. Open: the app's 220pt
+    // or 0.55 of the stack, whichever is wider, never wider than the stack.
+    const compactWidth = () => {
+      const cs = getComputedStyle(el);
+      const gap = num(cs.columnGap);
+      // The icon is SVG, which has no offsetWidth.
+      return num(cs.paddingLeft) + icon.getBoundingClientRect().width + gap + measure[0].offsetWidth
+        + Math.round(em() * 0.133) + gap + measure[1].offsetWidth + num(cs.paddingRight);
+    };
+    const openWidth = (stackWidth) =>
+      Math.min(stackWidth, Math.max(Math.round(em() * 7.33), Math.round(stackWidth * 0.55)));
+
+    // A pill while idle, the full field while in use, and the change between
+    // them sprung, so the field is seen to open out of the pill rather than
+    // replace it. Only while the stack is up: a stack arriving on screen
+    // builds the field at the width it should already have.
+    const layout = (stackWidth, animate) => {
+      el.classList.toggle('is-open', expanded());
+      const width = expanded() ? openWidth(stackWidth) : Math.min(stackWidth, compactWidth());
+      if (animate && !CALM) spring.animate(width);
+      else { spring.snap(width); spring.onTick(width); }
+    };
+    const place = (left, above, near) => {
+      el.style.left = left;
+      if (above) { el.style.top = 'auto'; el.style.bottom = near; }
+      else { el.style.bottom = 'auto'; el.style.top = near; }
+    };
+    const setVisible = (on) => { visible = on; el.classList.toggle('is-visible', on); };
+    const setBelow = (on) => el.classList.toggle('is-below', on);
+    // Nowhere to put the stack: it leaves the screen, keyboard included, and
+    // comes back with it. Not an outside click, so the pin survives it.
+    const setStarved = (on) => {
+      if (starved === on) return;
+      starved = on;
+      el.classList.toggle('is-starved', on);
+      if (!on && focused && document.activeElement !== field) field.focus();
+    };
+    // The stack opening: the pill is the nearest thing to the live box, so it
+    // rises first and the boxes follow it.
+    const rise = () => {
+      el.classList.remove('is-rising');
+      void el.offsetWidth;
+      el.classList.add('is-rising');
+      el.addEventListener('animationend', () => el.classList.remove('is-rising'), { once: true });
+    };
+
+    const setQuery = (text) => {
+      query = text;
+      el.classList.toggle('has-text', query !== '');
+    };
+    const changed = () => { setQuery(field.value); opts.onQuery(); };
+
+    // Give the keyboard back and let the stack answer to ⌥ again. The field
+    // is emptied whichever way this came. The boxes are left as the search
+    // had them: the usual next step is the stack fading out, and what fades
+    // should be what was on screen.
+    const unpin = () => {
+      if (!focused && query === '') return;
+      const hadQuery = query !== '';
+      focused = false;
+      field.value = '';
+      setQuery('');
+      if (document.activeElement === field) field.blur();
+      opts.onUnpin(hadQuery);
+    };
+
+    field.addEventListener('focus', () => {
+      if (focused) return;
+      focused = true;
+      opts.onPin();
+    });
+    field.addEventListener('input', changed);
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); unpin(); return; }
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      // ⌥ is what raised the stack, so it is still down as the first letters
+      // of a search are typed, and ⌥ with a letter is the layout's alternate
+      // character: "an" arrives as "åñ". Stripped from anything that would
+      // type a character, and left on everything else, so ⌥⌫ and ⌥← still
+      // edit the way they do in any field. ⌥F is the hotkey and types nothing.
+      let ch = null;
+      const letter = /^Key([A-Z])$/.exec(e.code);
+      if (letter) ch = e.shiftKey ? letter[1] : letter[1].toLowerCase();
+      else if (/^Digit[0-9]$/.test(e.code)) ch = e.code.slice(-1);
+      else if (e.code === 'Space') ch = ' ';
+      if (!ch) return;
+      e.preventDefault();
+      if (e.code === 'KeyF') return;
+      field.setRangeText(ch, field.selectionStart, field.selectionEnd, 'end');
+      changed();
+    });
+    // The keyboard went elsewhere: a click on the page, another window. Either
+    // is an outside click as far as the pin is concerned.
+    field.addEventListener('blur', () => { if (focused && !starved) unpin(); });
+    // A click on the pill is a click into the field; on the ✕, one that
+    // empties it and keeps the keyboard for the next word; on a box in the
+    // stack, inside the panel, so the pin stays. mousedown rather than
+    // pointerdown, which is the one Safari lets cancel a focus change.
+    clear.addEventListener('mousedown', (e) => e.preventDefault());
+    clear.addEventListener('click', () => { field.value = ''; changed(); field.focus(); });
+    el.addEventListener('mousedown', (e) => {
+      if (e.target === field || clear.contains(e.target)) return;
+      e.preventDefault();
+      field.focus();
+    });
+    el.addEventListener('click', (e) => {
+      if (e.target === field || clear.contains(e.target)) return;
+      field.focus();
+    });
+    history.addEventListener('mousedown', (e) => { if (focused) e.preventDefault(); });
+    // ⌥F, only while the stack is up: the rest of the time it belongs to
+    // whatever is in front.
+    window.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== 'KeyF') return;
+      if (!visible || starved) return;
+      e.preventDefault();
+      if (!focused) field.focus();
+    });
+    // Another window took the front. The browser would hand the field its
+    // focus back on return, and with it the pin, so it is let go for good.
+    window.addEventListener('blur', () => {
+      unpin();
+      setTimeout(() => { if (document.activeElement === field) field.blur(); }, 0);
+    });
+
+    return {
+      el: el,
+      get query() { return query; },
+      get pinned() { return focused; },
+      matches: (text) => matches(text, query),
+      write: (node, text) => write(node, text, query),
+      layout: layout,
+      place: place,
+      setVisible: setVisible,
+      setBelow: setBelow,
+      setStarved: setStarved,
+      height: () => el.offsetHeight,
+      rise: rise,
+      unpin: unpin,
+      // For the recordings' epilogue, which has no hands: the keyboard into the
+      // field, and text into it a piece at a time, as if typed.
+      focus: () => field.focus(),
+      type: (text) => { field.value += text; changed(); },
+    };
+  };
+
+  // The app's originXSpring and originYSpring. The live box hugs its text
+  // and grows a line at a time as a sentence wraps, and a stack that jumped
+  // the line with it read as a jolt; the box itself stays put, since it
+  // changes several times a second and is what is being read, and the stack
+  // and its pill follow it on a stiff spring, a tenth of a second behind, no
+  // overshoot. Straight there when the stack is arriving, since there is
+  // nowhere for it to be coming from. In px of the stage, where the demos
+  // used to write percentages: the target is recomputed whenever the box
+  // moves, which is what the percentages were for.
+  const follow = (history, search) => {
+    const x = new Spring(0, 900, 0.9);
+    const y = new Spring(0, 900, 0.9);
+    let above = true;
+    let block = 0;
+    const lay = () => {
+      const left = Math.round(x.value) + 'px';
+      const near = Math.round(y.value);
+      history.style.left = left;
+      search.place(left, above, near + 'px');
+      if (above) { history.style.top = 'auto'; history.style.bottom = (near + block) + 'px'; }
+      else { history.style.bottom = 'auto'; history.style.top = (near + block) + 'px'; }
+    };
+    x.onTick = lay;
+    y.onTick = lay;
+    // `left` is the live box's centre and `near` the stack's edge nearest it,
+    // both from the stage's own edges; `gapBlock` is the pill and the gap
+    // past it, where the boxes start.
+    return (left, near, isAbove, gapBlock, animate) => {
+      above = isAbove;
+      block = gapBlock;
+      if (animate && !CALM) { x.animate(left); y.animate(near); }
+      else { x.snap(left); y.snap(near); }
+      lay();
+    };
+  };
+
+  return { attach: attach, follow: follow };
 })();
 
 // Writing, in every window that is a document. While such a window is in
@@ -415,6 +755,17 @@ const I18N = (() => {
     },
   ];
 
+  // An epilogue for the recordings, off on the site: the stack and its search,
+  // narrated. The capture sets window.SUBTITLES_EPILOGUE to two lines, said
+  // before the podcast's last: the stack rises as ⌥ is said in the first, the
+  // field opens and a word goes in as ⌥F is said in the second, and both are
+  // let go under "none of it leaves the Mac", which then closes the loop as it
+  // always did. Without it the loop is the three scenes it always was; the
+  // scene bar has no fourth segment and ⌥ is the reader's.
+  const EPILOGUE = Array.isArray(window.SUBTITLES_EPILOGUE) && window.SUBTITLES_EPILOGUE.length === 2
+    ? window.SUBTITLES_EPILOGUE.map(String)
+    : null;
+
   front(SCENES[0].app);
   select(SCENES[0].app);
   if (glyph) glyph.classList.add('is-live');
@@ -544,6 +895,45 @@ const I18N = (() => {
     if (failed) throw failed.reason;
   }
 
+  // The recordings' epilogue, see EPILOGUE above. Each move lands as the word
+  // for it is said, which is what makes it read as the narration doing it: the
+  // stack rises as ⌥ comes up in the first line, the field opens as ⌥F does in
+  // the second, and a word the stack holds twice by then, in the call's second
+  // line and the notes' first, goes in a letter at a time, so the search is
+  // seen to narrow seven boxes to two. The scene bar holds where the podcast's
+  // first line left it: the epilogue has no segment of its own.
+  // ⌥ goes first: unpinning while it still counted as held would repaint the
+  // stack with every box back, and that is what would fade. Let go of both
+  // at once and what fades is what the search had on screen.
+  const endEpilogue = () => {
+    if (!search) return;
+    altKey = false;
+    search.unpin();
+    showHistory();
+  };
+  // Resolves once `text` has been typed into the live box, tentative word
+  // included, so a move can land on the word that names it.
+  const saidYet = async (text) => {
+    while (!(out.textContent + live.textContent).includes(text)) await step(30);
+  };
+  async function epilogue(at) {
+    if (!search) return;
+    await both(say(EPILOGUE[0], at, at), (async () => {
+      await saidYet('⌥');
+      altKey = true;
+      showHistory();
+    })());
+    await both(say(EPILOGUE[1], at, at), (async () => {
+      await saidYet('⌥F');
+      search.focus();
+      await step(600);
+      for (const ch of 'meeting') { search.type(ch); await step(150); }
+    })());
+    // Let go: the field empties and the stack fades under the line that
+    // follows, the podcast's last.
+    endEpilogue();
+  }
+
   async function loop() {
     let index = 0;
     // Set by a jump, cleared by the scene that answers it: the switch that gets
@@ -586,12 +976,24 @@ const I18N = (() => {
         }
 
         for (let j = 1; j < scene.lines.length; j++) {
+          // Before the last line of the last scene, so that line closes the
+          // loop with the stack fading under it.
+          if (EPILOGUE && index === SCENES.length - 1 && j === scene.lines.length - 1) {
+            await epilogue(j * slice);
+          }
           await say(scene.lines[j], j * slice, (j + 1) * slice);
         }
 
         index = (index + 1) % SCENES.length;
+        // The recording is one turn of the loop, cut at the wrap, and the
+        // stack it raises should be that turn's: with the epilogue on, the
+        // boxes start again from nothing each time round, or the search
+        // would light the same line once per turn the page had run.
+        if (EPILOGUE && index === 0) past.length = 0;
       } catch (error) {
         if (error !== JUMPED) throw error;
+        // A jump out of the epilogue leaves nothing raised behind it.
+        if (EPILOGUE) endEpilogue();
         // Somebody picked a scene. Drop whatever was mid-sentence and let the
         // next turn of the loop get there, which is also what makes a second
         // click during a switch work: it lands here again. A window click has
@@ -819,7 +1221,29 @@ const I18N = (() => {
   const history = document.getElementById('caption-history');
   const screen = document.querySelector('.demo-screen');
 
-  // Closed pages, oldest first, at the app's own `defaultHistoryDepth`.
+  // The search pill at the stack's edge, as on the landing pages: pinned, the
+  // stack stays up with ⌥ released; each keystroke repaints it narrowed and
+  // parked on the newest match; unpinned, it answers to ⌥ again, and if it
+  // stays up the boxes the search had hidden come back.
+  const search = history && stackSearch.attach({
+    history: history,
+    onPin: () => showHistory(),
+    onQuery: () => paintHistory(true),
+    onUnpin: (hadQuery) => {
+      showHistory();
+      // Up still: every box back. Going: the field closes back down to its
+      // pill as the stack fades, the boxes left as the search had them.
+      if (!history.classList.contains('is-visible')) search.layout(history.offsetWidth, true);
+      else if (hadQuery) paintHistory(true);
+    },
+  });
+  const follow = history && stackSearch.follow(history, search);
+  let altKey = false;
+
+  // Closed pages, oldest first, at what was the app's `defaultHistoryDepth`
+  // until 1.4.0, where the default became every box. The demo keeps the cap:
+  // it speaks seven lines on a loop, and a stack of every repetition since the
+  // page was opened would be hundreds of the same sentence.
   //
   // Held back to six at first, on the reasoning that this stage is only a few
   // hundred pixels tall and would clip most of them. That was the wrong way
@@ -849,7 +1273,11 @@ const I18N = (() => {
     if (!trimmed || (last && trimmed === last.text)) return;
     past.push({ id: ++pageId, text: trimmed });
     if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
+    // A stack already up takes the box in. One that is not may be wanted
+    // anyway: ⌥ pressed before anything had closed, and still held, which the
+    // app's poll answers the moment a first page does.
     if (history && history.classList.contains('is-visible')) paintHistory();
+    else showHistory();
   };
 
   // The live box's top edge, as the stack should hang off it.
@@ -1014,27 +1442,34 @@ const I18N = (() => {
     const room = roomFor(placedAbove, rect, bounds, em);
     const near = nearDistance();
     const was = history.clientHeight;
+    // The search pill sits at the near edge, a gap off the live box, and the
+    // boxes beyond it, so it comes off the room before they are measured
+    // against it, as the app's does.
+    const block = search.height() + em * 0.2;
+    const content = contentHeight();
 
-    history.style.left = ((rect.left + rect.width / 2 - bounds.left) / bounds.width * 100) + '%';
-    if (placedAbove) {
-      history.style.top = 'auto';
-      history.style.bottom = ((bounds.bottom - anchorTop(rect) + em * 0.2) / bounds.height * 100) + '%';
-    } else {
-      history.style.bottom = 'auto';
-      history.style.top = ((rect.bottom - bounds.top + em * 0.2) / bounds.height * 100) + '%';
-    }
     // Rounded, because `room` is derived from the live box's rect and jitters by
     // fractions of a pixel as a caption is typed. Left as a float it crossed the
     // half-pixel test below on its own every few frames, and every crossing was
     // a scroll correction the reader had not asked for.
-    history.style.maxHeight = Math.max(0, Math.round(room)) + 'px';
+    history.style.maxHeight = Math.max(0, Math.round(room - block)) + 'px';
 
     // Nowhere left to put it. Hidden rather than emptied, because the live box
-    // shrinks again on the next page and the stack should still be there.
-    history.classList.toggle('is-starved', room < em * MIN_ROOM);
+    // shrinks again on the next page and the stack should still be there. A
+    // stack with nothing in it, every box filtered out, still shows the field,
+    // and needs only the field's own height.
+    const starved = room < (content > 0 ? em * MIN_ROOM + block : search.height());
+    history.classList.toggle('is-starved', starved);
+    search.setStarved(starved);
+    // Sprung after the live box while the stack is up, straight there when it
+    // is arriving, as the app's is.
+    const edge = placedAbove ? bounds.bottom - anchorTop(rect) : rect.bottom - bounds.top;
+    follow(rect.left + rect.width / 2 - bounds.left, edge + em * 0.2, placedAbove, block,
+           history.classList.contains('is-visible') && !starved);
     // Whether the stack can scroll at all, which changes only when a box lands
     // or the live box takes room away — never mid-gesture.
-    history.classList.toggle('is-clipped', contentHeight() > room + 1);
+    history.classList.toggle('is-clipped', content > room - block + 1);
+    search.layout(history.offsetWidth, history.classList.contains('is-visible'));
 
     // Only a change of height disturbs the scroller; the live box merely moving
     // does not. Put the reader back the same distance from the live box, so a
@@ -1054,13 +1489,16 @@ const I18N = (() => {
   // Reconciled rather than rebuilt, so that a box already on screen is not
   // animated again when a page closes while ⌥ is still held — only the one that
   // just closed rises. The app does the same, against the same problem.
-  const paintHistory = () => {
+  // `park` forces the scroll to the newest box: the search asks for that on
+  // every keystroke, where a page closing leaves the reader where they were.
+  const paintHistory = (park) => {
     if (!history) return;
+    const fresh = !history.classList.contains('is-visible');
     // Read the reader's place before the rebuild destroys it. Sticking to the
     // newest box is right only if that is where they already were; if they had
     // scrolled back to an older one, hold *that* box still instead. New text
     // arriving must not drag the page out from under someone mid-sentence.
-    const wasParked = !history.children.length || parked;
+    const wasParked = fresh || !history.children.length || parked;
     const wasNear = nearDistance();
     const wasContent = contentHeight();
 
@@ -1090,9 +1528,27 @@ const I18N = (() => {
       const el = document.createElement('div');
       el.className = 'hist-line';
       el.dataset.pid = page.id;
-      el.textContent = page.text;
       history.insertBefore(el, here || null);
       risen.push(el);
+    });
+
+    // Every box counts towards the width, filtered out or not: a stack that
+    // narrowed as the query did would jitter under each keystroke, and the
+    // search pill takes its width from the stack's. So the width is read with
+    // every box standing, then held while the search hides some. Hidden rather
+    // than removed: a box keeps its place for when the query changes.
+    const kids = [...history.children];
+    const pageOf = (el) => past.find((p) => String(p.id) === el.dataset.pid);
+    history.style.minWidth = '';
+    kids.forEach((el) => {
+      const page = pageOf(el);
+      if (page) search.write(el, page.text);
+      el.classList.remove('is-hidden');
+    });
+    history.style.minWidth = history.offsetWidth + 'px';
+    kids.forEach((el) => {
+      const page = pageOf(el);
+      if (page) el.classList.toggle('is-hidden', !search.matches(page.text));
     });
 
     placeHistory();
@@ -1102,15 +1558,19 @@ const I18N = (() => {
     // measured against. Parked stays parked; otherwise the box they were reading
     // holds still, which means moving with the growth that landed at the near
     // end.
-    setNearDistance(wasParked ? 0 : wasNear + (contentHeight() - wasContent));
-    parked = wasParked;
+    setNearDistance(park || wasParked ? 0 : wasNear + (contentHeight() - wasContent));
+    parked = park || wasParked;
 
     // Only now do they animate. Nearest the live box first, so the stack unrolls
-    // out of it: the newest box is last above the live one and first below.
-    const kids = [...history.children];
+    // out of it: the newest box is last above the live one and first below. The
+    // pill goes before them all when the stack is opening. A box the search
+    // hides does not rise: it has nowhere to be seen, and an entrance that never
+    // ends would hold the scroll geometry hostage.
+    if (fresh) search.rise();
     risen.forEach((el) => {
+      if (el.classList.contains('is-hidden')) return;
       const i = kids.indexOf(el);
-      el.style.setProperty('--rise', placedAbove ? kids.length - 1 - i : i);
+      el.style.setProperty('--rise', (placedAbove ? kids.length - 1 - i : i) + (fresh ? 1 : 0));
       rising++;
       el.addEventListener('animationend', () => { rising = Math.max(0, rising - 1); },
                           { once: true });
@@ -1118,9 +1578,11 @@ const I18N = (() => {
     });
   };
 
-  const showHistory = (on) => {
+  // Up while ⌥ is held, or while the search has it pinned, when it stays up
+  // whatever the modifier keys are doing.
+  const showHistory = () => {
     if (!history || !stage) return;
-    const want = on && past.length > 0;
+    const want = (altKey || search.pinned) && past.length > 0;
 
     if (want) {
       // A fresh press builds the stack from nothing, so every box rises. Only
@@ -1133,20 +1595,26 @@ const I18N = (() => {
         // opens against the live box.
         rising = 0;
         parked = true;
-      }
 
-      // Flip only when there is genuinely more room the other way, which is what
-      // makes the stack fall below the box once the box is dragged to the top.
-      const bounds = stage.getBoundingClientRect();
-      const rect = box.getBoundingClientRect();
-      const em = parseFloat(getComputedStyle(history).fontSize) || 16;
-      placedAbove = roomFor(true, rect, bounds, em) >= roomFor(false, rect, bounds, em);
-      history.classList.toggle('is-below', !placedAbove);
+        // Flip only when there is genuinely more room the other way, which is
+        // what makes the stack fall below the box once the box is dragged to
+        // the top. Decided once, on the press that raises it, and held for as
+        // long as it is up: re-deciding it as the box resizes would let one
+        // sentence wrapping to a second line throw the stack across it
+        // mid-read, which is the app's reasoning too.
+        const bounds = stage.getBoundingClientRect();
+        const rect = box.getBoundingClientRect();
+        const em = parseFloat(getComputedStyle(history).fontSize) || 16;
+        placedAbove = roomFor(true, rect, bounds, em) >= roomFor(false, rect, bounds, em);
+        history.classList.toggle('is-below', !placedAbove);
+        search.setBelow(!placedAbove);
+      }
       paintHistory();
     }
     // The boxes are left in place on the way out so the stack fades rather than
     // vanishing; the next press is what clears them.
     history.classList.toggle('is-visible', want);
+    search.setVisible(want);
     box.classList.toggle('is-solid', want);
     queueHole();
   };
@@ -1206,14 +1674,14 @@ const I18N = (() => {
   window.addEventListener('keydown', (e) => {
     // Held keys repeat, and a repeat that repainted would restart the stagger
     // over and over for as long as ⌥ is down.
-    if (e.key === 'Alt' && !e.repeat) showHistory(true);
+    if (e.key === 'Alt' && !e.repeat) { altKey = true; showHistory(); }
     if (e.key === 'Shift') queueHole();
   });
   window.addEventListener('keyup', (e) => {
-    if (e.key === 'Alt') showHistory(false);
+    if (e.key === 'Alt') { altKey = false; showHistory(); }
     if (e.key === 'Shift') queueHole();
   });
-  window.addEventListener('blur', () => showHistory(false));
+  window.addEventListener('blur', () => { altKey = false; showHistory(); });
 
   // Only run while the demo is actually on screen...
   new IntersectionObserver(
