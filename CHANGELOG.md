@@ -4,7 +4,7 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
-## Unreleased
+## 1.4.0 · 2026-09-06
 
 - The Keep slider in Settings runs one stop further, to Unlimited, shown as ∞,
   and that is now the default. There the ⌥ stack keeps every box that closes, up
@@ -24,6 +24,9 @@ and the DMG name show.
   was, and comes back whole.
 - The stack no longer re-measures every box each time it is rebuilt. It was a
   hitch at the depths the slider now allows.
+- The stack follows the live box on a spring. The box grows a line at a time as
+  a sentence wraps, and the stack used to jump the line with it; now it catches
+  up over a tenth of a second, while the box itself stays exactly as it was.
 
 ## 1.3.5 · 2026-09-05
 
