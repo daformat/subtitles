@@ -32,14 +32,21 @@ final class Hotkey {
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed))
 
+        // `eventNotHandledErr`, not `noErr`, for a hotkey that is not this one.
+        // Carbon hands a hotkey event to the most recently installed handler
+        // first and stops there if it says it handled it — so the handler for
+        // the second hotkey registered, returning `noErr` for everything it
+        // saw, swallowed the first hotkey's presses for as long as it existed.
         let callback: EventHandlerUPP = { _, event, userData in
-            guard let userData, let event else { return noErr }
+            guard let userData, let event else { return OSStatus(eventNotHandledErr) }
             let hotkey = Unmanaged<Hotkey>.fromOpaque(userData).takeUnretainedValue()
             var pressed = EventHotKeyID()
-            GetEventParameter(event, EventParamName(kEventParamDirectObject),
-                              EventParamType(typeEventHotKeyID), nil,
-                              MemoryLayout<EventHotKeyID>.size, nil, &pressed)
-            guard pressed.id == hotkey.id else { return noErr }
+            let status = GetEventParameter(event, EventParamName(kEventParamDirectObject),
+                                           EventParamType(typeEventHotKeyID), nil,
+                                           MemoryLayout<EventHotKeyID>.size, nil, &pressed)
+            guard status == noErr, pressed.id == hotkey.id else {
+                return OSStatus(eventNotHandledErr)
+            }
             hotkey.action()
             return noErr
         }
