@@ -4,6 +4,15 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.4.2 · 2026-09-06
+
+- The settings preview's screen is the demo's again: its coloured desktop, a menu
+  bar with this app's glyph and the clock in it, and a call in front with the ring
+  handed round whoever is talking. The ⌥ stack stops at the menu bar, as on a real
+  screen. The preview is a little taller.
+- The welcome window's demo searches the ⌥ stack, as the site's does. A vendored
+  copy without that had nothing to attach the search to and stopped on load.
+
 ## 1.4.1 · 2026-09-06
 
 - ⌥⌘S pauses again while the ⌥ stack is showing. The stack's own ⌥F shortcut,
