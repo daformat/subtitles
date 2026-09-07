@@ -9,12 +9,15 @@ First-run download is visible and interruptible (§18); default is Multilingual,
 auto-detecting. Per-app capture actually switches as of §19; sixteen languages,
 §20 and §22.
 The menu bar badge says what is actually happening (§21).
-Phase 3 complete, published to a repo.
+Phase 3 complete, published to a repo, selling on Gumroad since 1.4.
+Next: in-app updates (§23), then a free trial and licence keys (§24) — in that
+order, because the licence gate is the first change that can lock a paying
+customer out, and today nothing can push a fix onto their machine.
 Remaining before this is shippable: stable signing identity, real-world WER,
 download integrity check and failure handling.
 **Repo:** https://github.com/daformat/subtitles
 See §8a (ASR latency) and §8b (capture) for measured results.
-**Last updated:** 2026-08-13
+**Last updated:** 2026-09-07
 **Host used for planning:** macOS 15.7.3, Apple Silicon (arm64)
 
 ---
@@ -30,6 +33,8 @@ See §8a (ASR latency) and §8b (capture) for measured results.
 | D5 | ASR engine | **Streaming Zipformer transducer** via sherpa-onnx, model `en-2023-06-26` fp32, CPU provider | **High — confirmed by Spike 0A** | If real-world WER disappoints |
 | D6 | Capture API (macOS) | **Core Audio process tap** | **High — confirmed by Spike 0B** | — |
 | D7 | Translation | **Deferred**, but designed for | Medium | After v1 |
+| D8 | Updates | **Sparkle 2**, appcast on the site, archives on GitHub Releases | High | §23 |
+| D9 | Selling | **Gumroad stays**; trial local, keys verified against Gumroad from the app, no server | High | §24 |
 
 ### D1 rationale — why native
 
@@ -1557,6 +1562,220 @@ rebuild over cached files that moving between zh and ja already was.
 What is left out is not lost. Of the 40 locales, 13 more are broad-coverage and 8
 need fine-tuning before they transcribe at all; either is still a case, a code and a
 display name away.
+
+## 23. In-app updates (planned, 2026-09-07)
+
+The app has no updater. Every copy out there is a DMG someone dragged to
+/Applications, and the only way it learns about a new version is an email from
+Gumroad and another download. That was tolerable while the audience was small; it
+stops being tolerable the moment §24 ships, because a licence gate is the first
+change that can lock a paying customer out, and a bug in it would be one nobody
+could fix on their machine. So this comes first, as 1.5, and 1.6 carries the
+licence.
+
+Nothing is lost by the order. Owners of 1.4.x have to re-download once whichever
+change ships first; from 1.5 on they never do again.
+
+### Sparkle 2, and why not something lighter
+
+The lighter thing is a menu item that fetches a one-line version file and opens
+the download page: no framework, no keys, an afternoon. It solves reach and not
+the emergency fix, because the customer still downloads and drags. Given that
+1.4.0 to 1.4.3 shipped in a single day, the real thing is worth its day and a
+half.
+
+Sparkle 2 fits what is already here:
+
+- It is a Swift package, so it lands in `Package.swift` beside FluidAudio.
+- Developer ID plus hardened runtime is its native case. The XPC services it
+  ships exist for sandboxed apps; this one is not sandboxed (process taps), so
+  none of that applies.
+- It replaces the bundle in place. Bundle id and team id stay the same, so the
+  TCC audio grant survives an update for the same reason it survives a rebuild
+  (§8b, README). That is the property everything else here protects.
+- It compares `CFBundleVersion`, which is `BUILD` in build.sh. The rule already
+  written there — monotonic, never repeated — is exactly what Sparkle needs, and
+  becomes load-bearing.
+
+### How it works, end to end
+
+1. **Keys, once.** Sparkle's `generate_keys` makes an EdDSA pair. The public key
+   goes into Info.plist as `SUPublicEDKey`, written by build.sh with the rest.
+   The private key lives in the login Keychain, where the tool puts it. **Back it
+   up** (`generate_keys -x`): lose it and every installed copy refuses every
+   future update, with no way left to reach them. This is the one irreversible
+   step in the whole plan.
+2. **The feed.** `SUFeedURL` in Info.plist points at `appcast.xml` on
+   subtitles-live.com — the site is static, on Netlify, committed to its own
+   repo, and an XML file there is one more file. Each entry carries the archive
+   URL, its byte length, its EdDSA signature, and the build number.
+3. **The archives.** GitHub Releases: the repo is public and release assets have
+   no bandwidth cap, which a 30 MB zip fetched by every install would eventually
+   test on Netlify. Two artefacts per release — the styled DMG for people, and a
+   zip for Sparkle, which installs from a DMG but faster from a zip. Both
+   under stable names so the site can link `/download` without editing.
+4. **release.sh** grows a tail: after stapling, `ditto -c -k --keepParent` the
+   app into a zip, run `generate_appcast` over a directory holding the archives
+   (it signs them with the Keychain key and emits the appcast), `gh release
+   create` with both files, and write the appcast into the site checkout for a
+   commit there. Release notes: `generate_appcast` picks up an HTML file per
+   version, so a small script renders the CHANGELOG entry, which keeps the
+   changelog the single source. The "upload it to Gumroad" closing line becomes
+   "publish, then tag"; the Gumroad upload remains for the product page.
+5. **The bundle.** The one real gotcha. Sparkle is a dynamic framework and the
+   bundle is assembled by hand, so build.sh must copy `Sparkle.framework` into
+   `Contents/Frameworks`, link with `-rpath @executable_path/../Frameworks`, and
+   sign it inside out — framework first, app last — exactly as the resource
+   bundles are handled now. `codesign --verify --strict --deep` already catches
+   the sealing mistake. Confirm where SwiftPM leaves the framework after
+   `swift build` before assuming a path.
+6. **In the app.** An `SPUStandardUpdaterController` started from main.swift and a
+   "Check for Updates…" item beside About. Sparkle asks on the second launch
+   whether it may check automatically; keep that prompt, leave system profiling
+   off, and put the question in the app's voice rather than the stock string.
+7. **Gentle reminders, not a window.** Sparkle's
+   `supportsGentleScheduledUpdateReminders` exists for menu bar apps: instead of
+   a window arriving over someone's call, the icon gets a dot in a colour §21
+   has not used (green is free; red stays off-limits) and the menu grows an
+   "Update to 1.5.1…" item. That is the whole of the scheduled-check UI here;
+   the stock window appears only from the explicit menu item.
+8. **The install.** Sparkle downloads, verifies the EdDSA signature and that the
+   new bundle is signed by the same Developer ID, quits, swaps the bundle in
+   /Applications, relaunches. It refuses to update an app running from the
+   mounted DMG, which the drag-to-install window already discourages.
+
+### What leaves the machine
+
+One GET of `appcast.xml` a day, with the app and Sparkle versions in the user
+agent, and only once the person has said yes. Nothing else, and it can be turned
+off. That sentence goes on the site's privacy page and into the About window,
+and it is the precedent §24 extends: every network request this app makes is
+disclosed in one place and is the user's to refuse.
+
+### Testing
+
+Serve a local appcast from a directory (`python3 -m http.server`) and point a
+dev build at it through an `SPUUpdaterDelegate` that reads an environment
+variable — never by editing the plist, which is how a dev feed ships. Then a
+real 1.5.0 → 1.5.1 on a clean user account, and afterwards `./probe.sh`: the
+audio grant surviving is the property under test, not the version string.
+
+### Not done here
+
+- Delta updates. The zip is small; revisit if it stops being.
+- Migrating anyone below 1.5. One Gumroad email when 1.5 ships is the whole
+  migration; they re-download once.
+- Keep 1.5 Gumroad-only. The public download starts with 1.6, for the reason in
+  §24's migration note.
+
+---
+
+## 24. Free trial and licence keys (planned, 2026-09-07)
+
+Today the DMG is the product: the only way to get it is to pay on Gumroad. With a
+trial the DMG becomes a free public download and the **key becomes the product**.
+That is the one structural change; everything else follows from it.
+
+**No server.** Gumroad's verify endpoint
+(`POST https://api.gumroad.com/v2/licenses/verify`, checked 2026-09-07) takes the
+product id and the key, needs no access token, and answers with the purchase
+record: `refunded`, `chargebacked`, `disputed`, the buyer's email, a `test` flag
+for the seller's own test purchases, and a `uses` counter incremented on each
+call unless `increment_uses_count=false`. The app can call it directly. The
+trial needs no network at all. What a server would add — user-driven seat
+release (the decrement endpoint needs the seller token), a signed offline
+receipt, a hidden product id — is not worth having for a $9 app whose source is
+public under FSL. Every check here is honour-system by construction; the plan
+must not pretend otherwise, and must not spend effort as if it were not.
+
+### Decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Trial length | **7 days, full features** | Enough to know, for an app that runs all day. 14 would match the refund window; not needed. |
+| When the clock starts | **First `engine ready`**, not first launch | First launch is a 633 MB download (§18); it should not eat the trial. |
+| What expiry does | **Runs, but stops transcribing** | Behaves as paused, icon dims (§21), top status line says the trial ended, Resume opens the licence window. Settings and the ⌥ stack stay reachable. No watermark, no five-minute sessions. |
+| Seats | **Not enforced in 1.6** | Gumroad counts activations; watch the dashboard, disable a key by hand if one is clearly shared. Enforcing means users need to free a seat, which needs the seller token, which is the server. |
+| Re-verification | **Every 30 days, silent, tolerant** | `increment_uses_count=false`. Revoke only on a definitive answer: refunded, charged back, disputed, disabled. Network failure changes nothing. Catches refund-and-keep; costs one small request a month, disclosed. |
+| Offline at activation | **Provisional for 72 h** if the key has the right shape and the host is unreachable | Otherwise a paying customer with a valid key and no network at trial end is stuck. Re-verified when the network returns. |
+| Source builds | **No opt-out flag** | The check applies to every build. Someone building from source deletes a line; a second code path is a second thing to break. One sentence in the README. |
+| Anti-tamper | **Proportionate** | Trial start in defaults *and* the Keychain so deleting the app does not reset it; a clock that goes backwards counts as expiry. Stop there. |
+
+### Gumroad, and the customers already there
+
+No code, half a day:
+
+- Turn on "Generate a unique license key per sale" on the product; copy the
+  product id from the Content tab (it is public and is compiled in as a
+  constant). Put a key block and the download link in the product content, and
+  keep the DMG attached for convenience.
+- Gumroad generates keys for past sales when the setting is enabled — **confirm
+  in the dashboard before relying on it**.
+- Nobody is stranded either way. 1.4.x has no updater, so its owners keep working
+  until they choose to re-download. One Gumroad update email when 1.6 ships:
+  new version, your key is in your library and on your receipt.
+
+**Migration note.** Every build before 1.6 came from Gumroad or from source, so
+the app's existing preferences at 1.6's first launch are decent evidence of a
+purchase. Treat their presence as **grandfathered**: licensed, no key asked,
+with the Gumroad key there for a clean reinstall. Forgeable with `defaults
+write`, and that is fine — see the paragraph on honour above. This is why 1.5
+stays Gumroad-only (§23): the first public download is the first build that
+knows about licences.
+
+### Code
+
+1. **Pure logic, tested (1 day).** A new SwiftPM target beside CaptionCore,
+   `LicenseCore` at `app/license`, no AppKit, own test target. It holds the
+   entitlement state machine — trial(days left), expired, licensed(email),
+   revoked, grandfathered — the trial clock rules, key normalisation (four groups
+   of eight hex; accept pasted whitespace and lowercase), and the parser for
+   the verify response. Tests: clock edges, restore-from-Keychain on reinstall,
+   backwards clock, each verify outcome including `test: true`, the 72 h
+   provisional path, grandfathering.
+2. **Storage and verifier (half a day).** Two Keychain generic-password items,
+   key and trial start; defaults for display copy (licensed email, last check).
+   **A different Keychain service string for ad-hoc dev builds**, or every
+   dev build prompts for access to the item the Developer ID build created.
+   The verifier is a form-encoded POST over URLSession with a short timeout.
+   Not sandboxed, so no entitlement changes.
+3. **Gate in main.swift (half a day).** Entitlement computed at launch and on a
+   daily timer. Expired takes the existing pause path; resume is refused with
+   the licence window instead. Nothing else in the pipeline learns about it.
+4. **UI (1–2 days).**
+   - A licence window in the About window's style: key field, Activate, Buy
+     (Gumroad), "Where is my key" (Gumroad library), and one line: activation
+     sends the key to Gumroad once, and nothing else ever leaves the machine.
+     Outcomes shown in place — licensed to *email*, invalid, refunded, offline
+     with retry.
+   - Menu bar: one item near Settings — "Trial: 6 days left", "Enter License
+     Key…", or "Licensed". The status line at the top carries the expired state.
+   - About: the licensed-to line under the version.
+   - Welcome: one sentence that the trial starts when captions do.
+   - The settings preview needs nothing.
+5. **Pipeline and site (half a day).** The site's primary button becomes
+   "Download free trial" with "Buy a key · $9" beside it; the FAQ answer about
+   no account gets a line on keys; the privacy page discloses the activation
+   request and the monthly check, next to §23's update check. release.sh needs
+   nothing beyond §23.
+
+About four working days, plus the Gumroad admin.
+
+### Testing before shipping
+
+A Gumroad test purchase from the seller account yields a real key with
+`test: true`. On a clean user account: fresh install, trial countdown, expiry,
+activation offline then online, then refund the test purchase and confirm the
+monthly check revokes. And `./probe.sh` again — the gate must never be the thing
+that changes the audio path.
+
+### If seats ever matter
+
+Lemon Squeezy is the drop-in alternative: merchant of record like Gumroad, but
+its activate *and* deactivate calls are both unauthenticated, so a customer can
+free a seat without anything of ours running. Not needed at $9.
+
+---
 
 ## 10. References
 
