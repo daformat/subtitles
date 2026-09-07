@@ -79,7 +79,20 @@ The app lives in the menu bar (no Dock icon).
 | **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
 | **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older, or ⌥F and type to filter them — the stack then stays up until Escape |
 | **⌘,** | settings — from the menu bar |
-| Menu bar | model, source, text size, overlay position, permission state |
+| Menu bar | model, source, text size, overlay position, permission state, updates |
+
+**Updates** come through the same menu, at the top under Pause. **Check for
+Updates…** asks subtitles-live.com for a newer version and installs it in place,
+same location and same signature, so the audio permission survives it. On the
+second launch the app asks once whether it may check on its own, once a day; the
+answer is a checkbox in the menu afterwards, and until it is yes the app makes
+no request at all. Updating happens in one window of the app's own. A check that
+finds something opens it at launch, or once nothing has been playing for a
+couple of minutes; while something is playing it shows a red badge with a 1 on
+the icon and **Update to …** in the menu instead, and the window comes when you
+choose it. `--feed URL` points a check at another appcast, for trying an update
+against a local server; release.sh writes the real one, and
+`tools/update-window-harness` shows every state of the window without a feed.
 
 The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
 while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and

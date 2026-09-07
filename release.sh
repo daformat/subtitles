@@ -11,6 +11,17 @@
 #   - notarization credentials stored as a keychain profile:
 #       xcrun notarytool store-credentials "subtitles-notary" \
 #         --apple-id <you@example.com> --team-id <TEAMID> --password <app-specific>
+#   - the Sparkle signing key in the login keychain (PLAN.md §23) — the one
+#     whose public half is SPARKLE_PUBLIC_KEY in build.sh
+#   - `gh`, logged in, for the GitHub release the update is served from
+#
+# The update feed is part of the release. The appcast is uploaded as one more
+# asset, GitHub serves the newest one at releases/latest/download/appcast.xml,
+# and the site proxies /appcast.xml to that address with one rule in its
+# _redirects — so the app keeps asking subtitles-live.com, and nothing on the
+# site changes per release. The release is created as a draft and published
+# only once every asset is up, so no check can see an appcast whose archive is
+# still uploading.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -20,15 +31,61 @@ PROFILE="${SUBTITLES_NOTARY_PROFILE:-subtitles-notary}"
 # trip to Apple and irrelevant to how the window looks, which is the thing that
 # actually needs iterating on. The result is NOT shippable.
 NOTARIZE=yes
-if [ "${1:-}" = "--no-notarize" ]; then NOTARIZE=no; fi
+# --critical marks the update as one every copy should take now: the app shows
+# its window at once rather than waiting for a quiet moment, and offers no
+# Skip. For the fix nobody should sit out — the reason this updater exists
+# (PLAN.md §23) — and for nothing else.
+CRITICAL=no
+# --dry-run exercises the publishing half without publishing: no notarization,
+# no tag, a draft release that is deleted again at the end. What it proves is
+# that the appcast generates, signs and uploads, and that the assets are the
+# ones expected — everything that cannot be undone once a real release is out.
+DRYRUN=no
+for arg in "$@"; do
+  case "$arg" in
+    --no-notarize) NOTARIZE=no ;;
+    --critical) CRITICAL=yes ;;
+    --dry-run) DRYRUN=yes; NOTARIZE=no ;;
+    *) echo "usage: release.sh [--no-notarize | --dry-run] [--critical]" >&2; exit 1 ;;
+  esac
+done
 
 VERSION=$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)
 APP="build/Subtitles.app"
 STAGE="build/dmg"
 DMG="build/Subtitles-$VERSION.dmg"
 RWDMG="build/Subtitles-rw.dmg"
+# What Sparkle installs. A zip rather than the DMG: Sparkle can update from
+# either, but a DMG has to be mounted first and this is the one everybody's
+# machine fetches.
+ZIP="build/Subtitles-$VERSION.zip"
+# Where the appcast is assembled. The previous one comes down from the latest
+# release first, so entries accumulate; the site holds no copy.
+FEED_DIR="build/feed"
+GENERATE_APPCAST=".build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+REPO="daformat/subtitles"
+RELEASES="https://github.com/$REPO/releases"
+# What every installed copy asks, daily. The site proxies it to GitHub.
+FEED_URL=$(grep -m1 '^SPARKLE_FEED=' build.sh | cut -d'"' -f2)
+TAG="v$VERSION"
 
 echo "==> release $VERSION"
+
+# Everything the tail of this script needs, checked before the three-minute
+# notarization round trip rather than after it.
+if [ "$NOTARIZE" = yes ] || [ "$DRYRUN" = yes ]; then
+  command -v gh >/dev/null || { echo "!! gh is not installed" >&2; exit 1; }
+  gh auth status >/dev/null 2>&1 || { echo "!! gh is not logged in" >&2; exit 1; }
+  # A version with no notes is not one to ship; this exits 1 and says so.
+  tools/changelog-notes.py "$VERSION" >/dev/null
+  if [ "$DRYRUN" = no ] && git rev-parse "$TAG" >/dev/null 2>&1; then
+    echo "!! $TAG is already tagged — bump VERSION and BUILD in build.sh" >&2; exit 1
+  fi
+  if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+    echo "!! a release $TAG already exists on GitHub (a leftover draft, perhaps):" >&2
+    echo "   gh release delete $TAG -R $REPO --yes" >&2; exit 1
+  fi
+fi
 
 # Refuse to ship a dirty tree. The DMG is going to strangers who paid for it;
 # "which commit was that build from" needs an answer.
@@ -151,7 +208,7 @@ echo "    $(du -h "$DMG" | cut -f1)"
 # user has mounted anything, and the download looks unsigned at the worst moment.
 codesign --force --sign "Developer ID Application" --timestamp "$DMG"
 
-if [ "$NOTARIZE" = no ]; then
+if [ "$NOTARIZE" = no ] && [ "$DRYRUN" = no ]; then
   rm -rf "$STAGE"
   echo
   echo "built $DMG — NOT notarized, do not ship this one"
@@ -159,30 +216,132 @@ if [ "$NOTARIZE" = no ]; then
   exit 0
 fi
 
-echo "==> notarizing (a few minutes)"
-# --wait blocks until Apple returns a verdict. Without it the script exits while
-# the submission is still in flight and stapling below fails confusingly.
-xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+if [ "$DRYRUN" = no ]; then
+  echo "==> notarizing (a few minutes)"
+  # --wait blocks until Apple returns a verdict. Without it the script exits
+  # while the submission is still in flight and stapling below fails
+  # confusingly.
+  xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
 
-# Stapling writes the ticket into the DMG so Gatekeeper can validate it without
-# calling Apple. Only the DMG is stapled, not the .app inside it: stapling the
-# app needs its own earlier notarization round-trip, and it only matters for a
-# first launch with no network — which cannot happen here, because first launch
-# downloads 633 MB of models before it can transcribe anything.
-echo "==> stapling"
-xcrun stapler staple "$DMG"
+  # Stapling writes the ticket into the DMG so Gatekeeper can validate it
+  # without calling Apple. The app inside is stapled too, below, for the zip.
+  echo "==> stapling"
+  xcrun stapler staple "$DMG"
 
-echo "==> verifying"
-xcrun stapler validate "$DMG"
-# What Gatekeeper actually runs on the customer's machine. `spctl -a` on a DMG
-# checks the disk image itself; the app inside is checked on first launch.
-spctl -a -t open --context context:primary-signature -v "$DMG"
+  echo "==> verifying"
+  xcrun stapler validate "$DMG"
+  # What Gatekeeper actually runs on the customer's machine. `spctl -a` on a
+  # DMG checks the disk image itself; the app inside is checked on first launch.
+  spctl -a -t open --context context:primary-signature -v "$DMG"
+fi
 
 rm -rf "$STAGE"
+
+# The update archive (PLAN.md §23). The app is stapled first: the DMG's ticket
+# covers the app inside it, so this needs no second round trip, and it means
+# the copy Sparkle installs carries its own proof rather than relying on the
+# network for it.
+echo "==> update archive"
+[ "$DRYRUN" = no ] && xcrun stapler staple "$APP"
+rm -f "$ZIP"
+ditto -c -k --keepParent "$APP" "$ZIP"
+echo "    $(du -h "$ZIP" | cut -f1)"
+
+# The appcast. generate_appcast signs the new archive with the Keychain key,
+# adds an entry for it, and keeps the entries already in the file — which is
+# why the previous release's copy is brought down first. Release notes are the
+# CHANGELOG entry, rendered beside the archive under the same name, so the
+# update window and the GitHub release say the same thing.
+echo "==> appcast"
+[ -x "$GENERATE_APPCAST" ] || { echo "!! $GENERATE_APPCAST missing — run swift build" >&2; exit 1; }
+rm -rf "$FEED_DIR"; mkdir -p "$FEED_DIR"
+cp "$ZIP" "$FEED_DIR/"
+tools/changelog-notes.py "$VERSION" --html > "$FEED_DIR/Subtitles-$VERSION.html"
+# The first release has nothing to download, and gh says so; that is the one
+# failure allowed here.
+if gh release download -R "$REPO" -p appcast.xml -D "$FEED_DIR" 2>/dev/null; then
+  echo "    previous appcast: $(grep -c '<item>' "$FEED_DIR/appcast.xml") entries"
+else
+  echo "    no previous release — starting a fresh appcast"
+fi
+APPCAST_FLAGS=()
+# An empty version means critical from any version, which is the only kind
+# of critical this app has.
+[ "$CRITICAL" = yes ] && APPCAST_FLAGS+=(--critical-update-version "")
+# The odd expansion is for the bash macOS ships (3.2), where an empty array
+# counts as unset under `set -u` and "${ARR[@]}" aborts the script.
+"$GENERATE_APPCAST" \
+  --download-url-prefix "$RELEASES/download/v$VERSION/" \
+  --link "https://subtitles-live.com" \
+  --embed-release-notes \
+  ${APPCAST_FLAGS[@]+"${APPCAST_FLAGS[@]}"} \
+  "$FEED_DIR"
+grep -q "sparkle:version>$(grep -m1 '^BUILD=' build.sh | cut -d'"' -f2)<" "$FEED_DIR/appcast.xml" \
+  || { echo "!! appcast has no entry for this build" >&2; exit 1; }
+
+# The GitHub release. A draft first, with every asset on it, published only
+# once they are all up: a check that lands between the appcast appearing and
+# its zip finishing would otherwise be offered a download that 404s.
+# Subtitles.dmg is the DMG again under a name that does not change, so the
+# site can link $RELEASES/latest/download/Subtitles.dmg without an edit per
+# release. The tag is made here rather than by hand afterwards, because the
+# appcast points at a URL with the tag's name in it, and a tag typed
+# differently is a 404 on every machine.
+NOTES="build/notes-$VERSION.md"
+tools/changelog-notes.py "$VERSION" > "$NOTES"
+cp "$DMG" build/Subtitles.dmg
+if [ "$DRYRUN" = no ]; then
+  echo "==> tagging $TAG"
+  git tag -a "$TAG" -m "$TAG"
+  git push origin "$TAG"
+fi
+echo "==> github release $TAG (draft)"
+gh release create "$TAG" -R "$REPO" --draft --target "$(git rev-parse HEAD)" \
+  --title "Subtitles $VERSION" --notes-file "$NOTES" \
+  "$DMG" "$ZIP" "build/Subtitles.dmg" "$FEED_DIR/appcast.xml"
+# Every asset, by name, before anything is published. Uploads fail quietly
+# often enough that this is worth ten lines.
+ASSETS=$(gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name')
+for want in "$(basename "$DMG")" "$(basename "$ZIP")" Subtitles.dmg appcast.xml; do
+  grep -qx "$want" <<<"$ASSETS" || { echo "!! asset missing from the draft: $want" >&2; exit 1; }
+done
+echo "    assets: $(tr '\n' ' ' <<<"$ASSETS")"
+
+if [ "$DRYRUN" = yes ]; then
+  gh release delete "$TAG" -R "$REPO" --yes
+  echo
+  echo "dry run complete: the draft was created with every asset and deleted again."
+  echo "  $DMG is NOT notarized — do not ship this one"
+  exit 0
+fi
+
+echo "==> publishing"
+gh release edit "$TAG" -R "$REPO" --draft=false --latest
+
+# What every installed copy will see. The site proxies /appcast.xml to the
+# latest release's asset; GitHub takes a moment to point "latest" at the new
+# release, so this waits a little before calling it a failure.
+echo "==> checking the feed"
+BUILD=$(grep -m1 '^BUILD=' build.sh | cut -d'"' -f2)
+for attempt in $(seq 1 12); do
+  if curl -fsSL "$FEED_URL" | grep -q "sparkle:version>$BUILD<"; then
+    echo "    $FEED_URL offers build $BUILD"
+    break
+  fi
+  [ "$attempt" = 12 ] && {
+    echo "!! $FEED_URL does not offer build $BUILD yet." >&2
+    echo "   The release is published; either GitHub is slow to update 'latest'," >&2
+    echo "   or the site's _redirects rule for /appcast.xml is not deployed." >&2
+    echo "   Check: curl -sL $RELEASES/latest/download/appcast.xml | grep sparkle:version" >&2
+    exit 1
+  }
+  sleep 5
+done
 
 echo
 echo "ready: $DMG"
 echo "  commit:  $(git rev-parse --short HEAD)"
+echo "  release: $RELEASES/tag/$TAG"
+echo "  feed:    $FEED_URL — live, every copy that checks is offered $VERSION"
 echo
-echo "upload it to Gumroad, then tag the release:"
-echo "  git tag -a v$VERSION -m 'v$VERSION' && git push origin v$VERSION"
+echo "upload $DMG to Gumroad."

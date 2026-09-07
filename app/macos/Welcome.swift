@@ -74,6 +74,10 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         return !(contents ?? []).isEmpty
     }
 
+    /// Whether the window is on screen — the updater holds its own window back
+    /// while this one is up.
+    var isVisible: Bool { window?.isVisible ?? false }
+
     func show(markAsSeen: Bool = false) {
         NSApp.activate(ignoringOtherApps: true)
         if markAsSeen { UserDefaults.standard.set(true, forKey: Self.shownKey) }

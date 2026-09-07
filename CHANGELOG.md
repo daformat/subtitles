@@ -4,6 +4,27 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.5.0 · 2026-09-07
+
+- The app can update itself. **Check for Updates…** sits at the top of the menu,
+  under Pause; it asks subtitles-live.com for a newer version and installs it
+  in place — same location, same signature — so the audio permission survives
+  an update the way it survives a rebuild. On the second launch the app asks,
+  once, whether it may check on its own once a day; the request carries the
+  app's version and nothing else, and the answer is a checkbox in the menu
+  afterwards.
+- Updating happens in one window of the app's own, in the style of its About
+  and Welcome windows: the notes set as text, one progress bar for the download,
+  Install and Relaunch when it is ready. A check that finds something opens it
+  at launch, or once nothing has been playing for a couple of minutes. While
+  something is playing it does not: a red badge with a 1 appears on the icon,
+  the menu offers **Update to …**, and the window comes when that is chosen.
+  A critical fix opens the window regardless, and cannot be skipped.
+- `--feed URL` points the check at another appcast, for trying an update against
+  a local server.
+- Copies older than this one have no updater. They are updated by downloading
+  again, once.
+
 ## 1.4.3 · 2026-09-06
 
 - The ⌥ stack fades its near edge too, once you have scrolled away from the live

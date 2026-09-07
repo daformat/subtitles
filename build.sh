@@ -16,8 +16,15 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.4.3"
-BUILD="20"
+VERSION="1.5.0"
+BUILD="21"
+# The updater's public key (PLAN.md §23). Its private half is in the login
+# Keychain of the machine that ran Sparkle's generate_keys, and is what
+# release.sh signs archives with. Losing that half strands every installed
+# copy: no update it is offered will ever verify. Export a backup with
+# `.build/artifacts/sparkle/Sparkle/bin/generate_keys -x <file>`.
+SPARKLE_PUBLIC_KEY="m+S4Ls6kFN21gYSPjfLglyylSW97Z/usYuahg1+RMr4="
+SPARKLE_FEED="https://subtitles-live.com/appcast.xml"
 
 echo "==> building rust core"
 (cd core && cargo build --release)
@@ -50,6 +57,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     <string>Subtitles transcribes the audio your Mac is playing so it can show live captions.</string>
     <!-- Agent app: no Dock icon, no menu bar. -->
     <key>LSUIElement</key>                <true/>
+    <!-- Sparkle. Whether it checks on its own is deliberately not declared
+         here: with nothing declared Sparkle's default is off, and the app asks
+         the question itself on the second launch (main.swift). -->
+    <key>SUFeedURL</key>                  <string>$SPARKLE_FEED</string>
+    <key>SUPublicEDKey</key>              <string>$SPARKLE_PUBLIC_KEY</string>
 </dict>
 </plist>
 PLIST
@@ -86,6 +98,22 @@ if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   echo "!! swift link failed" >&2
   exit 1
 fi
+
+# Sparkle. SwiftPM leaves the xcframework's macOS slice beside the binary; the
+# bundle wants it in Contents/Frameworks, where the rpath in Package.swift
+# points. The XPC services inside it exist for sandboxed apps, and this one is
+# not sandboxed (process taps), so they go — smaller bundle, two fewer things
+# to sign, and nothing that could be flagged at notarization for an
+# entitlement it never uses.
+echo "==> sparkle"
+SPARKLE_SRC=".build/release/Sparkle.framework"
+[ -d "$SPARKLE_SRC" ] || { echo "!! $SPARKLE_SRC missing — did swift build resolve Sparkle?" >&2; exit 1; }
+FRAMEWORKS="$APP/Contents/Frameworks"
+mkdir -p "$FRAMEWORKS"
+cp -R "$SPARKLE_SRC" "$FRAMEWORKS/"
+SPARKLE="$FRAMEWORKS/Sparkle.framework"
+rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
+echo "    Sparkle $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$SPARKLE/Resources/Info.plist"), XPC services stripped"
 
 # The status icon, and the two marks the About window puts beside its links.
 # Copied rather than declared as SwiftPM resources because the bundle here is
@@ -226,6 +254,15 @@ for bundle in "$APP/Contents/Resources/"*.bundle; do
   codesign "${SIGN[@]}" "$bundle"
   echo "    signed $(basename "$bundle")"
 done
+# Sparkle carries two executables of its own that run outside the app — the
+# helper that swaps the bundle, and the app that shows progress while it does —
+# and each needs its own hardened-runtime signature before the framework's
+# seals them in. This is the order Sparkle's own documentation gives.
+for nested in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app"; do
+  codesign "${SIGN[@]}" "$nested"
+done
+codesign "${SIGN[@]}" "$SPARKLE"
+echo "    signed Sparkle.framework and its helpers"
 
 if [ "$REAL_IDENTITY" = yes ]; then
   codesign "${SIGN[@]}" --entitlements "$ENTS" --identifier dev.mat.subtitles "$APP"

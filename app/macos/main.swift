@@ -39,6 +39,8 @@ var resetPosition = false
 var listSources = false
 var listModels = false
 var variantOverride: FluidVariant?
+/// An appcast URL for the updater, instead of the one in Info.plist.
+var feedOverride: String?
 
 var args = Array(CommandLine.arguments.dropFirst())
 var i = 0
@@ -53,6 +55,8 @@ while i < args.count {
         fontSize = (Double(args[i + 1]) as Double?).map { CGFloat($0) } ?? defaultFontSize; i += 1
     case "--variant" where i + 1 < args.count:
         variantOverride = FluidVariant(rawValue: args[i + 1]); i += 1
+    case "--feed" where i + 1 < args.count:
+        feedOverride = args[i + 1]; i += 1
     case "--help", "-h":
         print("""
         usage: subtitles [options]
@@ -63,6 +67,7 @@ while i < args.count {
           --reset-position  put the overlay back to bottom-centre
           --list-sources    print audio sources and exit (no permission needed)
           --list-models     print the model cache and what is unused, and exit
+          --feed URL        check for updates against this appcast, not the shipped one
           --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
@@ -286,6 +291,9 @@ final class Renderer {
     /// talking".
     private(set) var receivingAudio = false
     private let silenceGrace: Float = 2
+    /// How long nothing has been arriving, as the core last reported it. The
+    /// updater reads this to tell a quiet Mac from one mid-film (Updater.swift).
+    private(set) var silentSeconds: Float = 0
 
     /// FluidAudio reports the whole transcript each update rather than deltas,
     /// with the audio time of every word — which is what the overlay pages on.
@@ -363,6 +371,7 @@ final class Renderer {
 
     func status(_ text: String, peak: Float, silentSeconds: Float, dropped: UInt64) {
         receivingAudio = silentSeconds < silenceGrace
+        self.silentSeconds = silentSeconds
 
         // A missing audio-capture grant yields perfectly timed, correctly sized,
         // all-zero buffers with noErr everywhere. The only way to tell that apart
@@ -1024,6 +1033,23 @@ if useOverlay {
     menu.onTogglePause = { togglePause() }
     menu.onResetPosition = { controller.resetPosition() }
     menu.onQuit = { shutdownCleanly() }
+
+    // Updates (§23). Started before the menu is wired to it, so a build that
+    // cannot update — no Info.plist around the binary — simply has no items.
+    let updater = Updater()
+    updater.feedOverride = feedOverride
+    // Paused counts as quiet for as long as it lasts: nobody is reading
+    // captions that are not there.
+    updater.quietFor = { isPaused ? .infinity : TimeInterval(renderer.silentSeconds) }
+    updater.mayInterrupt = { !WelcomeWindow.shared.isVisible }
+    updater.start()
+    if updater.started {
+        menu.onCheckForUpdates = { updater.checkForUpdates() }
+        menu.pendingUpdateVersion = { updater.pendingVersion }
+        menu.automaticUpdates = { updater.automaticChecks }
+        menu.onToggleAutomaticUpdates = { updater.automaticChecks.toggle() }
+        updater.onPendingChange = { menu.updateHealthIndicator() }
+    }
     menu.onSelectVariant = { applyVariant($0) }
     menu.onSelectLanguage = { applyLanguage($0) }
     menu.currentLanguageID = { currentLanguage.rawValue }

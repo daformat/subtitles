@@ -1616,12 +1616,23 @@ Sparkle 2 fits what is already here:
    under stable names so the site can link `/download` without editing.
 4. **release.sh** grows a tail: after stapling, `ditto -c -k --keepParent` the
    app into a zip, run `generate_appcast` over a directory holding the archives
-   (it signs them with the Keychain key and emits the appcast), `gh release
-   create` with both files, and write the appcast into the site checkout for a
-   commit there. Release notes: `generate_appcast` picks up an HTML file per
-   version, so a small script renders the CHANGELOG entry, which keeps the
-   changelog the single source. The "upload it to Gumroad" closing line becomes
-   "publish, then tag"; the Gumroad upload remains for the product page.
+   (it signs them with the Keychain key and emits the appcast), and `gh release
+   create` with the DMG, the zip and the appcast itself. Release notes:
+   `generate_appcast` picks up an HTML file per version, so a small script
+   renders the CHANGELOG entry, which keeps the changelog the single source.
+   The Gumroad upload remains for the product page.
+
+   *Revised the same day.* The first draft wrote the appcast into the site
+   checkout for a commit there, which is two repos per release and an ordering
+   rule — assets first, appcast last — held in one's head. Instead the appcast
+   is one more release asset, GitHub serves the newest at
+   `releases/latest/download/appcast.xml`, and the site's `_redirects` proxies
+   `/appcast.xml` there (status 200, so the app keeps asking
+   subtitles-live.com and the privacy page stays true). The release is made as
+   a draft, every asset checked by name, then published — atomic, so no check
+   sees an appcast whose zip is still uploading — and the script ends by
+   fetching the feed and confirming it offers the new build. `--dry-run` runs
+   that half against a draft it deletes again, without notarizing or tagging.
 5. **The bundle.** The one real gotcha. Sparkle is a dynamic framework and the
    bundle is assembled by hand, so build.sh must copy `Sparkle.framework` into
    `Contents/Frameworks`, link with `-rpath @executable_path/../Frameworks`, and
@@ -1660,13 +1671,58 @@ variable — never by editing the plist, which is how a dev feed ships. Then a
 real 1.5.0 → 1.5.1 on a clean user account, and afterwards `./probe.sh`: the
 audio grant surviving is the property under test, not the version string.
 
+### Built (2026-09-07)
+
+Everything above except the site's translations, in Updater.swift,
+UpdateWindow.swift, MenuBar.swift, main.swift, build.sh, release.sh and
+tools/. Tried end to end on this machine: a 1.4.3 copy in a scratch directory,
+a 1.5.0 zip behind a local appcast, the question answered, the scheduled check
+finding the update, the install, the relaunch as 1.5.0 with the signature
+intact and no quarantine, and `probe.sh` reporting the audio grant still held.
+
+Three things moved after the first pass, all on trying it:
+
+- **Sparkle's windows are gone.** They were fine and they were Sparkle's — a
+  different width, a web view for the notes, a second window for the download.
+  UpdateWindow.swift is one window in the About and Welcome windows' style,
+  and every state of an update passes through it; Updater.swift implements
+  Sparkle's user-driver protocol and turns each of its calls into a state. The
+  notes come out of the appcast's HTML as native text (ReleaseNotes.swift, in
+  CaptionCore so it is tested). `tools/update-window-harness` shows every
+  state without a feed, captured one PNG each.
+- **When the window opens.** At launch, or once nothing has been playing for
+  two minutes — the app's own silence counter, not the keyboard: someone
+  watching a film with captions on touches nothing for two hours, and that is
+  exactly when a window must not appear. Otherwise the badge and the menu. A
+  critical update (release.sh `--critical`) opens the window regardless and
+  offers no Skip. Later keeps the badge and brings the window back at the next
+  launch, not a day later. Not on pause, not on menu open, no escalation timer.
+- **The badge is red after all**, and not a dot: a red disc with a white 1, the
+  shape of every notification badge on the Mac, reads as one thing waiting and
+  not as recording. The teal dot it replaced was accurate and unnoticed. The
+  digit is drawn as a glyph at an exact baseline, centred on its ink and then
+  a point left of that, which is where a 1 reads as centred. The menu item
+  carries no badge — just "Update to 1.5.1…" at the top, under Pause.
+
+Two things learned along the way:
+
+- SwiftPM copies the xcframework's macOS slice to `.build/release/` and links
+  with `@loader_path`, so `swift run` works untouched; the bundle needs only the
+  second rpath in Package.swift and the copy in build.sh.
+- Sparkle checks the moment automatic checks are switched on, not a day later,
+  so the first reminder can appear within seconds of answering yes. Fine —
+  that is the launch it was asked on, and the person is at the machine.
+
 ### Not done here
 
 - Delta updates. The zip is small; revisit if it stops being.
 - Migrating anyone below 1.5. One Gumroad email when 1.5 ships is the whole
   migration; they re-download once.
-- Keep 1.5 Gumroad-only. The public download starts with 1.6, for the reason in
-  §24's migration note.
+- The 1.5 archive is public by necessity — an appcast enclosure is a URL
+  anyone can fetch — but nothing links to it: the site's button still goes to
+  Gumroad, and the download button waits for 1.6, for the reason in §24's
+  migration note. Anyone who digs the release out of GitHub could have built
+  it from source; that was always so.
 
 ---
 
@@ -1720,8 +1776,8 @@ the app's existing preferences at 1.6's first launch are decent evidence of a
 purchase. Treat their presence as **grandfathered**: licensed, no key asked,
 with the Gumroad key there for a clean reinstall. Forgeable with `defaults
 write`, and that is fine — see the paragraph on honour above. This is why 1.5
-stays Gumroad-only (§23): the first public download is the first build that
-knows about licences.
+is not linked from the site (§23): the first advertised download is the first
+build that knows about licences.
 
 ### Code
 
