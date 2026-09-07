@@ -33,7 +33,7 @@ and the DMG name show.
 
 - The app can update itself. **Check for Updates…** sits at the top of the menu,
   under Pause; it asks subtitles-live.com for a newer version and installs it
-  in place — same location, same signature — so the audio permission survives
+  in place, same location and same signature, so the audio permission survives
   an update the way it survives a rebuild. On the second launch the app asks,
   once, whether it may check on its own once a day; the request carries the
   app's version and nothing else, and the answer is a checkbox in the menu
