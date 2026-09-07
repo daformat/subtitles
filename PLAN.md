@@ -1718,11 +1718,15 @@ Two things learned along the way:
 - Delta updates. The zip is small; revisit if it stops being.
 - Migrating anyone below 1.5. One Gumroad email when 1.5 ships is the whole
   migration; they re-download once.
-- The 1.5 archive is public by necessity — an appcast enclosure is a URL
-  anyone can fetch — but nothing links to it: the site's button still goes to
-  Gumroad, and the download button waits for 1.6, for the reason in §24's
-  migration note. Anyone who digs the release out of GitHub could have built
-  it from source; that was always so.
+- Update archives are public by necessity — an appcast enclosure is a URL
+  anyone can fetch — and the release page is a download page for anyone who
+  finds it. So the DMG is not on the release: only the zip and the appcast,
+  and the 1.5.0 release carries the appcast alone, because no installed copy
+  can consume the 1.5.0 zip (every copy with an updater already is 1.5.0, and
+  every older copy has none). From 1.5.1 the zip has to be there. The DMG
+  joins the release, under a stable name for the site's button, with 1.6 and
+  the trial. Anyone who digs a zip out of GitHub could have built it from
+  source; that was always so.
 
 ---
 

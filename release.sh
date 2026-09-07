@@ -282,14 +282,18 @@ grep -q "sparkle:version>$(grep -m1 '^BUILD=' build.sh | cut -d'"' -f2)<" "$FEED
 # The GitHub release. A draft first, with every asset on it, published only
 # once they are all up: a check that lands between the appcast appearing and
 # its zip finishing would otherwise be offered a download that 404s.
-# Subtitles.dmg is the DMG again under a name that does not change, so the
-# site can link $RELEASES/latest/download/Subtitles.dmg without an edit per
-# release. The tag is made here rather than by hand afterwards, because the
-# appcast points at a URL with the tag's name in it, and a tag typed
-# differently is a 404 on every machine.
+#
+# The zip and the appcast, and not the DMG. The zip has to be public — it is
+# what every installed copy downloads — but the DMG is the product Gumroad
+# sells, and a release page is a download page for anyone who finds it. When
+# the trial ships (PLAN.md §24) the DMG joins the release, under a name that
+# does not change, and the site's button points at it.
+#
+# The tag is made here rather than by hand afterwards, because the appcast
+# points at a URL with the tag's name in it, and a tag typed differently is a
+# 404 on every machine.
 NOTES="build/notes-$VERSION.md"
 tools/changelog-notes.py "$VERSION" > "$NOTES"
-cp "$DMG" build/Subtitles.dmg
 if [ "$DRYRUN" = no ]; then
   echo "==> tagging $TAG"
   git tag -a "$TAG" -m "$TAG"
@@ -298,11 +302,11 @@ fi
 echo "==> github release $TAG (draft)"
 gh release create "$TAG" -R "$REPO" --draft --target "$(git rev-parse HEAD)" \
   --title "Subtitles $VERSION" --notes-file "$NOTES" \
-  "$DMG" "$ZIP" "build/Subtitles.dmg" "$FEED_DIR/appcast.xml"
+  "$ZIP" "$FEED_DIR/appcast.xml"
 # Every asset, by name, before anything is published. Uploads fail quietly
 # often enough that this is worth ten lines.
 ASSETS=$(gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name')
-for want in "$(basename "$DMG")" "$(basename "$ZIP")" Subtitles.dmg appcast.xml; do
+for want in "$(basename "$ZIP")" appcast.xml; do
   grep -qx "$want" <<<"$ASSETS" || { echo "!! asset missing from the draft: $want" >&2; exit 1; }
 done
 echo "    assets: $(tr '\n' ' ' <<<"$ASSETS")"
@@ -310,7 +314,7 @@ echo "    assets: $(tr '\n' ' ' <<<"$ASSETS")"
 if [ "$DRYRUN" = yes ]; then
   gh release delete "$TAG" -R "$REPO" --yes
   echo
-  echo "dry run complete: the draft was created with every asset and deleted again."
+  echo "dry run complete: the draft was created with both assets and deleted again."
   echo "  $DMG is NOT notarized — do not ship this one"
   exit 0
 fi
