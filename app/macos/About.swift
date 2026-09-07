@@ -25,6 +25,10 @@ final class AboutWindow: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
 
+    /// The line under the version — "Licensed to …", or what the trial is
+    /// doing — from License.swift, read afresh at every open.
+    var licenseLine: () -> String? = { nil }
+
     func show() {
         // An agent app is never the active application, so the window would
         // otherwise open behind whatever the user is working in — and, having no
@@ -77,9 +81,19 @@ final class AboutWindow: NSObject, NSWindowDelegate {
         stack.addArrangedSubview(version)
         stack.setCustomSpacing(2, after: name)
 
+        var last: NSView = version
+        if let line = licenseLine() {
+            let licence = NSTextField(labelWithString: line)
+            licence.font = .systemFont(ofSize: 11)
+            licence.textColor = .secondaryLabelColor
+            stack.addArrangedSubview(licence)
+            stack.setCustomSpacing(2, after: version)
+            last = licence
+        }
+
         let credits = buildCredits()
         stack.addArrangedSubview(credits)
-        stack.setCustomSpacing(18, after: version)
+        stack.setCustomSpacing(18, after: last)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.width + Self.insetH * 2, height: 200),

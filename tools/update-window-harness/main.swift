@@ -1,7 +1,7 @@
 // Shows every state of the update window without a feed, and captures each.
 //
 //   swiftc -O -o build/update-window-harness \
-//     tools/update-window-harness/main.swift app/macos/UpdateWindow.swift \
+//     tools/update-window-harness/main.swift app/macos/UpdateWindow.swift app/macos/Dialog.swift \
 //     app/captions/ReleaseNotes.swift -framework AppKit
 //   build/update-window-harness build/update-window-states
 //

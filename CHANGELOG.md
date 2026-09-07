@@ -4,6 +4,31 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.6.0 · 2026-09-07
+
+- The app is a free download with a seven-day trial, and a licence key is what
+  you buy. The trial starts when the captions do, not at the first launch, so
+  the model download does not count against it. When it ends the app keeps
+  running but stops transcribing: the icon dims as it does for Pause, the menu
+  says why, and Resume opens the licence window instead. Settings and the ⌥
+  stack stay where they were.
+- **Enter License Key…** sits above Settings, or reads **Trial: N days left**
+  or **Licensed**. The window takes the key as it was pasted from a receipt or
+  the Gumroad library, in any case and spacing, and says in place what became
+  of it. Activating sends the key to Gumroad once; the app checks it again,
+  silently, about once a month, and only a key Gumroad reports as refunded,
+  charged back, disputed or disabled stops working. A key entered with no
+  network is accepted for 72 hours and confirmed when the network is back.
+  **Buy a Key** and **Where Is My Key?** go through subtitles-live.com.
+- Copies bought before this version are licensed as they are: a copy with
+  preferences from an earlier build on its first launch as 1.6 asks for no key.
+  Your key is in your Gumroad library for a clean reinstall.
+- About says who the copy is licensed to, and Welcome mentions the trial.
+- `--verify URL` points key verification at another server, for trying
+  activation against a local one, as `--feed` does for updates.
+- The DMG is on the GitHub release again, as `Subtitles.dmg` under a name that
+  never changes, which is what the site's download button links.
+
 ## 1.5.0 · 2026-09-07
 
 - The app can update itself. **Check for Updates…** sits at the top of the menu,

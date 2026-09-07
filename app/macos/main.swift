@@ -14,6 +14,7 @@
 import AppKit
 import CaptionCore
 import CSubs
+import LicenseCore
 import Carbon.HIToolbox
 import Darwin
 import Foundation
@@ -41,6 +42,8 @@ var listModels = false
 var variantOverride: FluidVariant?
 /// An appcast URL for the updater, instead of the one in Info.plist.
 var feedOverride: String?
+/// Where licence keys are verified, instead of Gumroad.
+var verifyOverride: URL?
 
 var args = Array(CommandLine.arguments.dropFirst())
 var i = 0
@@ -57,6 +60,8 @@ while i < args.count {
         variantOverride = FluidVariant(rawValue: args[i + 1]); i += 1
     case "--feed" where i + 1 < args.count:
         feedOverride = args[i + 1]; i += 1
+    case "--verify" where i + 1 < args.count:
+        verifyOverride = URL(string: args[i + 1]); i += 1
     case "--help", "-h":
         print("""
         usage: subtitles [options]
@@ -68,6 +73,7 @@ while i < args.count {
           --list-sources    print audio sources and exit (no permission needed)
           --list-models     print the model cache and what is unused, and exit
           --feed URL        check for updates against this appcast, not the shipped one
+          --verify URL      verify licence keys against this URL, not Gumroad's
           --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
@@ -130,6 +136,22 @@ enum Defaults {
 nonisolated(unsafe) var isPaused = false
 
 let app = NSApplication.shared
+
+// ── licence ──
+// Started here, before anything writes a default: whether a build older than
+// this one left preferences behind is what decides grandfathering (§24), and
+// the first write below would count as evidence. The gate itself is in
+// `togglePause` and the wiring further down.
+let license = LicenseController()
+license.verifyOverride = verifyOverride
+license.start()
+/// True while the licence, not the person, is what paused the app — so
+/// activating a key can resume it, and a pause the person chose is kept.
+var pausedByLicense = false
+if !license.entitlement.allowsTranscription {
+    isPaused = true
+    pausedByLicense = true
+}
 
 // ── engine ──
 // Globals rather than captures: the audio callback must not touch ARC.
@@ -595,6 +617,9 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 engineBusyMessage = nil
                 engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
+                // The trial clock starts here and nowhere else: a launch
+                // spent downloading the model has not started it.
+                if ok { license.noteEngineReady() }
             }
         },
         onLanguage: { code in
@@ -799,6 +824,14 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
 }
 
 func togglePause() {
+    // Resume is refused while the licence says no — the trial is over, or the
+    // key was refunded — and the licence window is what opens instead. The
+    // pause itself is allowed, so the person can always stop the tap.
+    if isPaused, !license.entitlement.allowsTranscription {
+        license.present()
+        return
+    }
+    pausedByLicense = false
     isPaused.toggle()
     renderer.overlay?.setPaused(isPaused)
     // Tear the tap down rather than discarding the samples it delivers.
@@ -1015,6 +1048,11 @@ if useOverlay {
         // being stopped on purpose, not a fault, and it is certainly not the app
         // listening. A model load still shows through above: that carries on
         // regardless of capture.
+        // A licence pause says why, in the default colour: not a fault, and
+        // not nothing either — the one line here that asks for something.
+        if isPaused, let blocked = license.entitlement.blockedStatusLine {
+            return (blocked, .normal)
+        }
         if isPaused { return ("Paused", .idle) }
         // One message, and not a red one. Distinguishing "nothing is playing" from
         // "the grant is missing" needs `processesOutputtingAudio()`, and that is
@@ -1110,6 +1148,12 @@ if useOverlay {
     renderer.onStatusRefresh = { [weak menu] in menu?.updateHealthIndicator() }
     statusMenu = menu
 
+    license.onChange = { [weak menu] in menu?.updateHealthIndicator() }
+    menu.licenseTitle = { license.entitlement.menuTitle }
+    menu.onLicense = { license.present() }
+    AboutWindow.shared.licenseLine = { license.entitlement.aboutLine }
+    if isPaused { controller.setPaused(true) }
+
     // Restore a saved target now rather than at load time: the controller needs
     // the overlay and the menu, both of which exist only here.
     if let target = translateTo { applyTranslation(target) }
@@ -1119,6 +1163,25 @@ if useOverlay {
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
 
     err("overlay on — click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
+}
+
+// The licence gate (§24). Expiry takes the pause path, so the tap comes down,
+// the icon dims and the overlay clears exactly as Pause does; the status line
+// says why, and Resume opens the licence window. Outside the overlay block:
+// --headless is gated the same way.
+license.onBlocked = {
+    guard !isPaused else { return }
+    togglePause()
+    pausedByLicense = true
+}
+license.onUnblocked = {
+    guard isPaused, pausedByLicense else { return }
+    pausedByLicense = false
+    isPaused = false
+    renderer.overlay?.setPaused(false)
+    resumeCapture()
+    statusMenu?.updateHealthIndicator()
+    err("resumed — licensed")
 }
 
 applyVariant(currentVariant, initial: true)
@@ -1132,15 +1195,25 @@ applyVariant(currentVariant, initial: true)
 if useOverlay {
     WelcomeWindow.shared.engineBusy = { engineBusyMessage }
     WelcomeWindow.shared.engineProgress = { engineBusyProgress }
+    WelcomeWindow.shared.trialLine = {
+        guard case .trial = license.entitlement else { return nil }
+        return "Your free trial runs for \(LicenseRecord.trialDays) days, and starts when the captions do."
+    }
     if WelcomeWindow.shouldShowAtLaunch {
         WelcomeWindow.shared.show(markAsSeen: true)
     }
 }
-do {
-    try tap.start()
-} catch {
-    err("\(red)capture failed:\(reset) \(error)")
-    exit(1)
+// Not while the licence has paused it: `resumeCapture` brings the tap up
+// once a key is entered, the same as after any pause.
+if isPaused {
+    err("\(yellow)not listening:\(reset) \(license.entitlement.blockedStatusLine ?? "paused")")
+} else {
+    do {
+        try tap.start()
+    } catch {
+        err("\(red)capture failed:\(reset) \(error)")
+        exit(1)
+    }
 }
 err("listening. ctrl-C to stop.\n")
 

@@ -11,9 +11,10 @@ Transcription runs on the **Apple Neural Engine** via
 at roughly 0.15 real-time factor.
 
 **[subtitles-live.com](https://subtitles-live.com)** is the app itself: built,
-signed and notarised, so the audio permission survives updates. Everything
-needed to build your own copy is in this repository, and `build.sh` below does
-exactly that.
+signed and notarised, so the audio permission survives updates. The download
+is a free seven-day trial, and a licence key, $9 on Gumroad, keeps it going.
+Everything needed to build your own copy is in this repository, and `build.sh`
+below does exactly that.
 
 ![status](https://img.shields.io/badge/platform-macOS%2014.2%2B-blue)
 
@@ -93,6 +94,27 @@ the icon and **Update to …** in the menu instead, and the window comes when yo
 choose it. `--feed URL` points a check at another appcast, for trying an update
 against a local server; release.sh writes the real one, and
 `tools/update-window-harness` shows every state of the window without a feed.
+
+**The trial and the key** (PLAN.md §24). The app works in full for seven days,
+counted from the first `engine ready` rather than the first launch, so the
+model download costs nothing. When the trial ends the app keeps running and
+stops transcribing: the icon dims as it does for Pause, the status line says
+why, and Resume opens the licence window instead. One item above Settings…
+reads **Trial: N days left**, **Enter License Key…** or **Licensed**, and opens
+that window: a field for the key, Activate, Buy a Key and Where Is My Key?, and
+every outcome shown in place. Activating sends the key and the product id to
+Gumroad once; a silent check repeats it about once a month, and only a key
+Gumroad reports as refunded, charged back, disputed or disabled stops working.
+A key entered offline is accepted for 72 hours and confirmed when the network
+is back. The trial start and the key live in the Keychain as well as the
+defaults, so a reinstall changes nothing; a copy with preferences from a build
+older than 1.6 is licensed as it is, since every such copy was bought.
+`--verify URL` points key verification at another server, as `--feed` does for
+updates, and `tools/license-window-harness` shows every state of the window
+without one. All of it is honour-system by construction: the source is public,
+the check applies to every build including this one, and there is deliberately
+no flag to skip it — a copy built from source that should not ask is one line
+deleted in `License.swift`.
 
 The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
 while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and
@@ -237,6 +259,8 @@ Two choices worth knowing about:
 ```
 core/          Rust: ring buffer, resampler, voice gate, pre-roll, C ABI
 app/macos/     Swift: process tap, FluidAudio engine, overlay, menu bar, hotkey
+app/captions/  Swift: the caption pipeline's pure parts (CaptionCore), tested
+app/license/   Swift: the trial and licence rules (LicenseCore), pure, tested
 spike/         throwaway probes from the measurement phase
 PLAN.md        design decisions, measurements, and everything that went wrong
 ```
@@ -245,6 +269,7 @@ PLAN.md        design decisions, measurements, and everything that went wrong
 
 ```bash
 cargo test --manifest-path core/Cargo.toml   # 11 tests
+swift test                                   # CaptionCore and LicenseCore
 ./build.sh && ./probe.sh && ./run.sh
 tail -f build/subtitles.log
 ```
@@ -260,9 +285,12 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 ```
 
 Builds, packages a DMG, notarizes it with Apple, staples the ticket and verifies
-the result the way Gatekeeper will. It stops at the first thing that is wrong
-rather than producing a file that fails on someone else's machine — a dirty
-working tree, an ad-hoc signature, a rejected notarization.
+the result the way Gatekeeper will, then publishes the GitHub release with the
+DMG under its stable name `Subtitles.dmg` — what the site's download button
+serves — the zip the updater installs, and the appcast. It stops at the first
+thing that is wrong rather than producing a file that fails on someone else's
+machine — a dirty working tree, an ad-hoc signature, a rejected notarization,
+an asset missing from the draft.
 
 Needs a `Developer ID Application` certificate in the login keychain, and
 notarization credentials stored once:

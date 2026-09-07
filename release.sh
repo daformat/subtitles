@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds, packages, notarizes and staples a DMG ready to upload to Gumroad.
+# Builds, packages, notarizes and staples a DMG, and publishes the release.
 #
 # One command per release. Everything it does is verifiable afterwards, and it
 # refuses to produce a file that would fail on a customer's machine rather than
@@ -15,13 +15,15 @@
 #     whose public half is SPARKLE_PUBLIC_KEY in build.sh
 #   - `gh`, logged in, for the GitHub release the update is served from
 #
-# The update feed is part of the release. The appcast is uploaded as one more
-# asset, GitHub serves the newest one at releases/latest/download/appcast.xml,
-# and the site proxies /appcast.xml to that address with one rule in its
-# _redirects — so the app keeps asking subtitles-live.com, and nothing on the
-# site changes per release. The release is created as a draft and published
-# only once every asset is up, so no check can see an appcast whose archive is
-# still uploading.
+# The GitHub release is the download. Three assets: the DMG under the stable
+# name Subtitles.dmg, which the site's download button points at through
+# releases/latest/download/; the zip Sparkle installs from; and the appcast,
+# which GitHub likewise serves newest-first and the site proxies /appcast.xml
+# to with one rule in its _redirects — so the app keeps asking
+# subtitles-live.com, and nothing on the site changes per release. The
+# release is created as a draft and published only once every asset is up, so
+# no check can see an appcast whose archive is still uploading, and no button
+# a release whose DMG is not there yet.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -54,6 +56,9 @@ VERSION=$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)
 APP="build/Subtitles.app"
 STAGE="build/dmg"
 DMG="build/Subtitles-$VERSION.dmg"
+# The same file under the name that never changes, for the release. The
+# versioned one stays for Gumroad's product page and for the shelf in build/.
+STABLE_DMG="build/Subtitles.dmg"
 RWDMG="build/Subtitles-rw.dmg"
 # What Sparkle installs. A zip rather than the DMG: Sparkle can update from
 # either, but a DMG has to be mounted first and this is the one everybody's
@@ -283,17 +288,20 @@ grep -q "sparkle:version>$(grep -m1 '^BUILD=' build.sh | cut -d'"' -f2)<" "$FEED
 # once they are all up: a check that lands between the appcast appearing and
 # its zip finishing would otherwise be offered a download that 404s.
 #
-# The zip and the appcast, and not the DMG. The zip has to be public — it is
-# what every installed copy downloads — but the DMG is the product Gumroad
-# sells, and a release page is a download page for anyone who finds it. When
-# the trial ships (PLAN.md §24) the DMG joins the release, under a name that
-# does not change, and the site's button points at it.
+# The DMG is on it since 1.6, as Subtitles.dmg. Through 1.5 it was kept off:
+# the DMG was the product Gumroad sold, and a release page is a download page
+# for anyone who finds it. With the trial (PLAN.md §24) the DMG is a free
+# download and the key is the product, so the release is the right place for
+# it — GitHub's release assets have no bandwidth cap, which Netlify's would
+# eventually feel — and the stable name is what lets the site's button point
+# at releases/latest/download/Subtitles.dmg for good.
 #
 # The tag is made here rather than by hand afterwards, because the appcast
 # points at a URL with the tag's name in it, and a tag typed differently is a
 # 404 on every machine.
 NOTES="build/notes-$VERSION.md"
 tools/changelog-notes.py "$VERSION" > "$NOTES"
+cp "$DMG" "$STABLE_DMG"
 if [ "$DRYRUN" = no ]; then
   echo "==> tagging $TAG"
   git tag -a "$TAG" -m "$TAG"
@@ -302,11 +310,11 @@ fi
 echo "==> github release $TAG (draft)"
 gh release create "$TAG" -R "$REPO" --draft --target "$(git rev-parse HEAD)" \
   --title "Subtitles $VERSION" --notes-file "$NOTES" \
-  "$ZIP" "$FEED_DIR/appcast.xml"
+  "$STABLE_DMG" "$ZIP" "$FEED_DIR/appcast.xml"
 # Every asset, by name, before anything is published. Uploads fail quietly
 # often enough that this is worth ten lines.
 ASSETS=$(gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name')
-for want in "$(basename "$ZIP")" appcast.xml; do
+for want in "$(basename "$STABLE_DMG")" "$(basename "$ZIP")" appcast.xml; do
   grep -qx "$want" <<<"$ASSETS" || { echo "!! asset missing from the draft: $want" >&2; exit 1; }
 done
 echo "    assets: $(tr '\n' ' ' <<<"$ASSETS")"
@@ -314,7 +322,7 @@ echo "    assets: $(tr '\n' ' ' <<<"$ASSETS")"
 if [ "$DRYRUN" = yes ]; then
   gh release delete "$TAG" -R "$REPO" --yes
   echo
-  echo "dry run complete: the draft was created with both assets and deleted again."
+  echo "dry run complete: the draft was created with all three assets and deleted again."
   echo "  $DMG is NOT notarized — do not ship this one"
   exit 0
 fi
@@ -344,8 +352,9 @@ done
 
 echo
 echo "ready: $DMG"
-echo "  commit:  $(git rev-parse --short HEAD)"
-echo "  release: $RELEASES/tag/$TAG"
-echo "  feed:    $FEED_URL — live, every copy that checks is offered $VERSION"
+echo "  commit:   $(git rev-parse --short HEAD)"
+echo "  release:  $RELEASES/tag/$TAG"
+echo "  download: $RELEASES/latest/download/Subtitles.dmg — what the site's button serves now"
+echo "  feed:     $FEED_URL — live, every copy that checks is offered $VERSION"
 echo
-echo "upload $DMG to Gumroad."
+echo "upload $DMG to Gumroad's product page too, for the receipt's link."

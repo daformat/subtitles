@@ -1730,7 +1730,7 @@ Two things learned along the way:
 
 ---
 
-## 24. Free trial and licence keys (planned, 2026-09-07)
+## 24. Free trial and licence keys (2026-09-07)
 
 Today the DMG is the product: the only way to get it is to pay on Gumroad. With a
 trial the DMG becomes a free public download and the **key becomes the product**.
@@ -1834,6 +1834,78 @@ that changes the audio path.
 Lemon Squeezy is the drop-in alternative: merchant of record like Gumroad, but
 its activate *and* deactivate calls are both unauthenticated, so a customer can
 free a seat without anything of ours running. Not needed at $9.
+
+### Built (2026-09-07)
+
+Everything above, in the order the plan gives: `LicenseCore` at `app/license`
+with its tests (the record, the six states, the key's shape, the reading of
+Gumroad's answer); LicenseStore.swift and LicenseVerifier.swift; the gate in
+main.swift through `LicenseController` (License.swift); LicenseWindow.swift,
+the menu item, the About line, the Welcome sentence and
+`tools/license-window-harness`; release.sh; the site. Tried end to end on this
+machine, driven through System Events: a grandfathered first launch, a fresh
+trial, a countdown at two days, expiry with the tap never brought up and Resume
+opening the window, half a key, a made-up key against the real endpoint, the
+test key activating against the real endpoint, activation with Gumroad
+unreachable and the confirmation once it was not, a stand-in server answering
+refunded to the monthly check, and `probe.sh` afterwards with the audio grant
+intact. The real refund of the test purchase is the one step not yet taken.
+
+What moved on writing it, all in comments where it lives:
+
+- **The dialogs share their parts.** Dialog.swift holds what the update
+  window and the licence window are both built from; each harness compiles
+  that one file rather than the other window.
+- **A backwards clock is not sticky.** The record keeps a high-water mark of
+  the clock; a clock more than an hour behind it counts as expired for as long
+  as it stays there, and a clock put right is the trial it was. A permanent
+  penalty for a mistaken clock is out of proportion to what it defends.
+- **A bad answer at activation changes nothing.** A licensed user mistyping a
+  second key keeps their licence and a trial user trying a refunded one keeps
+  their trial; the window says what happened. Only the monthly check records
+  a revocation, which is what "revoked" means: it stood, and now does not.
+  A key Gumroad no longer knows is not one of the four definitive answers and
+  is ignored for a verified key; it clears a provisional one, whose
+  activation it is the first real answer to. A dispute the seller won stands
+  (`dispute_won`).
+- **The Keychain wins with the earlier date.** A reinstall keeps the trial it
+  had; a key found in the Keychain alone comes back provisional and is
+  confirmed by the next check. The store logs which copy of the start it took,
+  because "why does it say my trial ended" is the question it will be asked.
+- **Hourly, not daily.** The trial ends at an hour of the day and the re-read
+  costs nothing; the network is still touched only when thirty days are up,
+  and the check runs at the first `engine ready` or a minute in.
+- **The buttons go through the site.** Buy a Key and Where Is My Key? open
+  `subtitles-live.com/buy` and `/key`, two 302s in the site's `_redirects`,
+  and the site's download button is `/download`, a third one to the DMG on the
+  latest GitHub release — so a change of store is a line on the site, not a
+  release. build.py and check.py learned those paths.
+- **`--verify URL`**, the licence's `--feed`: a dead localhost port is how the
+  provisional path was tried, and a stand-in server how revocation was.
+- **The record is a JSON string** with ISO 8601 dates under one defaults key,
+  so `defaults read` shows it and `defaults write -string` can move a trial
+  start back a week. The two Keychain items hold the key and whole seconds
+  since 1970.
+
+Learned along the way:
+
+- `defaults write` parses `{…}` as an old-style plist and refuses it; the
+  record needs `-string`. An interrupted test had already written an expiry
+  date to the Keychain, and the earlier-wins rule then made the next countdown
+  test read "trial ended" — the rule working, not a bug, but an hour spent
+  suspecting the decoder.
+- Gumroad's refusals are 404s with `success: false` and a sentence; a disabled
+  key's sentence says "disabled", which is the one refusal that is the
+  seller's decision about that key.
+- Return in a text field and a default button's key equivalent both fire; the
+  field intercepts Return itself so an activation cannot be sent twice.
+- An ad-hoc build is a new code identity every build, so the Keychain may
+  prompt on a machine without the certificate; nothing depends on the answer.
+
+### Not done here
+
+- Seats, as decided. The dashboard's activation count is the whole of it.
+- The site's translations: 49 stale strings per locale, reported by the build.
 
 ---
 

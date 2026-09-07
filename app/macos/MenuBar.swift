@@ -196,6 +196,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var pendingUpdateVersion: () -> String? = { nil }
     var automaticUpdates: () -> Bool = { false }
     var onToggleAutomaticUpdates: (() -> Void)?
+    /// The licence (License.swift): "Trial: 6 days left", "Enter License
+    /// Key…" or "Licensed", and the window when chosen. nil hides the item.
+    var licenseTitle: () -> String? = { nil }
+    var onLicense: (() -> Void)?
 
     var isPaused: () -> Bool = { false }
     var currentSource: () -> AudioSource = { .allSystemAudio }
@@ -497,6 +501,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(reset)
 
         menu.addItem(.separator())
+        if let title = licenseTitle() { menu.addItem(licenseMenuItem(title)) }
         menu.addItem(settingsMenuItem())
         menu.addItem(permissionMenuItem())
         menu.addItem(.separator())
@@ -826,6 +831,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     @objc private func showSettings() { SettingsWindow.shared.show() }
+
+    /// Where the trial stands, or that it no longer needs to. Above Settings,
+    /// where a thing about this copy of the app rather than about captions
+    /// belongs; every state opens the same window.
+    private func licenseMenuItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(showLicense), keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func showLicense() { onLicense?() }
 
     /// "Check for Updates…", or "Update to 1.5.1…" once a scheduled check has
     /// found one. Both do the same thing — Sparkle brings the update it already

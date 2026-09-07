@@ -28,11 +28,18 @@ let package = Package(
         // of them needs AppKit to be exercised.
         .target(name: "CaptionCore", path: "app/captions",
                 swiftSettings: [.swiftLanguageMode(.v5)]),
+        // The trial and the licence (PLAN.md §24): the entitlement rules, the
+        // key's shape, and the reading of Gumroad's answer. Pure for the same
+        // reason CaptionCore is — a gate that can lock a paying customer out
+        // is the last thing to test by hand.
+        .target(name: "LicenseCore", path: "app/license",
+                swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(
             name: "subtitles",
             dependencies: [
                 "CSubs",
                 "CaptionCore",
+                "LicenseCore",
                 .product(name: "FluidAudio", package: "FluidAudio"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
@@ -63,6 +70,9 @@ let package = Package(
             ]),
         .testTarget(name: "CaptionCoreTests", dependencies: ["CaptionCore"],
                     path: "Tests/CaptionCoreTests",
+                    swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "LicenseCoreTests", dependencies: ["LicenseCore"],
+                    path: "Tests/LicenseCoreTests",
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )

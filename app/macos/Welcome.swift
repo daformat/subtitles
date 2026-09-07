@@ -35,6 +35,9 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     // Wired up by main.swift, exactly as the menu's are.
     var engineBusy: () -> String? = { nil }
     var engineProgress: () -> Double = { 0 }
+    /// One sentence about the trial, or nil for a copy that has none to
+    /// mention — licensed, or from before there were keys (License.swift).
+    var trialLine: () -> String? = { nil }
 
     private var window: NSWindow?
     private var webView: WKWebView?
@@ -242,12 +245,23 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         stack.addArrangedSubview(option)
         stack.setCustomSpacing(6, after: hint)
 
+        // The trial, in one line, apart from the help above it: the download
+        // this window is watching does not count against it, and that is the
+        // one thing worth saying about it here.
+        var last: NSView = option
+        if let line = trialLine() {
+            let trial = hintLine(line)
+            stack.addArrangedSubview(trial)
+            stack.setCustomSpacing(14, after: option)
+            last = trial
+        }
+
         let row = NSStackView()
         row.orientation = .vertical
         row.alignment = .centerX
         row.spacing = 8
         stack.addArrangedSubview(row)
-        stack.setCustomSpacing(20, after: option)
+        stack.setCustomSpacing(20, after: last)
         statusRow = row
         buildProgress(into: row)
         contentStack = stack
