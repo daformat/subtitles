@@ -181,7 +181,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         case .licensed(let email):
             let to = email.map { "Subtitles is licensed to \($0)." } ?? "Subtitles is licensed on this Mac."
             return justActivated
-                ? ("You're all set", "\(to) Thank you — captions are back.")
+                ? ("You're all set", "\(to) Thank you. Captions are back.")
                 : ("Licensed", "\(to) If you ever reinstall, your key is in your Gumroad library and on your receipt.")
         case .provisional(let until):
             return ("Key accepted, to be confirmed",
@@ -229,7 +229,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         case .revoked(let why):
             text = "This key was \(why.phrase) and no longer works. Nothing has changed."
         case .unreachable(let message):
-            text = "Couldn't reach Gumroad — \(message) Your current key stays; try again when you are online."
+            text = "Couldn't reach Gumroad: \(message) Your current key stays; try again when you are online."
             colour = .secondaryLabelColor
         }
         return Dialog.label(text, size: 11, colour: colour)

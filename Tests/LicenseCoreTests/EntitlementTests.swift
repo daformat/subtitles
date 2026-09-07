@@ -334,9 +334,9 @@ final class EntitlementTests: XCTestCase {
         XCTAssertEqual(Entitlement.trial(daysLeft: 7, started: false).aboutLine,
                        "Trial · starts when captions do")
         XCTAssertEqual(Entitlement.expired.blockedStatusLine,
-                       "Trial ended — Resume to enter a license key")
+                       "Trial ended. Resume to enter a license key")
         XCTAssertEqual(Entitlement.revoked(.refunded).blockedStatusLine,
-                       "License refunded — Resume to enter another key")
+                       "License refunded. Resume to enter another key")
         XCTAssertNil(Entitlement.grandfathered.blockedStatusLine)
     }
 

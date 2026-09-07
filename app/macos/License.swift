@@ -182,10 +182,10 @@ final class LicenseController {
             case .answered(let outcome):
                 self.record.reverify(outcome: outcome, now: Date())
                 self.store.save(self.record)
-                err("license: checked — \(self.describe(self.entitlement))")
+                err("license: checked: \(self.describe(self.entitlement))")
                 self.evaluate()
             case .unreachable(let error):
-                err("license: check postponed — \(error.localizedDescription)")
+                err("license: check postponed: \(error.localizedDescription)")
             }
             then?()
         }

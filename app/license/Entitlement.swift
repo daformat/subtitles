@@ -86,8 +86,8 @@ public enum Entitlement: Equatable {
     /// is refused; nil in every state where it is not.
     public var blockedStatusLine: String? {
         switch self {
-        case .expired: return "Trial ended — Resume to enter a license key"
-        case .revoked(let why): return "License \(why.phrase) — Resume to enter another key"
+        case .expired: return "Trial ended. Resume to enter a license key"
+        case .revoked(let why): return "License \(why.phrase). Resume to enter another key"
         default: return nil
         }
     }
