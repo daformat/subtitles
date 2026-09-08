@@ -657,12 +657,21 @@ final class HistoryController {
     /// The search pill's width, on its way between closed and open.
     private let searchWidthSpring = SpringValue(0)
 
-    /// The panel's origin, on its way to where the live box now wants it. The
+    /// The panel's place, on its way to where the live box now wants it. The
     /// box hugs its text and grows a line at a time, and a stack that jumped a
     /// line with it read as a jolt; the box itself stays put — it changes
     /// several times a second and is what is being read — and the stack
     /// follows it on a stiff spring, a tenth of a second behind, no overshoot.
-    private let originXSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
+    ///
+    /// Sideways it is the *centre* that is sprung, not the origin. The panel is
+    /// as wide as its widest box, so its origin moves whenever a wider box
+    /// arrives or the widest one leaves, while nothing on screen should: the
+    /// boxes are centred on the live box either way. With the origin sprung,
+    /// every box slid half the width change sideways and back over the tenth
+    /// of a second. The origin is derived from the centre and the width on
+    /// every frame instead (StackLayout), so a width change moves the panel
+    /// at once and the boxes not at all.
+    private let centreXSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
     private let originYSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
     /// Where the pill sits vertically as last placed, so the spring's ticks
     /// can lay the frame without re-deriving the panel.
@@ -738,7 +747,7 @@ final class HistoryController {
         search.onFocus = { [weak self] in self?.searchTookFocus() }
         searchWidthSpring.view = search
         searchWidthSpring.onTick = { [weak self] width in self?.laySearch(width: width) }
-        for spring in [originXSpring, originYSpring] {
+        for spring in [centreXSpring, originYSpring] {
             spring.view = root
             spring.onTick = { [weak self] _ in self?.followOrigin() }
         }
@@ -878,6 +887,7 @@ final class HistoryController {
         }
 
         stackWidth = width
+        let panelX = StackLayout.panelX(centreX: centreX, width: width)
         contentHeight = sizes.reduce(0) { $0 + $1.height }
             + Self.gap * CGFloat(max(pills.count - 1, 0))
         document.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
@@ -889,8 +899,11 @@ final class HistoryController {
         for (i, pill) in pills.enumerated() {
             let size = sizes[i]
             let y = placedAbove ? offset : contentHeight - offset - size.height
-            pill.frame = NSRect(x: ((width - size.width) / 2).rounded(), y: y.rounded(),
-                                width: size.width, height: size.height)
+            // Placed from the centre, not centred in the document: the two
+            // differ by a point whenever the stack's width changes parity.
+            pill.frame = NSRect(
+                x: StackLayout.boxX(centreX: centreX, panelX: panelX, boxWidth: size.width),
+                y: y.rounded(), width: size.width, height: size.height)
             document.addSubview(pill)
             offset += size.height + Self.gap
         }
@@ -993,21 +1006,25 @@ final class HistoryController {
         // already right for the first event after a resize.
         scroll.verticalScrollElasticity = contentHeight > scrollHeight + 1 ? .allowed : .none
         let origin = NSPoint(
-            x: (centreX - size.width / 2).rounded(),
+            x: StackLayout.panelX(centreX: centreX, width: size.width),
             y: (placedAbove
                 ? anchor.maxY - SubtitleView.pad
                 : anchor.minY + SubtitleView.pad - size.height).rounded())
         let target = clamp(origin, size: size, to: screen.visibleFrame)
+        // The centre the clamp allows: the anchor's, unless the stack would
+        // run off the screen, in which case the panel's own middle.
+        let targetCentre = target.x == origin.x ? centreX : target.x + size.width / 2
         // Sprung towards the target while the stack is up; straight there when
         // it is arriving, since there is nowhere for it to be coming from.
         let placedOrigin: NSPoint
         if isVisible, panel.isVisible {
-            originXSpring.animate(to: target.x)
+            centreXSpring.animate(to: targetCentre)
             originYSpring.animate(to: target.y)
-            placedOrigin = NSPoint(x: originXSpring.value.rounded(),
-                                   y: originYSpring.value.rounded())
+            placedOrigin = NSPoint(
+                x: StackLayout.panelX(centreX: centreXSpring.value, width: size.width),
+                y: originYSpring.value.rounded())
         } else {
-            originXSpring.snap(to: target.x)
+            centreXSpring.snap(to: targetCentre)
             originYSpring.snap(to: target.y)
             placedOrigin = target
         }
@@ -1073,14 +1090,17 @@ final class HistoryController {
 
     /// One frame of the panel following the live box.
     private func followOrigin() {
-        let origin = NSPoint(x: originXSpring.value.rounded(), y: originYSpring.value.rounded())
+        let origin = NSPoint(x: StackLayout.panelX(centreX: centreXSpring.value, width: stackWidth),
+                             y: originYSpring.value.rounded())
         if origin != panel.frame.origin { panel.setFrameOrigin(origin) }
     }
 
-    /// The pill at `width`, centred on the stack.
+    /// The pill at `width`, centred where the boxes are.
     private func laySearch(width: CGFloat) {
-        let frame = NSRect(x: ((stackWidth - width) / 2).rounded(), y: searchY,
-                           width: width.rounded(), height: searchHeight)
+        let panelX = StackLayout.panelX(centreX: lastCentreX, width: stackWidth)
+        let frame = NSRect(
+            x: StackLayout.boxX(centreX: lastCentreX, panelX: panelX, boxWidth: width.rounded()),
+            y: searchY, width: width.rounded(), height: searchHeight)
         if frame != search.frame { search.frame = frame }
     }
 
