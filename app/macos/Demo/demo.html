@@ -39,13 +39,6 @@
      window it lands on the window's own material and reads as grime, so it is
      replaced with the hairline that frames it. */
   .demo-screen { box-shadow: none; }
-
-  /* The site rounds the screen generously, and its menu bar now starts with
-     the Apple mark hard against the corner. At this window's width a 20px
-     radius eats into it, and the clock at the other end, so the corner is
-     tightened. The hairline frame is drawn with border-radius: inherit and
-     follows on its own. */
-  .demo-screen { border-radius: 14px; }
 </style>
 </head>
 <body>
@@ -59,7 +52,7 @@
           <div class="demo-menubar">
             <span class="mb-left">
               <svg class="mb-apple" viewBox="0 0 17 20" fill="currentColor" aria-hidden="true"><path d="M14.1 10.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.9-.8-3.1-.8C4.5 5.4 3 6.3 2.2 7.8c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8s2.1-1.2 2.9-2.4c.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.8-4.1zM11.8 3.6c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.5 2.8-1.3z"/></svg>
-              <span class="mb-app" id="mb-app" data-i18n="home.demo.app1">Meetings</span>
+              <span class="mb-app" id="mb-app">zoom.us</span>
               <span class="mb-menu" data-i18n="home.demo.menu1">File</span>
               <span class="mb-menu" data-i18n="home.demo.menu2">Edit</span>
               <span class="mb-menu" data-i18n="home.demo.menu3">View</span>
@@ -98,30 +91,9 @@
             </div>
 
             <!-- 2 · what you switch to -->
-            <div class="demo-window win-notes" data-app="notes">
-              <div class="win-titlebar">
-                <span class="lights"><i class="l-close"></i><i class="l-min"></i><i class="l-max"></i></span>
-                <span class="win-title" data-i18n="home.demo.win2">Notes · Weekly sync</span>
-              </div>
-              <div class="win-content">
-                <div class="notes-body">
-                  <div class="notes-side"><i></i><i class="is-on"></i><i></i><i></i><i></i></div>
-                  <div class="notes-doc">
-                    <b data-i18n="home.demo.notes-title">Weekly sync</b>
-                    <i style="width:100%"></i>
-                    <i style="width:84.8%"></i>
-                    <i style="width:92.4%"></i>
-                    <i style="width:47.8%"></i>
-                    <b class="sub" data-i18n="home.demo.notes-sub">Actions</b>
-                    <i style="width:95.7%"></i>
-                    <i style="width:79.3%"></i>
-                    <i style="width:88%"></i>
-                    <i style="width:56.5%"></i>
-                    <i style="width:93.5%"></i>
-                    <i style="width:41.3%"></i><span class="notes-caret"></span>
-                  </div>
-                </div>
-              </div>
+            <div class="demo-window win-notes app-notes" data-app="notes">
+              <div class="win-titlebar"><span class="lights"><i class="l-close"></i><i class="l-min"></i><i class="l-max"></i></span><div class="nt-tools"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="5" width="13" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 13l8.5-8.5 2 2L14 15h-2z"/></svg></span><span class="nt-gap"></span><span class="nt-aa">Aa</span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 7l2 2 3.5-3.5M3 15l2 2 3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="11" y="6" width="10" height="2.2" rx="1"/><rect x="11" y="14" width="10" height="2.2" rx="1"/></svg></span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 10h18M3 15h18M10 4v16M16 4v16" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8.5" cy="9" r="1.8"/><path d="M4 18l5-5 3.5 3.5 3-3L20 18z"/></svg></span><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nt-search"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M14.5 14.5L20 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span data-i18n="ui.notes.search">Search</span></span></div></div>
+              <div class="win-content"><div class="nt"><div class="nt-side"><span class="nt-h" data-i18n="ui.notes.icloud">iCloud</span><span class="nt-row"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span data-i18n="ui.notes.all">All iCloud</span><u>12</u></span><span class="nt-row is-on"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span data-i18n="ui.notes.notes">Notes</span><u>9</u></span><span class="nt-row"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span data-i18n="ui.notes.quick">Quick Notes</span><u>2</u></span><span class="nt-row"><span class="g"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 6h16v2H4zM9 3h6v2H9zM6 8h12l-1 13H7z"/></svg></span><span data-i18n="ui.notes.deleted">Recently Deleted</span><u>1</u></span></div><div class="nt-list"><span class="nt-item is-on"><b data-i18n="home.demo.notes-title">Weekly sync</b><span class="nt-meta"><span>14:32</span><i class="sk" style="width:55%"></i></span></span><span class="nt-item"><i class="sk" style="width:62%"></i><span class="nt-meta"><span data-i18n="ui.notes.yesterday">Yesterday</span><i class="sk" style="width:48%"></i></span></span><span class="nt-item"><i class="sk" style="width:44%"></i><span class="nt-meta"><i class="sk" style="width:18%"></i><i class="sk" style="width:52%"></i></span></span></div><div class="nt-editor"><span class="nt-date" data-i18n="ui.notes.date">7 September 2026 at 14:32</span><div class="notes-doc"><b data-i18n="home.demo.notes-title">Weekly sync</b><i style="width:100%"></i><i style="width:84.8%"></i><i style="width:92.4%"></i><i style="width:47.8%"></i><b class="sub" data-i18n="home.demo.notes-sub">Actions</b><i style="width:95.7%"></i><i style="width:79.3%"></i><i style="width:88%"></i><i style="width:56.5%"></i><i style="width:93.5%"></i><i style="width:41.3%"></i><span class="notes-caret"></span></div></div></div></div>
             </div>
 
             <!-- 3 · the podcast -->
@@ -289,15 +261,15 @@
             <!-- ⌘-tab -->
             <div class="demo-switcher" id="switcher">
               <span class="sw-app" data-app="meeting">
-                <span class="sw-icon i-meet"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2.6" y="6.4" width="12.6" height="11.2" rx="2.6"/><path d="M16.8 11.2l3.6-2.6a.7.7 0 0 1 1.1.6v5.6a.7.7 0 0 1-1.1.6l-3.6-2.6z"/></svg></span>
+                <span class="sw-icon"><img src="assets/apps/dock/zoom.png" width="84" height="84" alt=""></span>
                 <span class="sw-name"></span>
               </span>
               <span class="sw-app" data-app="notes">
-                <span class="sw-icon i-notes"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4.6" y="3" width="14.8" height="18" rx="2.6"/><g fill="#b07d18"><rect x="7.4" y="7" width="9.2" height="1.7" rx="0.85"/><rect x="7.4" y="11" width="9.2" height="1.7" rx="0.85"/><rect x="7.4" y="15" width="5.6" height="1.7" rx="0.85"/></g></svg></span>
+                <span class="sw-icon"><img src="assets/apps/dock/notes.png" width="84" height="84" alt=""></span>
                 <span class="sw-name"></span>
               </span>
               <span class="sw-app" data-app="player">
-                <span class="sw-icon i-player"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="7.68" fill="rgba(255,255,255,0.95)" stroke="none"/><path transform="translate(11.478 12) scale(.5) translate(-12 -12)" d="M8.4 5.8v12.4a.8.8 0 0 0 1.22.68l9.8-6.2a.8.8 0 0 0 0-1.36l-9.8-6.2a.8.8 0 0 0-1.22.68z"/></svg></span>
+                <span class="sw-icon"><img src="assets/apps/dock/spotify.png" width="84" height="84" alt=""></span>
                 <span class="sw-name"></span>
               </span>
             </div>

@@ -482,7 +482,7 @@ const stackSearch = (() => {
       }
       const tok = document.createElement('i');
       tok.className = 'lw-tok-' + pick(['p', 'p', 'p', 'k', 't', 'f', 's', 'n']);
-      tok.style.width = rand(3, 12).toFixed(1) + '%';
+      tok.style.width = rand(3.9, 15.6).toFixed(1) + '%';
       caret.before(tok);
       count++;
       if (count < want) return rand(220, 420);
@@ -559,6 +559,42 @@ const stackSearch = (() => {
   });
 })();
 
+// /podcasts: the same player as the home page, and on that page it is always
+// playing — the waveform moves, the clock runs, the played bars fill — because
+// nothing there pauses it: the page's point is an episode going on while you
+// do something else. The home page's own captionDemo owns its player and its
+// pauses, so this stands down where that runs.
+(function podcastPlaying() {
+  if (document.getElementById('caption-box')) return;
+  const win = document.querySelector('.demo-window.win-player');
+  const wave = document.getElementById('pod-wave');
+  if (!win || !wave) return;
+  win.classList.add('is-playing');
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const fill = document.getElementById('pod-fill');
+  const clock = document.getElementById('pod-elapsed');
+  const bars = [...wave.children];
+  const START = 18 * 60 + 24;   // 18:24, where the markup starts
+  const TOTAL = 41 * 60 + 7;    // 41:07
+  const RATE = 4;               // seconds of episode per second of demo
+  let at = START;
+  const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  const paint = () => {
+    const pct = at / TOTAL;
+    if (fill) fill.style.width = (pct * 100).toFixed(2) + '%';
+    if (clock) clock.textContent = mmss(at);
+    const played = Math.round(pct * bars.length);
+    bars.forEach((b, i) => b.classList.toggle('is-played', i < played));
+  };
+  paint();
+  setInterval(() => {
+    if (document.hidden) return;
+    // Round and round: the episode starts over rather than ending.
+    at = at + RATE > TOTAL ? START : at + RATE;
+    paint();
+  }, 1000);
+})();
+
 (function captionDemo() {
   const box = document.getElementById('caption-box');
   const out = document.getElementById('caption-text');
@@ -568,10 +604,11 @@ const stackSearch = (() => {
   const windows = document.querySelectorAll('.demo-window');
   if (!box || !out) return;
 
+  // Named as the Mac names them in its menu bar: Zoom's process is zoom.us.
   const APPS = {
-    meeting: I18N('app.meeting', 'Meetings'),
+    meeting: I18N('app.meeting', 'zoom.us'),
     notes: I18N('app.notes', 'Notes'),
-    player: I18N('app.player', 'Player'),
+    player: I18N('app.player', 'Spotify'),
   };
 
   // Every icon carries its own name, and only the selected one shows it. That is
@@ -709,7 +746,7 @@ const stackSearch = (() => {
   };
 
   const mbApp = document.getElementById('mb-app');
-  const APP_NAMES = { meeting: 'Meetings', notes: 'Notes', player: 'Player' };
+  const APP_NAMES = { meeting: 'zoom.us', notes: 'Notes', player: 'Spotify' };
   const front = (app) => {
     frontApp = app;
     restack(app);

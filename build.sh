@@ -16,8 +16,8 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.6.1"
-BUILD="23"
+VERSION="1.6.2"
+BUILD="24"
 # [main-edition]
 # The updater's public key (PLAN.md §23). Its private half is in the login
 # Keychain of the machine that ran Sparkle's generate_keys, and is what
@@ -130,10 +130,12 @@ cp app/macos/StatusIcon.svg app/macos/LogoMat.svg app/macos/LogoTwitter.svg \
 
 # The welcome window's demo, vendored from the website by tools/vendor-demo.sh.
 # demo.shell.html is the template that script splices demo.html out of, and has
-# no business in the bundle.
+# no business in the bundle. assets/ holds the icons the demo's ⌘-tab switcher
+# wears, which the page names by relative path.
 mkdir -p "$APP/Contents/Resources/Demo"
 cp app/macos/Demo/demo.html app/macos/Demo/demo.css app/macos/Demo/demo.js \
    "$APP/Contents/Resources/Demo/"
+cp -R app/macos/Demo/assets "$APP/Contents/Resources/Demo/"
 
 # The app icon. Built from the one PNG rather than committing an .icns, so there
 # is a single source of truth to edit. Cached against the source's timestamp:

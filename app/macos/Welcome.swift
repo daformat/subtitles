@@ -462,7 +462,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // A starting height in the demo's own proportions, so the window is the
         // right shape before the page has measured itself. It is corrected from
         // the page below, which is what makes this survive the demo changing.
-        let height = web.heightAnchor.constraint(equalToConstant: 432)
+        let height = web.heightAnchor.constraint(equalToConstant: 392)
         NSLayoutConstraint.activate([
             web.widthAnchor.constraint(equalToConstant: Self.width),
             height,

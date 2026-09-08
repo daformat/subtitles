@@ -135,6 +135,10 @@
   --recess: rgb(0 0 0 / 0.045);
   --recess-deep: rgb(0 0 0 / 0.06);
   --played: #5856d6;
+  /* VS Code's Light+ syntax colours: variables, keywords, types, functions,
+     strings, numbers, comments. */
+  --tok-p: #001080; --tok-k: #0000ff; --tok-t: #267f99; --tok-f: #795e26;
+  --tok-s: #a31515; --tok-n: #098658; --tok-c: #008000;
   /* A background window is not dimmed on a Mac, but the demo has three of them
      overlapping in a small space, and the front one has to win. This is the
      least that does it: the colour drains a little out of the content, and the
@@ -185,6 +189,9 @@
     --recess: rgb(0 0 0 / 0.3);
     --recess-deep: rgb(0 0 0 / 0.42);
     --played: rgb(157 153 255 / 0.9);
+    /* and Dark+ */
+    --tok-p: #9cdcfe; --tok-k: #569cd6; --tok-t: #4ec9b0; --tok-f: #dcdcaa;
+    --tok-s: #ce9178; --tok-n: #b5cea8; --tok-c: #6a9955;
     --content-dim: brightness(0.86);
     --desktop-bg:
       radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
@@ -220,6 +227,9 @@
     --recess: rgb(0 0 0 / 0.3);
     --recess-deep: rgb(0 0 0 / 0.42);
     --played: rgb(157 153 255 / 0.9);
+    /* and Dark+ */
+    --tok-p: #9cdcfe; --tok-k: #569cd6; --tok-t: #4ec9b0; --tok-f: #dcdcaa;
+    --tok-s: #ce9178; --tok-n: #b5cea8; --tok-c: #6a9955;
     --desktop-bg:
       radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
       radial-gradient(48% 55% at 86% 18%, rgb(225 70 150 / 0.36), transparent 66%),
@@ -244,17 +254,33 @@
    its floors while the screen shrank, and a title bar that is 3.4% of the width
    at full size was 10% of it on a phone — the model stopped being to scale and
    started looking like a toy.
-   --u is capped at the 8.8px it reaches at the 880px the screen tops out at, so
+   --u is capped at the 7.2px it reaches at the 880px the screen tops out at, so
    nothing changes at full size, and floored at 4px, because a model that scales
    the whole way down loses its hairlines and its text turns to grain. Below
-   about 400px of screen the demo therefore stops shrinking and simply is what it
-   is: still far closer to scale than the floors it had before. */
+   about 490px of screen the demo therefore stops shrinking and simply is what it
+   is: still far closer to scale than the floors it had before.
+
+   The screen is 16:9, and it is the whole screen that is, menu bar included:
+   the bar takes its height off the top and the stage below is whatever is left.
+   (It was a 16:9.6 stage under the bar before, which came to 16:10 all told.)
+   The home page's demo and the landing pages' share all of this. */
 .demo-screen {
   position: relative;
   container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 16 / 9;
   max-width: 880px;
   margin-inline: auto;
-  border-radius: var(--radius-lg);
+  /* The corner follows the unit rather than the site's card radius, because
+     the screen clips at it: at 20px on a phone, where the unit is at its floor
+     and the bar is 12px tall, the arc ran through the Apple mark. 2.3vw is
+     about 2.8 units, which is what the 20px is at full size, and it cannot be
+     written in the unit itself: an element's own container is the next one
+     up, so the screen's width is available to everything it contains and not
+     to the screen. It bottoms out at 8px, two units at the floor, which
+     clears the mark's box with the arc to spare. */
+  border-radius: clamp(8px, 2.3vw, var(--radius-lg));
   overflow: hidden;
   background: var(--desktop-bg);
   box-shadow: var(--shadow-lg);
@@ -285,13 +311,18 @@
    A Mac does not scale its chrome to the window: a title bar is 28pt on a small
    window and 28pt on a large one, and a narrow window simply wears more of it.
    Holding the unit still across every window size is the faithful thing as well
-   as the legible one, so it is most of the way back to where it started: 8px at
-   the top rather than the 8.8 it was, which is a shade off the full size and
-   still comfortably readable. 0.91cqw is the slope that reaches 8 exactly at the
-   880 the screen tops out at, so the model scales the whole way there rather
-   than flattening early against its own cap. */
+   as the legible one, so it went most of the way back to where it started: 8px
+   at the top rather than the 8.8 it was.
+
+   It is 7.2 now, a tenth off that, taken when the screen went to 16:9: the
+   stage lost a tenth of its height and the windows with it, and the model is
+   zoomed out by the same tenth so a window still holds the drawing it held.
+   Still comfortably readable. 0.8182cqw is the slope that reaches 7.2 exactly
+   at the 880 the screen tops out at, so the model scales the whole way there
+   rather than flattening early against its own cap. The floor is unchanged,
+   and reached a little sooner, at about 490px of screen. */
 .demo-menubar,
-.demo-stage { --u: clamp(4px, 0.91cqw, 8px); }
+.demo-stage { --u: clamp(4px, 0.8182cqw, 7.2px); }
 
 /* Above the windows and above the ⌘-tab panel, the way a menu bar is, and now
    that windows can be dragged there is something for it to be above. The one
@@ -318,7 +349,10 @@
 /* The left half reads like the real bar: the mark, the app in bold, then the
    first menus. All of it sits at the bar's own size, which follows --u. */
 .mb-left { display: inline-flex; align-items: center; gap: calc(1.55 * var(--u)); color: rgb(var(--ink) / 0.82); }
-.mb-apple { width: calc(1.35 * var(--u)); height: calc(1.6 * var(--u)); margin-inline-end: calc(0.2 * var(--u)); }
+/* Lifted an eighth of a unit — 1px at full size — off the bar's centre line:
+   the mark's visual weight sits low in its box, and centring the box sat it
+   low. */
+.mb-apple { position: relative; top: calc(-0.125 * var(--u)); width: calc(1.35 * var(--u)); height: calc(1.6 * var(--u)); margin-inline-end: calc(0.2 * var(--u)); }
 .mb-app { font-weight: 700; }
 .mb-menu { color: rgb(var(--ink) / 0.72); }
 
@@ -353,9 +387,14 @@
 
 .mb-time { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 
+/* The part of the screen under the menu bar. The screen is the one with the
+   aspect ratio, and the stage takes what the bar leaves: flex: 1 for that, and
+   min-height: 0 because a flex item's automatic minimum is its content, and
+   this one must never come out taller than the screen makes it. */
 .demo-stage {
   position: relative;
-  aspect-ratio: 16 / 9.6;
+  flex: 1;
+  min-height: 0;
 }
 
 /* fake macOS windows, fanned across the stage with one fronted at a time. */
@@ -405,15 +444,19 @@
    and 880 are we" as a number and multiply the two layouts by it. So the
    progress is folded into the coefficients instead, per edge. They are derived,
    not tuned. For an edge running from n% at 620 to f% at 880, with k = 1 across
-   and 9.6/16 down, since the stage is 16/9.6 and a vertical percentage resolves
-   against its height:
+   and 0.538363 down, since a vertical percentage resolves against the stage's
+   height, and the stage is the 16:9 screen's 56.25cqw less the menu bar's 2.95
+   units at 0.8182cqw each:
 
      p1 = n/100 * k * 620,  p2 = f/100 * k * 880
      slope = (p2 - p1) / 260,  intercept = p1 - slope * 620
 
    and the two bounds are n*k and f*k in cqw. Change an endpoint and recompute
    the pair; do not nudge a slope on its own, or the layout stops landing on the
-   value the comment claims.
+   value the comment claims. The unit's slope is inside k, so every vertical
+   edge is recomputed when the unit moves. Below the unit's floor the bar is a
+   fixed 11.8px rather than 2.41cqw and k drifts by a per cent or so, which
+   nobody can see.
 
    One thing the fan gave up: these three used to share a bottom edge, so the
    caption straddled the same part of whichever window was in front. A cascade
@@ -428,9 +471,9 @@
    script runs and corrects it. */
 .win-meeting {
   --z: 3;
-  top:    clamp(3.45cqw, 0.230769cqw + 28.3292px, 4.8cqw);  /*  8%   ->  5.75% */
+  top:    clamp(3.09559cqw, 0.207063cqw + 25.419px, 4.3069cqw);   /*  8%   ->  5.75% */
   right:  clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
-  bottom: clamp(5.85cqw, 4.77692cqw + 9.44308px, 6.3cqw);   /* 10.5% ->  9.75% */
+  bottom: clamp(5.24904cqw, 4.2862cqw + 8.47301px, 5.65281cqw);   /* 10.5% ->  9.75% */
   left:   clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
   /* Five per cent narrower than the insets alone give, taken evenly from both
      sides so it keeps its centre. */
@@ -438,16 +481,16 @@
 }
 .win-notes {
   --z: 1;
-  top:    clamp(6.45cqw, 4.66154cqw + 15.7385px, 7.2cqw);   /* 12%   -> 10.75% */
+  top:    clamp(5.7874cqw, 4.18267cqw + 14.1217px, 6.46036cqw);   /* 12%   -> 10.75% */
   right:  clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
-  bottom: clamp(6.3cqw, 14.9308cqw - 53.5108px, 8.85cqw);   /* 10.5% -> 14.75% */
+  bottom: clamp(5.65281cqw, 13.397cqw - 48.0137px, 7.94086cqw);   /* 10.5% -> 14.75% */
   left:   clamp(15cqw, 32.7692cqw - 110.169px, 20.25cqw);   /* 15%   -> 20.25% */
 }
 .win-player {
   --z: 2;
-  top:    clamp(3cqw, 20.7692cqw - 110.169px, 8.25cqw);     /*  5%   -> 13.75% */
+  top:    clamp(2.69182cqw, 18.6356cqw - 98.8517px, 7.40249cqw);  /*  5%   -> 13.75% */
   right:  clamp(15cqw, 46.3077cqw - 194.108px, 24.25cqw);   /* 15%   -> 24.25% */
-  bottom: clamp(6.3cqw, 14.9308cqw - 53.5108px, 8.85cqw);   /* 10.5% -> 14.75% */
+  bottom: clamp(5.65281cqw, 13.397cqw - 48.0137px, 7.94086cqw);   /* 10.5% -> 14.75% */
   left:   clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
 }
 
@@ -652,20 +695,22 @@
    are reading the width of, which is why this looked like a bug that came and
    went with the animation.
 
-   0.5u and 0.125u put the pitch at 5px at the size the model tops out at, which
-   is 10 whole device pixels on a retina Mac and 5 on anything else, so every bar
-   is painted identically on both. Both are fractions of --u so the row still
-   scales with the rest of the model; the phase lands exactly at the top of the
-   range, and everywhere else the bars are small enough that the beat does not
-   read.
+   0.5u and 0.125u put the pitch at 4.5px at the size the model tops out at,
+   which is 9 whole device pixels on a retina Mac, so every bar there is painted
+   the same. It was 5px, whole on a 1x display as well, until the unit came down
+   to 7.2; on a 1x display the CSS alone is back on a half pixel, and it is
+   waveFit() that keeps the beat out of it. Both are fractions of --u so the row
+   still scales with the rest of the model; the phase lands exactly at the top
+   of the range, and everywhere else the bars are small enough that the beat
+   does not read.
 
-   The pitch is set by what the pane can hold: 96 bars want 479px and the podcast
-   window offers about 520, so the row nearly fills and starts hard left, on the
-   same edge as the artwork above it. It is aligned rather than stretched, since
-   stretching is what put the bars on a fractional pitch in the first place, and
-   that means the pitch has to be revisited whenever the podcast window is
-   resized. Too wide and the row is clipped; too narrow and it floats short of
-   the right edge.
+   The pitch is set by what the pane can hold: 96 bars want 431px and the podcast
+   window offers about 530, so the row starts hard left, on the same edge as the
+   artwork above it, and stops a little short of the right. It is aligned rather
+   than stretched, since stretching is what put the bars on a fractional pitch
+   in the first place, and that means the pitch has to be revisited whenever the
+   podcast window is resized. Too wide and the row is clipped; too narrow and it
+   floats short of the right edge.
 
    With script.js running, waveFit() takes over: it measures the row in device
    pixels and sets each bar and gap inline to a whole number of them, so the
@@ -690,7 +735,7 @@
   background: rgb(var(--ink) / 0.18);
   transform-origin: center;
 }
-/* --u stops at a 4px floor around 440px of screen, so below that the bars hold
+/* --u stops at a 4px floor around 490px of screen, so below that the bars hold
    their size while the pane they sit in carries on shrinking, and eventually the
    row is wider than the window. It runs out at about 365px. Narrower than that
    the bars give up a quarter of their width, which is the same answer the player
@@ -1052,49 +1097,14 @@
 }
 .sw-app.is-selected { background: rgb(var(--ink) / 0.22); }
 
+/* Each app's icon as the Dock draws it — its own shape, margins and shadow,
+   read from the app by tools/app-icons.py — so the tile is only a box. */
 .sw-icon {
-  display: grid;
-  place-items: center;
+  display: block;
   width: calc(5.23 * var(--u));
   height: calc(5.23 * var(--u));
-  border-radius: calc(1.25 * var(--u));
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 2px 5px rgba(0, 0, 0, 0.3);
 }
-.sw-icon svg { width: 62%; height: 62%; }
-.i-meet   { background: linear-gradient(160deg, #4a8ef0, #2c5fc4); }
-.i-notes  { background: linear-gradient(160deg, #ffd75e, #f0b429); }
-/* Still an app icon, so it keeps the squircle the other two have. What is
-   round is the play badge inside it, the way a media app draws itself.
-
-   The badge and the mark are one SVG, and they have to stay one. They were a
-   CSS ::before circle with the mark stacked on it in the same grid cell, which
-   is fine until the switcher animates: the panel scales 0.94 → 1, and the two
-   were rounding to device pixels independently on the way, so the mark crept
-   about half a pixel inside its badge and settled when the scale did. Inside
-   one SVG they are a single painted thing at any scale, and nothing can drift
-   between them.
-
-   The geometry the CSS used to hold, now in the markup: the badge is 64% of
-   the tile, so r is 32% of a 24 box; the mark is drawn at half size about the
-   centre, which puts it at 32% of the tile tall — half the badge's diameter,
-   the proportion a play button normally uses, and the point at which it stops
-   looking lost in the circle. Rounding a filled shape by stroking it with
-   round joins also dilates it, by the stroke width, so the two are one
-   calculation rather than two: the path is 11.02 wide and 13.76 tall, and
-   stroking it at 1.6 makes that 12.62 by 15.36. The 0.522 taken off x is the
-   nudge that was a translate before: the triangle's centroid sits on 12.07
-   against a centre of 12, and this takes a little of that back by eye. Change
-   any of these and the others have to move. */
-.i-player { background: linear-gradient(160deg, #3a3b46, #1e1f27); }
-.i-player svg {
-  width: 100%;
-  height: 100%;
-  color: #1b1c24;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-}
+.sw-icon img { display: block; width: 100%; height: 100%; }
 
 /* The app name sits under the selection, as macOS shows it. */
 .sw-name {
@@ -1596,3 +1606,115 @@
 /* The screen keeps its own corners, hairline and shadow; the scene bar and
    the help lines sit under it in the open, as they always did. */
 .demo-frame .demo-screen { max-width: none; }
+
+/* ── Notes ───────────────────────────────────────────────────
+   Apple's, drawn as it is: the toolbar in the title bar, then three
+   columns — the folders, the list, the note — in the demo's tokens, so it
+   follows the page the way the real one follows the Mac. */
+.app-notes .win-titlebar { justify-content: flex-start; gap: calc(1.1 * var(--u)); }
+.app-notes .g { display: inline-block; flex: none; width: calc(1.4 * var(--u)); height: calc(1.4 * var(--u)); }
+.app-notes .g svg { display: block; width: 100%; height: 100%; }
+.app-notes .sk { display: block; height: calc(0.6 * var(--u)); border-radius: 3px; background: rgb(var(--ink) / 0.12); }
+.nt-tools {
+  display: flex;
+  align-items: center;
+  gap: calc(1.1 * var(--u));
+  flex: 1;
+  min-width: 0;
+  color: rgb(var(--ink) / 0.62);
+}
+.nt-tools .g { width: calc(1.5 * var(--u)); height: calc(1.5 * var(--u)); }
+.nt-tools .nt-aa { font-size: calc(1.15 * var(--u)); font-weight: 500; letter-spacing: -0.02em; }
+.nt-tools .nt-gap { flex: 1; }
+.nt-search {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.4 * var(--u));
+  width: calc(11 * var(--u));
+  height: calc(2 * var(--u));
+  padding-inline: calc(0.6 * var(--u));
+  border-radius: calc(0.5 * var(--u));
+  background: rgb(var(--ink) / 0.07);
+  box-shadow: inset 0 0 0 0.5px rgb(var(--ink) / 0.1);
+  font-size: calc(1 * var(--u));
+  color: rgb(var(--ink) / 0.4);
+}
+.nt-search .g { width: calc(1.1 * var(--u)); height: calc(1.1 * var(--u)); }
+.nt { display: flex; height: 100%; background: var(--notes-bg); font-size: calc(1.05 * var(--u)); }
+.nt-side {
+  flex: none;
+  width: 24%;
+  padding: calc(1.2 * var(--u)) calc(0.8 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.25 * var(--u));
+  background: rgb(var(--ink) / 0.04);
+  border-right: 1px solid rgb(var(--ink) / 0.08);
+  color: rgb(var(--ink) / 0.85);
+  min-width: 0;
+}
+.nt-side .nt-h {
+  padding: 0 calc(0.6 * var(--u)) calc(0.3 * var(--u));
+  font-size: calc(0.85 * var(--u));
+  font-weight: 700;
+  color: rgb(var(--ink) / 0.45);
+}
+.nt-row {
+  display: flex;
+  align-items: center;
+  gap: calc(0.6 * var(--u));
+  height: calc(2.2 * var(--u));
+  padding-inline: calc(0.6 * var(--u));
+  border-radius: calc(0.5 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nt-row.is-on { background: rgb(var(--ink) / 0.11); }
+/* The folders in the gold Notes gives them. */
+.nt-row .g { color: #f2b300; }
+.nt-row span { overflow: hidden; text-overflow: ellipsis; }
+.nt-row u { margin-inline-start: auto; text-decoration: none; color: rgb(var(--ink) / 0.4); font-size: calc(0.95 * var(--u)); }
+.nt-list {
+  flex: none;
+  width: 30%;
+  padding: calc(0.8 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.3 * var(--u));
+  border-right: 1px solid rgb(var(--ink) / 0.08);
+  min-width: 0;
+}
+.nt-item {
+  display: grid;
+  gap: calc(0.35 * var(--u));
+  padding: calc(0.7 * var(--u)) calc(0.8 * var(--u));
+  border-radius: calc(0.6 * var(--u));
+  border-bottom: 1px solid rgb(var(--ink) / 0.06);
+}
+.nt-item.is-on { background: rgb(var(--ink) / 0.1); border-bottom-color: transparent; }
+.nt-item b { font-size: calc(1.05 * var(--u)); color: rgb(var(--ink) / 0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-item .nt-meta { display: flex; align-items: center; gap: calc(0.6 * var(--u)); }
+.nt-item .nt-meta span { font-size: calc(0.9 * var(--u)); color: rgb(var(--ink) / 0.7); font-variant-numeric: tabular-nums; }
+.nt-item .nt-meta .sk { flex: 1; height: calc(0.5 * var(--u)); }
+.nt-item > .sk { height: calc(0.55 * var(--u)); }
+.nt-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.nt-date {
+  padding-top: calc(1 * var(--u));
+  text-align: center;
+  font-size: calc(0.85 * var(--u));
+  color: rgb(var(--ink) / 0.4);
+}
+/* The note itself: the same document the demos have always written into,
+   with the title at the size Notes sets it. */
+.app-notes .notes-doc { padding: calc(0.9 * var(--u)) calc(1.9 * var(--u)) calc(1.5 * var(--u)); }
+.app-notes .notes-doc b { font-size: calc(1.6 * var(--u)); font-weight: 700; color: rgb(var(--ink) / 0.9); margin-bottom: calc(0.3 * var(--u)); }
+.app-notes .notes-doc b.sub { font-size: calc(1.2 * var(--u)); color: rgb(var(--ink) / 0.8); margin-top: calc(0.6 * var(--u)); }
+/* Narrow, the columns go the way they do when a Notes window is dragged
+   narrow: the folders first, then the list. */
+@container (max-width: 620px) {
+  .nt-side { display: none; }
+  .nt-list { width: 36%; }
+}
+@container (max-width: 430px) {
+  .nt-list { display: none; }
+}

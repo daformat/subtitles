@@ -4,6 +4,22 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.6.2 · 2026-09-08
+
+- Re-vendored the site's caption demo for the welcome window. The screen is
+  16:9 now, menu bar included, and the model a tenth smaller so each window
+  still holds what it held. The apps go by the names the Mac shows, zoom.us
+  and Spotify, the ⌘-tab switcher wears their icons, and the Notes window is
+  drawn as Notes: the toolbar in its title bar, the list beside the note.
+- The welcome window's copy of the demo carries those icons and the Notes
+  window's styles itself. The site names the icons by absolute path, which
+  in a webview loading a file would have pointed at the root of the disk, and
+  keeps the Notes styles with the landing pages' windows rather than in the
+  demo's own section; the vendor script now brings both across.
+- The screen's corner in the welcome window follows the site's own rule,
+  which is set from the model's unit and clears the Apple mark and the clock
+  at this width, rather than a radius the window forced on it.
+
 ## 1.6.1 · 2026-09-08
 
 - The ⌥ stack no longer shifts sideways when a box arrives that is wider than
