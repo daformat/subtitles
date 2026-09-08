@@ -25,7 +25,9 @@ CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
 
 def entry(version: str) -> tuple[str, str]:
     """(heading, body) for the version, body being the Markdown below it."""
-    text = CHANGELOG.read_text(encoding="utf-8")
+    # Without the HTML comments: the 0BSD edition's own entries live in one
+    # (PLAN.md §25), under the same headings as the main edition's.
+    text = re.sub(r"<!--.*?-->", "", CHANGELOG.read_text(encoding="utf-8"), flags=re.S)
     heads = list(re.finditer(r"^## (\S+)(.*)$", text, re.M))
     for i, m in enumerate(heads):
         if m.group(1) == version:
