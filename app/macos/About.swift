@@ -220,7 +220,12 @@ final class AboutWindow: NSObject, NSWindowDelegate {
         add("Live captions for whatever your Mac is playing.\u{2028}"
             + "Nothing is recorded; no audio ever leaves the machine.\n",
             colour: .labelColor)
+        // [main-edition]
         add("FSL-1.1-ALv2", colour: .secondaryLabelColor)
+        // [/main-edition]
+        // [0bsd-edition]
+        // add("0BSD", colour: .secondaryLabelColor)
+        // [/0bsd-edition]
 
         add("\nCopyright © 2026 Mathieu Jouhet (CSS labs)",
             colour: .secondaryLabelColor, style: footer, size: 10)

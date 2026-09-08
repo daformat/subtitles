@@ -18,6 +18,7 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # that reappears with different contents makes it serve the stale one.
 VERSION="1.6.0"
 BUILD="22"
+# [main-edition]
 # The updater's public key (PLAN.md §23). Its private half is in the login
 # Keychain of the machine that ran Sparkle's generate_keys, and is what
 # release.sh signs archives with. Losing that half strands every installed
@@ -25,6 +26,7 @@ BUILD="22"
 # `.build/artifacts/sparkle/Sparkle/bin/generate_keys -x <file>`.
 SPARKLE_PUBLIC_KEY="m+S4Ls6kFN21gYSPjfLglyylSW97Z/usYuahg1+RMr4="
 SPARKLE_FEED="https://subtitles-live.com/appcast.xml"
+# [/main-edition]
 
 echo "==> building rust core"
 (cd core && cargo build --release)
@@ -57,11 +59,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     <string>Subtitles transcribes the audio your Mac is playing so it can show live captions.</string>
     <!-- Agent app: no Dock icon, no menu bar. -->
     <key>LSUIElement</key>                <true/>
+    <!-- [main-edition] -->
     <!-- Sparkle. Whether it checks on its own is deliberately not declared
          here: with nothing declared Sparkle's default is off, and the app asks
          the question itself on the second launch (main.swift). -->
     <key>SUFeedURL</key>                  <string>$SPARKLE_FEED</string>
     <key>SUPublicEDKey</key>              <string>$SPARKLE_PUBLIC_KEY</string>
+    <!-- [/main-edition] -->
 </dict>
 </plist>
 PLIST
@@ -99,6 +103,7 @@ if [ ! -x "$APP/Contents/MacOS/subtitles" ]; then
   exit 1
 fi
 
+# [main-edition]
 # Sparkle. SwiftPM leaves the xcframework's macOS slice beside the binary; the
 # bundle wants it in Contents/Frameworks, where the rpath in Package.swift
 # points. The XPC services inside it exist for sandboxed apps, and this one is
@@ -114,6 +119,7 @@ cp -R "$SPARKLE_SRC" "$FRAMEWORKS/"
 SPARKLE="$FRAMEWORKS/Sparkle.framework"
 rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
 echo "    Sparkle $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$SPARKLE/Resources/Info.plist"), XPC services stripped"
+# [/main-edition]
 
 # The status icon, and the two marks the About window puts beside its links.
 # Copied rather than declared as SwiftPM resources because the bundle here is
@@ -182,9 +188,15 @@ NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 {
   echo "Subtitles — third-party notices"
   echo
+  # [main-edition]
   echo "Subtitles itself is FSL-1.1-ALv2 (see LICENSE), which converts to"
   echo "Apache-2.0 two years after each release."
   echo "The components below are compiled into this application."
+  # [/main-edition]
+  # [0bsd-edition]
+  # echo "Subtitles itself is 0BSD (see LICENSE) and asks nothing of you."
+  # echo "The components below are compiled into this application and do."
+  # [/0bsd-edition]
   echo
   echo "The speech models are NOT included in this application. They are"
   echo "downloaded from HuggingFace on first use and carry their own terms:"
@@ -254,6 +266,7 @@ for bundle in "$APP/Contents/Resources/"*.bundle; do
   codesign "${SIGN[@]}" "$bundle"
   echo "    signed $(basename "$bundle")"
 done
+# [main-edition]
 # Sparkle carries two executables of its own that run outside the app — the
 # helper that swaps the bundle, and the app that shows progress while it does —
 # and each needs its own hardened-runtime signature before the framework's
@@ -263,6 +276,7 @@ for nested in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app"
 done
 codesign "${SIGN[@]}" "$SPARKLE"
 echo "    signed Sparkle.framework and its helpers"
+# [/main-edition]
 
 if [ "$REAL_IDENTITY" = yes ]; then
   codesign "${SIGN[@]}" --entitlements "$ENTS" --identifier dev.mat.subtitles "$APP"

@@ -2,9 +2,15 @@
 name = "subs-core"
 version = "0.1.0"
 edition = "2021"
+# [main-edition]
 # One licence for the whole repository, including this crate. Never published to
 # crates.io, so license-file rather than an SPDX expression — FSL has no SPDX id.
 license-file = "../LICENSE"
+# [/main-edition]
+# [0bsd-edition]
+# # One licence for the whole repository, including this crate.
+# license = "0BSD"
+# [/0bsd-edition]
 
 [lib]
 name = "subs_core"

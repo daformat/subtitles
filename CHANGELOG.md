@@ -4,6 +4,18 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+<!-- [0bsd-edition]
+## 1.6.0 · 2026-09-07
+
+- Nothing changes in this edition. The main edition gained a free trial and
+  licence keys; this one has neither, by design.
+
+## 1.5.0 · 2026-09-07
+
+- Nothing changes in this edition. The main edition gained an in-app updater;
+  this one has none, by design, and is updated by downloading again.
+[/0bsd-edition] -->
+<!-- [main-edition] -->
 ## 1.6.0 · 2026-09-07
 
 - The app is a free download with a seven-day trial, and a licence key is what
@@ -49,6 +61,7 @@ and the DMG name show.
   a local server.
 - Copies older than this one have no updater. They are updated by downloading
   again, once.
+<!-- [/main-edition] -->
 
 ## 1.4.3 · 2026-09-06
 

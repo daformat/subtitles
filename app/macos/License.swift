@@ -197,6 +197,20 @@ final class LicenseController {
         reverifyIfDue(force: true, then: then)
     }
 
+    // MARK: the menu
+
+    /// The item above Settings: "Trial: 6 days left", "Enter License Key…" or
+    /// "Licensed" — a thing about this copy of the app rather than about
+    /// captions, which is where it belongs. Every state opens the same window.
+    func menuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: entitlement.menuTitle,
+                              action: #selector(MenuAction.fire), keyEquivalent: "")
+        item.target = menuAction
+        return item
+    }
+
+    private lazy var menuAction = MenuAction { [weak self] in self?.present() }
+
     // MARK: the window
 
     /// The site's /buy and /key, which redirect to the store and to where it
@@ -278,4 +292,13 @@ final class LicenseController {
         case .grandfathered: return "grandfathered"
         }
     }
+}
+
+/// A target for a menu item, for an owner that is not an NSObject.
+final class MenuAction: NSObject {
+    private let action: () -> Void
+
+    init(_ action: @escaping () -> Void) { self.action = action }
+
+    @objc func fire() { action() }
 }

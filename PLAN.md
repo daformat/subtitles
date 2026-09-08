@@ -1909,6 +1909,55 @@ Learned along the way:
 
 ---
 
+## 25. The 0BSD edition (2026-09-08)
+
+There are two editions of this app. The main one, in this repository, is FSL
+and sold; it has the updater (§23) and the trial and licence (§24). The 0BSD
+one, at github.com/daformat/subtitles-0BSD, is the same app with neither: it
+checks for nothing and asks for nothing, and anyone may do anything with it.
+Until 1.4.3 the fork was kept by cherry-picking upstream's commits one by one,
+which worked because the two trees differed in five lines about the licence.
+§23 and §24 put four thousand lines between them, with hooks in the files that
+change most, and every future cherry-pick near a hook would have been a
+conflict resolved by hand, forever.
+
+**The fork is generated now, not ported.** `tools/edition-0bsd.py` turns a
+checkout of this repository into the 0BSD tree, deterministically:
+
+- **A list of files that do not travel:** the updater, the update window, the
+  licence core and its windows, the harnesses, the release-notes tool, and
+  their tests.
+- **Marked regions in the files that do.** A block between `[main-edition]`
+  and `[/main-edition]` marker lines — in whatever comment syntax the file
+  has — is removed. A block between `[0bsd-edition]` and `[/0bsd-edition]` is
+  the other edition's text, kept commented out here, and the generator
+  uncomments it: the 0BSD licence line in About, the notices in build.sh, the
+  README's licence section, the changelog's "nothing changes" entries.
+- **The rest is the same file,** byte for byte, in both editions.
+
+The habit this asks of upstream is one line above and below each seam, and it
+is a habit worth having anyway: it says where the paid edition is. The seams
+were also shrunk while being marked. The status menu no longer knows what an
+updater or a licence is; it offers `itemsUnderPause`, `itemsAboveSettings` and
+`decorateStatusButton`, and the editions fill them in from their own files. So
+MenuBar.swift carries no marker at all, and main.swift carries the wiring and
+nothing else.
+
+The fork's history becomes one commit per release, each naming the upstream
+commit it was generated from. Upstream is public with the full history, so
+nothing is lost to a reader, and the commit says what the fork is more
+honestly than eighty cherry-picks did. Version numbers follow upstream's, so
+"0BSD 1.7.2 is main 1.7.2 minus the updater and the licence" stays a true
+sentence; 1.5.0 and 1.6.0 contain nothing the fork keeps, and its changelog
+says so in one line each.
+
+Running it: `tools/edition-0bsd.py ../subtitles-0BSD`, then in the fork
+`./build.sh`, `swift test`, and a commit. The generator refuses to leave a
+marker behind, and refuses an output that still mentions Sparkle, the licence
+core or the appcast anywhere but PLAN.md, which travels whole.
+
+---
+
 ## 10. References
 
 - sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD

@@ -11,10 +11,17 @@ Transcription runs on the **Apple Neural Engine** via
 at roughly 0.15 real-time factor.
 
 **[subtitles-live.com](https://subtitles-live.com)** is the app itself: built,
+<!-- [main-edition] -->
 signed and notarised, so the audio permission survives updates. The download
 is a free seven-day trial, and a licence key, $9 on Gumroad, keeps it going.
 Everything needed to build your own copy is in this repository, and `build.sh`
 below does exactly that.
+<!-- [/main-edition] -->
+<!-- [0bsd-edition]
+signed and notarised, so the audio permission survives updates. Everything
+needed to build your own copy is in this repository, and `build.sh` below does
+exactly that.
+[/0bsd-edition] -->
 
 ![status](https://img.shields.io/badge/platform-macOS%2014.2%2B-blue)
 
@@ -80,6 +87,7 @@ The app lives in the menu bar (no Dock icon).
 | **Hold ⇧** | make the overlay draggable — it is click-through otherwise |
 | **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older, or ⌥F and type to filter them — the stack then stays up until Escape |
 | **⌘,** | settings — from the menu bar |
+<!-- [main-edition] -->
 | Menu bar | model, source, text size, overlay position, permission state, updates |
 
 **Updates** come through the same menu, at the top under Pause. **Check for
@@ -115,6 +123,10 @@ without one. All of it is honour-system by construction: the source is public,
 the check applies to every build including this one, and there is deliberately
 no flag to skip it — a copy built from source that should not ask is one line
 deleted in `License.swift`.
+<!-- [/main-edition] -->
+<!-- [0bsd-edition]
+| Menu bar | model, source, text size, overlay position, permission state |
+[/0bsd-edition] -->
 
 The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
 while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and
@@ -256,6 +268,7 @@ Two choices worth knowing about:
 
 ## Layout
 
+<!-- [main-edition] -->
 ```
 core/          Rust: ring buffer, resampler, voice gate, pre-roll, C ABI
 app/macos/     Swift: process tap, FluidAudio engine, overlay, menu bar, hotkey
@@ -264,12 +277,22 @@ app/license/   Swift: the trial and licence rules (LicenseCore), pure, tested
 spike/         throwaway probes from the measurement phase
 PLAN.md        design decisions, measurements, and everything that went wrong
 ```
+<!-- [/main-edition] -->
+<!-- [0bsd-edition]
+```
+core/          Rust: ring buffer, resampler, voice gate, pre-roll, C ABI
+app/macos/     Swift: process tap, FluidAudio engine, overlay, menu bar, hotkey
+app/captions/  Swift: the caption pipeline's pure parts (CaptionCore), tested
+spike/         throwaway probes from the measurement phase
+PLAN.md        design decisions, measurements, and everything that went wrong
+```
+[/0bsd-edition] -->
 
 ## Development
 
 ```bash
 cargo test --manifest-path core/Cargo.toml   # 11 tests
-swift test                                   # CaptionCore and LicenseCore
+swift test                                   # CaptionCore, and the licence in the main edition
 ./build.sh && ./probe.sh && ./run.sh
 tail -f build/subtitles.log
 ```
@@ -284,6 +307,7 @@ is close to falling behind permanently, since a live stream cannot be caught up.
 ./release.sh
 ```
 
+<!-- [main-edition] -->
 Builds, packages a DMG, notarizes it with Apple, staples the ticket and verifies
 the result the way Gatekeeper will, then publishes the GitHub release with the
 DMG under its stable name `Subtitles.dmg` — what the site's download button
@@ -291,6 +315,13 @@ serves — the zip the updater installs, and the appcast. It stops at the first
 thing that is wrong rather than producing a file that fails on someone else's
 machine — a dirty working tree, an ad-hoc signature, a rejected notarization,
 an asset missing from the draft.
+<!-- [/main-edition] -->
+<!-- [0bsd-edition]
+Builds, packages a DMG, notarizes it with Apple, staples the ticket and verifies
+the result the way Gatekeeper will. It stops at the first thing that is wrong
+rather than producing a file that fails on someone else's machine — a dirty
+working tree, an ad-hoc signature, a rejected notarization.
+[/0bsd-edition] -->
 
 Needs a `Developer ID Application` certificate in the login keychain, and
 notarization credentials stored once:
@@ -335,6 +366,7 @@ the things that turned out to be wrong.
 
 ## Licence
 
+<!-- [main-edition] -->
 [FSL-1.1-ALv2](LICENSE) — the [Functional Source License](https://fsl.software).
 Read it, build it, modify it, run it for whatever you like. The one thing it
 withholds is *competing use*: shipping it as a commercial product that
@@ -344,6 +376,18 @@ trapdoor.
 
 Commits up to `dfe4b08` were published under 0BSD and remain so; that grant
 cannot be withdrawn, and this is not an attempt to.
+<!-- [/main-edition] -->
+<!-- [0bsd-edition]
+[0BSD](LICENSE) — the BSD Zero Clause License. Use it, copy it, modify it, ship
+it, sell it. No attribution, no notice to carry, no conditions at all: it is a
+public-domain-equivalent grant with a warranty disclaimer attached.
+
+This is the 0BSD edition of [Subtitles](https://github.com/daformat/subtitles),
+generated from it by `tools/edition-0bsd.py` there: the same app without the
+in-app updater and without the trial and licence key. It checks for nothing
+and asks for nothing. Version numbers follow the main edition's, so a release
+here that changes nothing says so in the changelog.
+[/0bsd-edition] -->
 
 That covers the code in this repository. Everything fetched at run time keeps its
 own terms — FluidAudio is Apache-2.0, and the models are third-party weights:

@@ -11,6 +11,7 @@
 #   - notarization credentials stored as a keychain profile:
 #       xcrun notarytool store-credentials "subtitles-notary" \
 #         --apple-id <you@example.com> --team-id <TEAMID> --password <app-specific>
+# [main-edition]
 #   - the Sparkle signing key in the login keychain (PLAN.md §23) — the one
 #     whose public half is SPARKLE_PUBLIC_KEY in build.sh
 #   - `gh`, logged in, for the GitHub release the update is served from
@@ -24,6 +25,7 @@
 # release is created as a draft and published only once every asset is up, so
 # no check can see an appcast whose archive is still uploading, and no button
 # a release whose DMG is not there yet.
+# [/main-edition]
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -33,6 +35,7 @@ PROFILE="${SUBTITLES_NOTARY_PROFILE:-subtitles-notary}"
 # trip to Apple and irrelevant to how the window looks, which is the thing that
 # actually needs iterating on. The result is NOT shippable.
 NOTARIZE=yes
+# [main-edition]
 # --critical marks the update as one every copy should take now: the app shows
 # its window at once rather than waiting for a quiet moment, and offers no
 # Skip. For the fix nobody should sit out — the reason this updater exists
@@ -43,12 +46,21 @@ CRITICAL=no
 # that the appcast generates, signs and uploads, and that the assets are the
 # ones expected — everything that cannot be undone once a real release is out.
 DRYRUN=no
+# [/main-edition]
+# [0bsd-edition]
+# DRYRUN=no
+# [/0bsd-edition]
 for arg in "$@"; do
   case "$arg" in
     --no-notarize) NOTARIZE=no ;;
+    # [main-edition]
     --critical) CRITICAL=yes ;;
     --dry-run) DRYRUN=yes; NOTARIZE=no ;;
     *) echo "usage: release.sh [--no-notarize | --dry-run] [--critical]" >&2; exit 1 ;;
+    # [/main-edition]
+    # [0bsd-edition]
+    # *) echo "usage: release.sh [--no-notarize]" >&2; exit 1 ;;
+    # [/0bsd-edition]
   esac
 done
 
@@ -56,10 +68,11 @@ VERSION=$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)
 APP="build/Subtitles.app"
 STAGE="build/dmg"
 DMG="build/Subtitles-$VERSION.dmg"
+RWDMG="build/Subtitles-rw.dmg"
+# [main-edition]
 # The same file under the name that never changes, for the release. The
 # versioned one stays for Gumroad's product page and for the shelf in build/.
 STABLE_DMG="build/Subtitles.dmg"
-RWDMG="build/Subtitles-rw.dmg"
 # What Sparkle installs. A zip rather than the DMG: Sparkle can update from
 # either, but a DMG has to be mounted first and this is the one everybody's
 # machine fetches.
@@ -73,9 +86,11 @@ RELEASES="https://github.com/$REPO/releases"
 # What every installed copy asks, daily. The site proxies it to GitHub.
 FEED_URL=$(grep -m1 '^SPARKLE_FEED=' build.sh | cut -d'"' -f2)
 TAG="v$VERSION"
+# [/main-edition]
 
 echo "==> release $VERSION"
 
+# [main-edition]
 # Everything the tail of this script needs, checked before the three-minute
 # notarization round trip rather than after it.
 if [ "$NOTARIZE" = yes ] || [ "$DRYRUN" = yes ]; then
@@ -91,6 +106,7 @@ if [ "$NOTARIZE" = yes ] || [ "$DRYRUN" = yes ]; then
     echo "   gh release delete $TAG -R $REPO --yes" >&2; exit 1
   fi
 fi
+# [/main-edition]
 
 # Refuse to ship a dirty tree. The DMG is going to strangers who paid for it;
 # "which commit was that build from" needs an answer.
@@ -242,6 +258,7 @@ fi
 
 rm -rf "$STAGE"
 
+# [main-edition]
 # The update archive (PLAN.md §23). The app is stapled first: the DMG's ticket
 # covers the app inside it, so this needs no second round trip, and it means
 # the copy Sparkle installs carries its own proof rather than relying on the
@@ -358,3 +375,12 @@ echo "  download: $RELEASES/latest/download/Subtitles.dmg — what the site's bu
 echo "  feed:     $FEED_URL — live, every copy that checks is offered $VERSION"
 echo
 echo "upload $DMG to Gumroad's product page too, for the receipt's link."
+# [/main-edition]
+# [0bsd-edition]
+# echo
+# echo "ready: $DMG"
+# echo "  commit:  $(git rev-parse --short HEAD)"
+# echo
+# echo "tag the release:"
+# echo "  git tag -a v$VERSION -m 'v$VERSION' && git push origin v$VERSION"
+# [/0bsd-edition]

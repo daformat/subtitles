@@ -96,28 +96,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private var badge: Badge = .none
 
-    /// The other corner. An update waiting is not one of the four states above:
-    /// it says nothing about what the app is doing, and it has to be visible
-    /// through all of them, listening included, or it is visible only when
-    /// nothing is playing. So it is a second mark at the top *left*.
-    ///
-    /// Red, with a count in it — and red is the colour this file says never to
-    /// use. The exception holds because this is not a dot: a red disc with a
-    /// white 1 in it is the shape every notification badge on the Mac has, and
-    /// it reads as "one thing waiting for you", not as a state light. A plain
-    /// red dot in this corner would read as recording (see `Badge.colour`), and
-    /// a teal one, tried first, was simply not noticed.
-    private lazy var updateBadge = CountBadgeView(count: 1)
-
-    private func refreshUpdateBadge(in button: NSStatusBarButton) {
-        guard pendingUpdateVersion() != nil else {
-            updateBadge.removeFromSuperview()
-            return
-        }
-        if updateBadge.superview == nil { button.addSubview(updateBadge) }
-        updateBadge.frame = badgeRect(in: button, size: CountBadgeView.size, leading: true)
-    }
-
     private func setBadge(_ next: Badge, in button: NSStatusBarButton) {
         defer {
             // Always re-place it: the button's bounds change with the icon.
@@ -188,18 +166,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
-    /// Updates (Updater.swift). nil hides the items: a build with no updater
-    /// has nothing to offer.
-    var onCheckForUpdates: (() -> Void)?
-    /// The version a scheduled check has found, or nil. Non-nil turns the check
-    /// item into "Update to X…" and lights the update dot.
-    var pendingUpdateVersion: () -> String? = { nil }
-    var automaticUpdates: () -> Bool = { false }
-    var onToggleAutomaticUpdates: (() -> Void)?
-    /// The licence (License.swift): "Trial: 6 days left", "Enter License
-    /// Key…" or "Licensed", and the window when chosen. nil hides the item.
-    var licenseTitle: () -> String? = { nil }
-    var onLicense: (() -> Void)?
+    /// Items from outside this file, in the two places they can go. Whatever
+    /// an edition of the app adds to this menu — an updater's items, a
+    /// licence's — arrives through these rather than as code of its own here,
+    /// so this file has no opinion about which edition it is in. Under Pause
+    /// is where news goes; above Settings is where a thing about this copy of
+    /// the app, rather than about captions, belongs. Called on every rebuild,
+    /// so the titles can say what is true now.
+    var itemsUnderPause: () -> [NSMenuItem] = { [] }
+    var itemsAboveSettings: () -> [NSMenuItem] = { [] }
+    /// A second mark on the icon, from outside, called on every refresh with
+    /// the button and the rect the glyph occupies in it. The health badge
+    /// owns the top right (`badgeRect`); the top left is the caller's.
+    var decorateStatusButton: ((NSStatusBarButton, NSRect) -> Void)?
 
     var isPaused: () -> Bool = { false }
     var currentSource: () -> AudioSource = { .allSystemAudio }
@@ -278,7 +257,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // the only thing that tells the menu bar a pause happened — and pausing
         // stops the tap, which stops the status events that used to drive it.
         refreshIcon()
-        refreshUpdateBadge(in: button)
+        decorateStatusButton?(button, glyphRect(in: button))
 
         // A load in flight outranks everything else: it badges the same corner,
         // and neither "listening" nor "no audio reaching Subtitles" is a useful
@@ -315,20 +294,23 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
     }
 
-    /// Top-right corner of the *glyph*, not the button. The button is wider and
-    /// taller than the icon it draws, so positioning against its bounds parks the
-    /// badge in the padding instead of on the icon.
-    private func badgeRect(in button: NSStatusBarButton, size: CGFloat,
-                           leading: Bool = false) -> NSRect {
+    /// Where the glyph sits inside the button. The button is wider and taller
+    /// than the icon it draws, so anything placed against the button's own
+    /// bounds parks in the padding instead of on the icon.
+    private func glyphRect(in button: NSStatusBarButton) -> NSRect {
         let glyph = button.image?.size ?? NSSize(width: 16, height: 16)
-        let glyphRect = NSRect(x: (button.bounds.width - glyph.width) / 2,
-                               y: (button.bounds.height - glyph.height) / 2,
-                               width: glyph.width, height: glyph.height)
-        let x = leading ? glyphRect.minX - 3 : glyphRect.maxX - size + 1
+        return NSRect(x: (button.bounds.width - glyph.width) / 2,
+                      y: (button.bounds.height - glyph.height) / 2,
+                      width: glyph.width, height: glyph.height)
+    }
+
+    /// Top-right corner of the glyph, for the health badge.
+    private func badgeRect(in button: NSStatusBarButton, size: CGFloat) -> NSRect {
+        let glyphRect = glyphRect(in: button)
+        let x = glyphRect.maxX - size + 1
         // NSStatusBarButton is not flipped, but do not assume it: getting this
         // wrong silently puts the badge on the opposite corner.
-        let y = button.isFlipped ? glyphRect.minY - (leading ? 2 : 1)
-                                 : glyphRect.maxY - size + (leading ? 2 : 1)
+        let y = button.isFlipped ? glyphRect.minY - 1 : glyphRect.maxY - size + 1
         return NSRect(x: x, y: y, width: size, height: size)
     }
 
@@ -441,11 +423,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(toggle)
         menu.addItem(.separator())
 
-        // Straight under Pause, in a group of their own: an update waiting is
-        // the one thing in this menu that is news, and news goes at the top.
-        if onCheckForUpdates != nil {
-            menu.addItem(updateMenuItem())
-            menu.addItem(automaticUpdatesMenuItem())
+        // Straight under Pause, in a group of their own: news goes at the top.
+        let news = itemsUnderPause()
+        if !news.isEmpty {
+            news.forEach(menu.addItem)
             menu.addItem(.separator())
         }
 
@@ -501,7 +482,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(reset)
 
         menu.addItem(.separator())
-        if let title = licenseTitle() { menu.addItem(licenseMenuItem(title)) }
+        itemsAboveSettings().forEach(menu.addItem)
         menu.addItem(settingsMenuItem())
         menu.addItem(permissionMenuItem())
         menu.addItem(.separator())
@@ -832,44 +813,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func showSettings() { SettingsWindow.shared.show() }
 
-    /// Where the trial stands, or that it no longer needs to. Above Settings,
-    /// where a thing about this copy of the app rather than about captions
-    /// belongs; every state opens the same window.
-    private func licenseMenuItem(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: #selector(showLicense), keyEquivalent: "")
-        item.target = self
-        return item
-    }
-
-    @objc private func showLicense() { onLicense?() }
-
-    /// "Check for Updates…", or "Update to 1.5.1…" once a scheduled check has
-    /// found one. Both do the same thing — Sparkle brings the update it already
-    /// has into focus rather than checking again.
-    private func updateMenuItem() -> NSMenuItem {
-        let pending = pendingUpdateVersion()
-        let item = NSMenuItem(title: pending.map { "Update to \($0)…" } ?? "Check for Updates…",
-                              action: #selector(checkForUpdates), keyEquivalent: "")
-        item.target = self
-        return item
-    }
-
-    @objc private func checkForUpdates() { onCheckForUpdates?() }
-
-    /// The answer to the one question the app asks on its second launch, kept
-    /// where it can be changed. Off means the app makes no request at all;
-    /// the item above still works either way.
-    private func automaticUpdatesMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Check for Updates Automatically",
-                              action: #selector(toggleAutomaticUpdates), keyEquivalent: "")
-        item.target = self
-        item.state = automaticUpdates() ? .on : .off
-        item.toolTip = "Once a day, asks subtitles-live.com for a newer version"
-        return item
-    }
-
-    @objc private func toggleAutomaticUpdates() { onToggleAutomaticUpdates?() }
-
     private func welcomeMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Show Welcome Screen Again",
                               action: #selector(showWelcome), keyEquivalent: "")
@@ -982,50 +925,5 @@ final class ProgressMenuView: NSView {
         // run loop's display cycle, which an open menu is not reliably running —
         // the values updated underneath while the pixels stayed put.
         displayIfNeeded()
-    }
-}
-
-/// A notification badge: a red disc with a white count centred in it.
-///
-/// Drawn rather than composed from a layer and a label, so the digit is set
-/// against the disc at the exact size and cannot drift off centre with a
-/// font change. Eleven points is the smallest at which a bold digit is a digit
-/// rather than a smudge on a menu bar.
-final class CountBadgeView: NSView {
-    static let size: CGFloat = 11
-
-    private let count: Int
-
-    init(count: Int) {
-        self.count = count
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.size, height: Self.size))
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.systemRed.setFill()
-        NSBezierPath(ovalIn: bounds).fill()
-
-        // The digit is drawn as a glyph at a baseline of this view's choosing,
-        // not as a string: string drawing goes through the layout manager,
-        // which rounds the baseline to whole pixels and lands the ink a
-        // fraction high or low at this size. Centred on the glyph's ink, not
-        // its typographic box — a 1 has its flag on the left and its stem right
-        // of centre, and the box carries ascent and descent no digit fills.
-        // All of it is the font's numbers, so another face or size still
-        // lands centred.
-        let font = NSFont.systemFont(ofSize: 7.5, weight: .bold)
-        var glyph = CGGlyph(0)
-        var scalar = Array(String(count).utf16)[0]
-        CTFontGetGlyphsForCharacters(font, &scalar, &glyph, 1)
-        let ink = font.boundingRect(forCGGlyph: glyph)
-        // Half a point left of the ink's centre. A 1 carries its weight in the stem,
-        // right of its box's middle, and centred by the box it reads as sitting
-        // right of the disc's; this is where it reads as centred.
-        var origin = CGPoint(x: bounds.midX - ink.midX - 0.5, y: bounds.midY - ink.midY)
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        ctx.setFillColor(NSColor.white.cgColor)
-        CTFontDrawGlyphs(font, &glyph, &origin, 1, ctx)
     }
 }

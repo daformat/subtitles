@@ -14,7 +14,9 @@
 import AppKit
 import CaptionCore
 import CSubs
+// [main-edition]
 import LicenseCore
+// [/main-edition]
 import Carbon.HIToolbox
 import Darwin
 import Foundation
@@ -40,10 +42,25 @@ var resetPosition = false
 var listSources = false
 var listModels = false
 var variantOverride: FluidVariant?
+// [main-edition]
 /// An appcast URL for the updater, instead of the one in Info.plist.
 var feedOverride: String?
 /// Where licence keys are verified, instead of Gumroad.
 var verifyOverride: URL?
+// [/main-edition]
+
+// The main edition's own options, spliced into --help below. Inside the
+// literal a marker would print, so the lines live here.
+// [main-edition]
+let editionOptions = """
+  --feed URL        check for updates against this appcast, not the shipped one
+  --verify URL      verify licence keys against this URL, not Gumroad's
+
+"""
+// [/main-edition]
+// [0bsd-edition]
+// let editionOptions = ""
+// [/0bsd-edition]
 
 var args = Array(CommandLine.arguments.dropFirst())
 var i = 0
@@ -58,10 +75,12 @@ while i < args.count {
         fontSize = (Double(args[i + 1]) as Double?).map { CGFloat($0) } ?? defaultFontSize; i += 1
     case "--variant" where i + 1 < args.count:
         variantOverride = FluidVariant(rawValue: args[i + 1]); i += 1
+    // [main-edition]
     case "--feed" where i + 1 < args.count:
         feedOverride = args[i + 1]; i += 1
     case "--verify" where i + 1 < args.count:
         verifyOverride = URL(string: args[i + 1]); i += 1
+    // [/main-edition]
     case "--help", "-h":
         print("""
         usage: subtitles [options]
@@ -72,9 +91,7 @@ while i < args.count {
           --reset-position  put the overlay back to bottom-centre
           --list-sources    print audio sources and exit (no permission needed)
           --list-models     print the model cache and what is unused, and exit
-          --feed URL        check for updates against this appcast, not the shipped one
-          --verify URL      verify licence keys against this URL, not Gumroad's
-          --quiet           suppress status lines
+        \(editionOptions)  --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
         The overlay is click-through; hold ⇧ to drag it, and its position is
@@ -137,6 +154,7 @@ nonisolated(unsafe) var isPaused = false
 
 let app = NSApplication.shared
 
+// [main-edition]
 // ── licence ──
 // Started here, before anything writes a default: whether a build older than
 // this one left preferences behind is what decides grandfathering (§24), and
@@ -152,6 +170,7 @@ if !license.entitlement.allowsTranscription {
     isPaused = true
     pausedByLicense = true
 }
+// [/main-edition]
 
 // ── engine ──
 // Globals rather than captures: the audio callback must not touch ARC.
@@ -313,8 +332,9 @@ final class Renderer {
     /// talking".
     private(set) var receivingAudio = false
     private let silenceGrace: Float = 2
-    /// How long nothing has been arriving, as the core last reported it. The
-    /// updater reads this to tell a quiet Mac from one mid-film (Updater.swift).
+    /// How long nothing has been arriving, as the core last reported it. For
+    /// whatever needs to tell a quiet Mac from one mid-film; the main
+    /// edition's updater does, before opening a window unasked.
     private(set) var silentSeconds: Float = 0
 
     /// FluidAudio reports the whole transcript each update rather than deltas,
@@ -617,9 +637,11 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 engineBusyMessage = nil
                 engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
+                // [main-edition]
                 // The trial clock starts here and nowhere else: a launch
                 // spent downloading the model has not started it.
                 if ok { license.noteEngineReady() }
+                // [/main-edition]
             }
         },
         onLanguage: { code in
@@ -824,6 +846,7 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
 }
 
 func togglePause() {
+    // [main-edition]
     // Resume is refused while the licence says no — the trial is over, or the
     // key was refunded — and the licence window is what opens instead. The
     // pause itself is allowed, so the person can always stop the tap.
@@ -832,6 +855,7 @@ func togglePause() {
         return
     }
     pausedByLicense = false
+    // [/main-edition]
     isPaused.toggle()
     renderer.overlay?.setPaused(isPaused)
     // Tear the tap down rather than discarding the samples it delivers.
@@ -1048,11 +1072,13 @@ if useOverlay {
         // being stopped on purpose, not a fault, and it is certainly not the app
         // listening. A model load still shows through above: that carries on
         // regardless of capture.
+        // [main-edition]
         // A licence pause says why, in the default colour: not a fault, and
         // not nothing either — the one line here that asks for something.
         if isPaused, let blocked = license.entitlement.blockedStatusLine {
             return (blocked, .normal)
         }
+        // [/main-edition]
         if isPaused { return ("Paused", .idle) }
         // One message, and not a red one. Distinguishing "nothing is playing" from
         // "the grant is missing" needs `processesOutputtingAudio()`, and that is
@@ -1072,6 +1098,7 @@ if useOverlay {
     menu.onResetPosition = { controller.resetPosition() }
     menu.onQuit = { shutdownCleanly() }
 
+    // [main-edition]
     // Updates (§23). Started before the menu is wired to it, so a build that
     // cannot update — no Info.plist around the binary — simply has no items.
     let updater = Updater()
@@ -1082,12 +1109,11 @@ if useOverlay {
     updater.mayInterrupt = { !WelcomeWindow.shared.isVisible }
     updater.start()
     if updater.started {
-        menu.onCheckForUpdates = { updater.checkForUpdates() }
-        menu.pendingUpdateVersion = { updater.pendingVersion }
-        menu.automaticUpdates = { updater.automaticChecks }
-        menu.onToggleAutomaticUpdates = { updater.automaticChecks.toggle() }
+        menu.itemsUnderPause = { updater.menuItems() }
+        menu.decorateStatusButton = { button, glyph in updater.decorate(button, glyph: glyph) }
         updater.onPendingChange = { menu.updateHealthIndicator() }
     }
+    // [/main-edition]
     menu.onSelectVariant = { applyVariant($0) }
     menu.onSelectLanguage = { applyLanguage($0) }
     menu.currentLanguageID = { currentLanguage.rawValue }
@@ -1148,11 +1174,12 @@ if useOverlay {
     renderer.onStatusRefresh = { [weak menu] in menu?.updateHealthIndicator() }
     statusMenu = menu
 
+    // [main-edition]
     license.onChange = { [weak menu] in menu?.updateHealthIndicator() }
-    menu.licenseTitle = { license.entitlement.menuTitle }
-    menu.onLicense = { license.present() }
+    menu.itemsAboveSettings = { [license.menuItem()] }
     AboutWindow.shared.licenseLine = { license.entitlement.aboutLine }
     if isPaused { controller.setPaused(true) }
+    // [/main-edition]
 
     // Restore a saved target now rather than at load time: the controller needs
     // the overlay and the menu, both of which exist only here.
@@ -1165,6 +1192,7 @@ if useOverlay {
     err("overlay on — click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
 }
 
+// [main-edition]
 // The licence gate (§24). Expiry takes the pause path, so the tap comes down,
 // the icon dims and the overlay clears exactly as Pause does; the status line
 // says why, and Resume opens the licence window. Outside the overlay block:
@@ -1183,6 +1211,7 @@ license.onUnblocked = {
     statusMenu?.updateHealthIndicator()
     err("resumed — licensed")
 }
+// [/main-edition]
 
 applyVariant(currentVariant, initial: true)
 
@@ -1195,14 +1224,17 @@ applyVariant(currentVariant, initial: true)
 if useOverlay {
     WelcomeWindow.shared.engineBusy = { engineBusyMessage }
     WelcomeWindow.shared.engineProgress = { engineBusyProgress }
+    // [main-edition]
     WelcomeWindow.shared.trialLine = {
         guard case .trial = license.entitlement else { return nil }
         return "Your free trial runs for \(LicenseRecord.trialDays) days, and starts when the captions do."
     }
+    // [/main-edition]
     if WelcomeWindow.shouldShowAtLaunch {
         WelcomeWindow.shared.show(markAsSeen: true)
     }
 }
+// [main-edition]
 // Not while the licence has paused it: `resumeCapture` brings the tap up
 // once a key is entered, the same as after any pause.
 if isPaused {
@@ -1215,6 +1247,15 @@ if isPaused {
         exit(1)
     }
 }
+// [/main-edition]
+// [0bsd-edition]
+// do {
+//     try tap.start()
+// } catch {
+//     err("\(red)capture failed:\(reset) \(error)")
+//     exit(1)
+// }
+// [/0bsd-edition]
 err("listening. ctrl-C to stop.\n")
 
 // SIGUSR1 cycles variants, so A/B comparison is scriptable.
