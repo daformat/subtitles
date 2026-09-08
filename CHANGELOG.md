@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.6.1 · 2026-09-08
+
+- The ⌥ stack no longer shifts sideways when a box arrives that is wider than
+  the ones already up, or when the widest one leaves. The stack is as wide as
+  its widest box, so its left edge moves at those moments; what moved with it,
+  for a tenth of a second, was every box in it, because the edge was what the
+  stack's follow animation was attached to. It is attached to the centre now,
+  and each box is placed from that centre rather than centred in the stack, so
+  the stack's width can change under them without a box moving by a point.
+
 <!-- [0bsd-edition]
 ## 1.6.0 · 2026-09-07
 
@@ -16,16 +26,7 @@ and the DMG name show.
   this one has none, by design, and is updated by downloading again.
 [/0bsd-edition] -->
 <!-- [main-edition] -->
-## 1.6.1 · 2026-09-08
-
-- The ⌥ stack no longer shifts sideways when a box arrives that is wider than
-  the ones already up, or when the widest one leaves. The stack is as wide as
-  its widest box, so its left edge moves at those moments; what moved with it,
-  for a tenth of a second, was every box in it, because the edge was what the
-  stack's follow animation was attached to. It is attached to the centre now,
-  and each box is placed from that centre rather than centred in the stack, so
-  the stack's width can change under them without a box moving by a point.
-
+## 1.6.0 · 2026-09-07
 
 - The app is a free download with a seven-day trial, and a licence key is what
   you buy. The trial starts when the captions do, not at the first launch, so
