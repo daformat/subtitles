@@ -1290,6 +1290,25 @@ let shutdown: @convention(c) (Int32) -> Void = { _ in
 signal(SIGINT, shutdown)
 signal(SIGTERM, shutdown)
 
+// An Edit menu, though no menu bar ever shows it. ⌘X, ⌘C, ⌘V, ⌘A and ⌘Z
+// reach a text field only as the key equivalents of these menu items, so
+// without them what was on the clipboard could be typed into a field but
+// never pasted into it. A nil target is the first responder, which while a
+// field is editing is its field editor. The first item of a main menu is the
+// application menu whatever it is called, so Edit is the second.
+let edit = NSMenu(title: "Edit")
+edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+edit.addItem(.separator())
+edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+let mainMenu = NSMenu()
+mainMenu.addItem(withTitle: "Subtitles", action: nil, keyEquivalent: "").submenu = NSMenu()
+mainMenu.addItem(withTitle: "Edit", action: nil, keyEquivalent: "").submenu = edit
+app.mainMenu = mainMenu
+
 // .accessory: no Dock icon, no menu bar, and the app never becomes active —
 // combined with .nonactivatingPanel the overlay cannot steal focus.
 app.setActivationPolicy(.accessory)

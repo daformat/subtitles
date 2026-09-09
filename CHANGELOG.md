@@ -4,6 +4,25 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+<!-- [0bsd-edition]
+## 1.6.3 · 2026-09-09
+
+- ⌘V pastes into the Clear After field in Settings now, and ⌘C, ⌘X, ⌘A and
+  ⌘Z work there too. They reach a text field only as the key equivalents of
+  an Edit menu, and an app without a menu bar has no Edit menu unless it
+  makes one; it has one now, which nothing ever shows.
+
+[/0bsd-edition] -->
+<!-- [main-edition] -->
+## 1.6.3 · 2026-09-09
+
+- A licence key can be pasted into the licence window now. ⌘V, and ⌘C, ⌘X,
+  ⌘A and ⌘Z with it, reach a text field only as the key equivalents of an
+  Edit menu, and an app without a menu bar has no Edit menu unless it makes
+  one; it has one now, which nothing ever shows. The Clear After field in
+  Settings takes a paste for the same reason.
+
+<!-- [/main-edition] -->
 ## 1.6.2 · 2026-09-08
 
 - Re-vendored the site's caption demo for the welcome window. The screen is
