@@ -86,6 +86,12 @@ final class SubtitleView: NSView {
         }
     }
 
+    /// The blur under the pill, when there is one: a sibling beneath this view,
+    /// told the pill's shape on every draw — hole included — so what it
+    /// softens is exactly what the pill covers, and no more once the reveal
+    /// has opened the box.
+    weak var backdrop: BackdropBlurView?
+
     /// Full extent of the reveal about the cursor. Wider than it is tall because
     /// the box is: a circle big enough to clear the pill's width overshoots its
     /// height several times over and takes far more of the screen with it than it
@@ -255,8 +261,25 @@ final class SubtitleView: NSView {
         ctx.restoreGState()
     }
 
+    /// The blur wears the pill's shape. None at all with no text, and none at
+    /// zero: that setting says bare text over the picture, and a softened
+    /// rectangle behind bare text is a pill by another name.
+    private func syncBackdrop(drawsPill: Bool) {
+        guard let backdrop else { return }
+        guard drawsPill, backgroundOpacity > 0 else {
+            backdrop.shape = nil
+            return
+        }
+        backdrop.shape = .init(rect: boxRect, corner: corner, hole: maskCenter.map {
+            .init(center: $0, size: maskSize, strength: maskStrength)
+        })
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let text = attributed(committed: committed, tentative: tentative)
+        // Here, because everything the shape depends on ends in a redraw: this
+        // is the one place the blur is certain to be told with the pill.
+        syncBackdrop(drawsPill: text.length > 0)
         guard text.length > 0 else { return }
 
         // Pill, ring and text have to be composited into one image before the
@@ -319,6 +342,8 @@ final class SubtitleView: NSView {
 final class OverlayController {
     private let panel: SubtitlePanel
     private let view: SubtitleView
+    /// Under the view, filling the panel with it — see BackdropBlur.swift.
+    private let backdrop = BackdropBlurView(blending: .behindWindow)
     private var idleTimer: Timer?
     private var modifierTimer: Timer?
     private var cursorTimer: Timer?
@@ -391,6 +416,13 @@ final class OverlayController {
     var boxOpacity: CGFloat {
         get { view.backgroundOpacity }
         set { view.backgroundOpacity = newValue }
+    }
+
+    /// How far the picture behind the box is softened, in points; 0 is not at
+    /// all. The ⌥ stack takes the same number: unlike the fill there is no
+    /// stepping back to do, since a softer picture is a softer picture.
+    var backdropBlur: CGFloat = Pill.backdropBlur {
+        didSet { backdrop.radius = backdropBlur }
     }
 
     /// How much of the box the pointer reveal takes, 0…1.
@@ -656,7 +688,16 @@ final class OverlayController {
         panel = SubtitlePanel(contentRect: initial)
         view = SubtitleView(frame: initial)
         view.fontSize = fontSize
-        panel.contentView = view
+        // The blur beneath the view, both filling the panel, and the view telling
+        // the blur its shape.
+        let root = NSView(frame: initial)
+        backdrop.frame = root.bounds
+        backdrop.autoresizingMask = [.width, .height]
+        view.autoresizingMask = [.width, .height]
+        view.backdrop = backdrop
+        root.addSubview(backdrop)
+        root.addSubview(view)
+        panel.contentView = root
         panel.alphaValue = 0
         panel.orderFrontRegardless()
 
@@ -790,7 +831,8 @@ final class OverlayController {
                 fontSize: view.fontSize,
                 maxLines: view.maxLines,
                 fill: view.backgroundOpacity * HistoryPillView.recession,
-                textOpacity: historyTextOpacity)
+                textOpacity: historyTextOpacity,
+                blur: backdropBlur)
             history.present(entries: entries, style: style, anchor: panel.frame,
                             centreX: boxCentreX, maxWidth: maxWidth,
                             animated: !isSwappingLanguage)

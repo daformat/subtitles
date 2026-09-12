@@ -34,6 +34,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onMaxLines: ((Int) -> Void)?
     var boxOpacity: () -> CGFloat = { SubtitleView.defaultBackgroundOpacity }
     var onBoxOpacity: ((CGFloat) -> Void)?
+    /// How far the picture behind the box is softened, in points.
+    var backdropBlur: () -> CGFloat = { Pill.backdropBlur }
+    var onBackdropBlur: ((CGFloat) -> Void)?
     /// Read-only here — text size is a menu setting. The preview needs it to
     /// draw the box the size it actually is.
     var fontSize: () -> CGFloat = { 30 }
@@ -739,6 +742,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.background)
             })
 
+        // Whole points: the difference between 6 and 6.4 is not one anyone can
+        // see, and a readout that says so is noise.
+        let blur = SliderRow(
+            "Blur", range: 0...Double(Pill.maxBackdropBlur), value: Double(backdropBlur()),
+            snaps: true,
+            format: { $0 < 0.5 ? "Off" : "\(Int($0.rounded())) pt" },
+            apply: { [weak self] in
+                self?.onBackdropBlur?(CGFloat($0.rounded()))
+                self?.syncPreview(.blur)
+            })
+
         // The track runs one stop past the last number, and that stop is
         // Unlimited. The setting itself is a sentinel there, not this stop's
         // ordinal, so the slider maps in both directions — and `SliderRow`'s
@@ -773,7 +787,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.dimness)
             })
 
-        rows = [lines, background, opacity, width, height, depth, dimness]
+        rows = [lines, background, blur, opacity, width, height, depth, dimness]
 
         let (stack, section) = Self.makeStack()
 
@@ -790,9 +804,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         section("Subtitle Box",
                 "How many lines a box fills before it clears and starts a new one, "
-                + "and how solid the box behind the text is. The ⌥ history follows "
-                + "it, a step behind.",
-                Self.grid([lines.cells, background.cells]), nil)
+                + "how solid the box behind the text is, and how far the picture "
+                + "under it is softened. The ⌥ history follows it, a step behind.",
+                Self.grid([lines.cells, background.cells, blur.cells]), nil)
         revealSwitch.target = self
         revealSwitch.action = #selector(toggleReveal)
         revealSwitch.state = revealEnabled() ? .on : .off
@@ -1011,6 +1025,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             fontSize: fontSize(),
             maxLines: maxLines(),
             boxOpacity: boxOpacity(),
+            blur: backdropBlur(),
             revealOpacity: revealOpacity(),
             revealSize: revealSize(),
             revealEnabled: revealEnabled(),

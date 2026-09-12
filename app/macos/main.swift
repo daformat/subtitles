@@ -127,6 +127,7 @@ enum Defaults {
     static let historyDepth = "overlay.historyDepth"
     static let maxLines = "overlay.maxLines"
     static let boxOpacity = "overlay.boxOpacity"
+    static let backdropBlur = "overlay.backdropBlur"
     static let historyTextOpacity = "overlay.historyTextOpacity"
     // Seconds. A new key rather than the minutes one it replaces: the old
     // values are numerically valid seconds, so reusing it would quietly turn
@@ -944,6 +945,9 @@ if useOverlay {
     controller.boxOpacity = CGFloat(
         UserDefaults.standard.object(forKey: Defaults.boxOpacity) as? Double
             ?? Double(SubtitleView.defaultBackgroundOpacity))
+    controller.backdropBlur = min(max(CGFloat(
+        UserDefaults.standard.object(forKey: Defaults.backdropBlur) as? Double
+            ?? Double(Pill.backdropBlur)), 0), Pill.maxBackdropBlur)
 
     // Read back from the controller rather than from a copy: the window is built
     // fresh on every open, and the overlay is the thing that actually holds these.
@@ -995,7 +999,7 @@ if useOverlay {
         for key in [Defaults.fontSize, Defaults.reveal, Defaults.history,
                     Defaults.historyDepth, Defaults.historyTextOpacity,
                     Defaults.historyExpiry, Defaults.historyExpires,
-                    Defaults.maxLines, Defaults.boxOpacity,
+                    Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
                     Defaults.revealOpacity,
                     Defaults.revealWidth, Defaults.revealHeight] {
             UserDefaults.standard.removeObject(forKey: key)
@@ -1011,6 +1015,7 @@ if useOverlay {
         controller.isHistoryEnabled = true
         controller.maxLines = SubtitleView.defaultMaxLines
         controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
+        controller.backdropBlur = Pill.backdropBlur
         controller.historyDepth = OverlayController.defaultHistoryDepth
         controller.historyTextOpacity = HistoryPillView.defaultTextOpacity
         controller.historyExpiry = OverlayController.defaultHistoryExpiry
@@ -1043,6 +1048,11 @@ if useOverlay {
     settings.onBoxOpacity = { value in
         controller.boxOpacity = value
         UserDefaults.standard.set(Double(value), forKey: Defaults.boxOpacity)
+    }
+    settings.backdropBlur = { controller.backdropBlur }
+    settings.onBackdropBlur = { value in
+        controller.backdropBlur = value
+        UserDefaults.standard.set(Double(value), forKey: Defaults.backdropBlur)
     }
     settings.maxLines = { controller.maxLines }
     settings.onMaxLines = { lines in

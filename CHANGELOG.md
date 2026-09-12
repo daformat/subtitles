@@ -4,6 +4,19 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.6.4 · 2026-09-12
+
+- The picture behind the boxes is blurred, six points of it. Dark text on a
+  dark pill over a busy scene was hard to read, and softening what is under
+  the box is what lets the text stand off it. The live box, the ⌥ stack and
+  its search field all have it, and the pointer reveal cuts through the blur
+  exactly as it cuts through the pill, so what shows through the hole is the
+  page itself, sharp.
+- **Blur**, under Background in Settings, sets how far the picture is
+  softened, from off to twenty points, and the preview follows the slider.
+- Re-vendored the site's demo for the welcome window, whose boxes wear the
+  same blur.
+
 <!-- [0bsd-edition]
 ## 1.6.3 · 2026-09-09
 

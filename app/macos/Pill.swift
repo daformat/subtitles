@@ -12,6 +12,18 @@ enum Pill {
     static let inset = NSSize(width: 22, height: 14)
     static let corner: CGFloat = 14
 
+    /// The site's `backdrop-filter: blur(6px)`: the standard deviation, in
+    /// points, of the blur behind every box. The picture under a box is what
+    /// makes dark text on a dark pill hard to read, and softening it is what
+    /// lets the text stand off it. See BackdropBlur.swift for how a box gets
+    /// it.
+    static let backdropBlur: CGFloat = 6
+
+    /// As far as the setting goes. The system's own materials sit at 30, and
+    /// well before that the picture is gone and the pill is a frosted panel,
+    /// which is a different design from a box over a softened one.
+    static let maxBackdropBlur: CGFloat = 20
+
     /// A rounded, heavy face reads better at a glance against arbitrary video.
     static func font(ofSize size: CGFloat) -> NSFont {
         let base = NSFont.systemFont(ofSize: size, weight: .semibold)

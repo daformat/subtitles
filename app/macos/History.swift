@@ -153,6 +153,33 @@ struct HistoryStyle: Equatable {
     /// Pill background, already stepped back from the live box's.
     var fill: CGFloat
     var textOpacity: CGFloat
+    /// How far the picture under the boxes is softened, in points.
+    var blur: CGFloat = Pill.backdropBlur
+    /// Where the blur under the boxes looks: behind the window on the overlay,
+    /// whose backdrop is other apps' windows, and within it in the Settings
+    /// preview, whose desktop is its own drawing. See BackdropBlur.swift.
+    var backdrop: NSVisualEffectView.BlendingMode = .behindWindow
+}
+
+/// The fade at the stack's clipped edge, as each box wears it.
+///
+/// A mask rather than a gradient drawn over the top: the panel is transparent,
+/// so an overlaid gradient would have to fade to a colour that is not there,
+/// and would darken the desktop showing through instead of the boxes. And on
+/// each box's face rather than on the clip view over all of them: a mask on the
+/// clip takes the blur down with the fill, and the blur is meant to stay whole
+/// under a box that is fading out — the picture softened to the last pixel of
+/// the box, a frosted band where the stack is cut, which is how it read when
+/// the window server did the blurring and how it reads best. The site found
+/// the same: a mask on its stack left each box's backdrop-filter nothing to
+/// blur, so each box carries its own.
+///
+/// The clip's visible rect, in the document's coordinates, and the ramp across
+/// it; each box places the ramp where it sits in that rect.
+struct StackFade {
+    var visible: CGRect
+    var colors: [CGColor]
+    var locations: [NSNumber]
 }
 
 // MARK: - One past box
@@ -180,13 +207,52 @@ final class HistoryPillView: NSView {
     private let style: HistoryStyle
     /// Where the search query occurs, in UTF-16 units of `text`.
     private let highlights: [NSRange]
+    /// The picture under the pill, softened, and the pill drawn over it. Two
+    /// subviews rather than this view's own `draw`: a view paints beneath its
+    /// subviews, and the blur is one, so the fill and text have to be one as
+    /// well to land on top of it.
+    private let blur: BackdropBlurView
+    private let face = PillFace()
+    /// The stack's fade, on the face alone — see StackFade.
+    private let fade = CAGradientLayer()
 
     init(text: String, style: HistoryStyle, highlights: [NSRange] = []) {
         self.text = text
         self.style = style
         self.highlights = highlights
+        blur = BackdropBlurView(blending: style.backdrop)
         super.init(frame: .zero)
         wantsLayer = true
+        face.drawing = { [unowned self] bounds in self.drawFace(in: bounds) }
+        // A layer of its own from the start, so the fade has one to mask the
+        // moment the stack is laid, not after the first scroll.
+        face.wantsLayer = true
+        addSubview(blur)
+        addSubview(face)
+    }
+
+    /// Wear the stack's fade, or none.
+    func wear(_ stackFade: StackFade?) {
+        // No implicit animation: this is recomputed on every scroll event, and
+        // CoreAnimation's default quarter-second interpolation would leave the
+        // fade lagging visibly behind the content.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let stackFade, let layer = face.layer else {
+            if face.layer?.mask != nil { face.layer?.mask = nil }
+            return
+        }
+        // The clip's rect brought into this box's coordinates, so the one ramp
+        // across the clip lands on each box at the right height. A plain
+        // vertical ramp: layer unit space is y-up here, so location 0 is the
+        // bottom edge.
+        fade.frame = stackFade.visible.offsetBy(dx: -frame.minX, dy: -frame.minY)
+        fade.startPoint = CGPoint(x: 0.5, y: 0)
+        fade.endPoint = CGPoint(x: 0.5, y: 1)
+        fade.colors = stackFade.colors
+        fade.locations = stackFade.locations
+        if layer.mask !== fade { layer.mask = fade }
     }
 
     @available(*, unavailable)
@@ -217,7 +283,16 @@ final class HistoryPillView: NSView {
         Self.fittingSize(text, style: style, maxWidth: maxWidth)
     }
 
-    override func draw(_ dirtyRect: NSRect) {
+    override func layout() {
+        super.layout()
+        blur.frame = bounds
+        face.frame = bounds
+        blur.radius = style.blur
+        // No pill, no blur: at zero the setting says bare text over the picture.
+        blur.shape = style.fill > 0 ? .init(rect: bounds, corner: Pill.corner) : nil
+    }
+
+    private func drawFace(in bounds: NSRect) {
         // Every box in the stack at the same strength. Ageing them individually
         // was tried and is wrong: a per-box ramp reads as each box fading on its
         // own, and it fights the one gradient that is meant to be doing that job
@@ -226,6 +301,16 @@ final class HistoryPillView: NSView {
         NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
         attributed.draw(with: bounds.insetBy(dx: Pill.inset.width, dy: Pill.inset.height),
                         options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+}
+
+/// The face of a pill — its fill and whatever sits on it — drawn over its blur
+/// by whichever pill owns it.
+private final class PillFace: NSView {
+    var drawing: ((NSRect) -> Void)?
+
+    override func draw(_ dirtyRect: NSRect) {
+        drawing?(bounds)
     }
 }
 
@@ -295,6 +380,10 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
 
     private var hintWidth: CGFloat { ceil(hint.attributedStringValue.size().width) }
 
+    /// Under everything, the blur; over it, the fill; over that, the controls.
+    /// The same arrangement as HistoryPillView, for the same reason.
+    private let blur: BackdropBlurView
+    private let face = PillFace()
     private let field = SearchField()
     private let icon = NSImageView()
     /// The circled ✕ at the far end, there while the field holds text. One
@@ -319,7 +408,15 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
 
     init(style: HistoryStyle) {
         self.style = style
+        blur = BackdropBlurView(blending: style.backdrop)
         super.init(frame: .zero)
+
+        face.drawing = { [unowned self] bounds in
+            NSColor.black.withAlphaComponent(self.style.fill).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
+        }
+        addSubview(blur)
+        addSubview(face)
 
         icon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -386,7 +483,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         clearButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                        weight: .semibold)
         needsLayout = true
-        needsDisplay = true
+        face.needsDisplay = true
     }
 
     var fittingHeight: CGFloat {
@@ -418,6 +515,10 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
 
     override func layout() {
         super.layout()
+        blur.frame = bounds
+        face.frame = bounds
+        blur.radius = style.blur
+        blur.shape = style.fill > 0 ? .init(rect: bounds, corner: Pill.corner) : nil
         let side = fontSize.rounded()
         icon.frame = NSRect(x: Self.inset.width, y: ((bounds.height - side) / 2).rounded(),
                             width: side, height: side)
@@ -437,11 +538,6 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         let height = field.intrinsicContentSize.height
         field.frame = NSRect(x: x, y: ((bounds.height - height) / 2).rounded(),
                              width: max(right - x, 0), height: height)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(style.fill).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
     }
 
     // MARK: NSTextFieldDelegate
@@ -701,11 +797,10 @@ final class HistoryController {
     /// more common case of the live box merely moving.
     private var placedHeight: CGFloat = 0
 
-    /// Softens the edge that has content beyond it. A mask on the clip view
-    /// rather than a view drawn over the top: the panel is transparent, so an
-    /// overlaid gradient would have to fade to a colour that is not there, and
-    /// would darken the desktop showing through instead of the boxes.
-    private let fadeMask = CAGradientLayer()
+    /// Every box in the document.
+    private var stackPills: [HistoryPillView] {
+        document.subviews.compactMap { $0 as? HistoryPillView }
+    }
     private var scrollObserver: NSObjectProtocol?
 
     init() {
@@ -1272,7 +1367,7 @@ final class HistoryController {
         // promises more to see and then does not deliver it.
         guard visible.height > 0, content > visible.height + 1,
               farHidden > 0.5 || nearHidden > 0.5 else {
-            if clip.layer?.mask != nil { clip.layer?.mask = nil }
+            for pill in stackPills { pill.wear(nil) }
             return
         }
 
@@ -1283,19 +1378,6 @@ final class HistoryController {
         let farStop = far / visible.height
         let nearStop = near / visible.height
 
-        // No implicit animation: the mask is recomputed on every scroll event,
-        // and CoreAnimation's default quarter-second interpolation would leave
-        // the fade lagging visibly behind the content.
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        // The mask lives in the clip view's own coordinates, whose origin *is*
-        // the scroll offset — so tracking `bounds` is what keeps it still while
-        // the content moves under it.
-        fadeMask.frame = visible
-        // A plain vertical ramp. Layer unit space is y-up here, so location 0 is
-        // the bottom edge.
-        fadeMask.startPoint = CGPoint(x: 0.5, y: 0)
-        fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         let clear = NSColor.clear.cgColor
         let solid = NSColor.black.cgColor
         // Bottom to top. Above the live box the far edge is the top and the near
@@ -1320,10 +1402,10 @@ final class HistoryController {
             colors.append(solid)
             locations.append(1)
         }
-        fadeMask.colors = colors
-        fadeMask.locations = locations
-        if clip.layer?.mask !== fadeMask { clip.layer?.mask = fadeMask }
-        CATransaction.commit()
+        // `visible` is the clip's bounds, whose origin *is* the scroll offset:
+        // the rect in document coordinates that each box measures itself against.
+        let fade = StackFade(visible: visible, colors: colors, locations: locations)
+        for pill in stackPills { pill.wear(fade) }
     }
 
     // MARK: animation

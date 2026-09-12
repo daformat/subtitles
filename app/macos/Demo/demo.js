@@ -49,6 +49,21 @@ const I18N = (() => {
 // Escape or a click anywhere outside the stack unpins it, and the stack goes
 // back to living under ⌥. The numbers are the app's, at 30pt of text, so in
 // em of the boxes.
+// The stack's fade at its edges is drawn on each box rather than on the stack:
+// a mask on the stack would make it the backdrop root for everything in it,
+// and a box's backdrop-filter would then have only the stack's own transparent
+// pixels to blur. So each box carries its own mask, positioned from where the
+// box sits in the stack's view (--y) against the stack's height (--h) and the
+// two bands (--fade, --near-fade) the demos measure; styles.css does the rest.
+// Reads first, then writes, so a stack of fifteen costs one layout.
+const placeFade = (history) => {
+  const top = history.scrollTop;
+  const lines = [...history.children];
+  const ys = lines.map((line) => line.offsetTop - top);
+  history.style.setProperty('--h', history.clientHeight + 'px');
+  lines.forEach((line, i) => line.style.setProperty('--y', ys[i].toFixed(1) + 'px'));
+};
+
 const stackSearch = (() => {
   const CALM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -170,10 +185,13 @@ const stackSearch = (() => {
     const n = ++instances;
     const el = document.createElement('div');
     el.className = 'demo-search';
+    // The field's word, in the page's language: the same one the Notes
+    // window's search field shows.
+    const label = I18N('search.placeholder', 'Search');
     el.innerHTML =
       '<svg class="ds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">'
       + '<circle cx="10.4" cy="10.4" r="6.8"/><path d="M15.5 15.5 21.4 21.4"/></svg>'
-      + '<input class="ds-field" type="text" placeholder="Search" aria-label="Search" tabindex="-1"'
+      + '<input class="ds-field" type="text" placeholder="' + label + '" aria-label="' + label + '" tabindex="-1"'
       + ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'
       + '<span class="ds-hint" aria-hidden="true">⌥F</span>'
       + '<button type="button" class="ds-clear" tabindex="-1" aria-label="Clear">'
@@ -182,7 +200,7 @@ const stackSearch = (() => {
       + '<circle cx="12" cy="12" r="10" fill="currentColor" mask="url(#ds-x' + n + ')"/></svg></button>'
       // For measuring the closed pill: the placeholder and the hint in their
       // own fonts, laid out but never seen.
-      + '<span class="ds-measure" aria-hidden="true">Search</span>'
+      + '<span class="ds-measure" aria-hidden="true">' + label + '</span>'
       + '<span class="ds-measure ds-hint" aria-hidden="true">⌥F</span>';
     history.parentNode.insertBefore(el, history);
     const field = el.querySelector('.ds-field');
@@ -191,6 +209,9 @@ const stackSearch = (() => {
     const measure = el.querySelectorAll('.ds-measure');
 
     let focused = false;
+    // Pinned by a demo's script rather than by a hand in the field: the
+    // keyboard is wherever the visitor left it, and stays there.
+    let scripted = false;
     let query = '';
     let visible = false;
     let starved = false;
@@ -236,7 +257,7 @@ const stackSearch = (() => {
       if (starved === on) return;
       starved = on;
       el.classList.toggle('is-starved', on);
-      if (!on && focused && document.activeElement !== field) field.focus();
+      if (!on && focused && !scripted && document.activeElement !== field) field.focus();
     };
     // The stack opening: the pill is the nearest thing to the live box, so it
     // rises first and the boxes follow it.
@@ -261,6 +282,7 @@ const stackSearch = (() => {
       if (!focused && query === '') return;
       const hadQuery = query !== '';
       focused = false;
+      scripted = false;
       field.value = '';
       setQuery('');
       if (document.activeElement === field) field.blur();
@@ -340,9 +362,15 @@ const stackSearch = (() => {
       height: () => el.offsetHeight,
       rise: rise,
       unpin: unpin,
-      // For the recordings' epilogue, which has no hands: the keyboard into the
-      // field, and text into it a piece at a time, as if typed.
+      // For the demos' own searches, which have no hands: the keyboard into
+      // the field, and text into it a piece at a time, as if typed. `open`
+      // pins the field without the keyboard: the landing pages search on
+      // the page itself, and a page must not take the focus from a visitor
+      // who is reading, or typing, somewhere else on it. What it costs is
+      // the caret; the recordings' epilogue, which has the page to itself,
+      // takes the real focus for it.
       focus: () => field.focus(),
+      open: () => { if (focused) return; focused = true; scripted = true; opts.onPin(); },
       type: (text) => { field.value += text; changed(); },
     };
   };
@@ -384,6 +412,169 @@ const stackSearch = (() => {
   };
 
   return { attach: attach, follow: follow };
+})();
+
+// Resizing the demo windows by their edges, as on a Mac: the pointer within
+// four pixels of an edge, on either side of it, takes hold of that edge, and
+// a corner takes hold of two. The hit test runs on the stage rather than on
+// the windows, because half of the band is outside the window, over the
+// desktop or over whatever window is behind; and it walks the windows front
+// to back, so a band under another window's body is not reachable through
+// it, exactly as a real desktop has it. Mouse only, like moving them: on a
+// phone the edges are inside a page you are trying to scroll.
+//
+// `front` gives the windows front to back; `onGrab` is what taking hold of a
+// window means to the demo, which is bringing it forward. `pin` is shared
+// with moving: a window at explicit fractions of the stage, in place of the
+// insets it was laid out with and the margin it may have been centred by,
+// which would move it by that much the moment it is picked up or pulled.
+const windowResize = (() => {
+  const SLOP = 4;
+  const pin = (stage, win) => {
+    const bounds = stage.getBoundingClientRect();
+    const r = win.getBoundingClientRect();
+    const box = {
+      left: (r.left - bounds.left) / bounds.width,
+      top: (r.top - bounds.top) / bounds.height,
+      width: r.width / bounds.width,
+      height: r.height / bounds.height,
+    };
+    win.style.inset = 'auto';
+    win.style.marginInline = '0';
+    win.style.left = (box.left * 100) + '%';
+    win.style.top = (box.top * 100) + '%';
+    win.style.width = (box.width * 100) + '%';
+    win.style.height = (box.height * 100) + '%';
+    return box;
+  };
+  // The floor when a window names none of its own (styles.css, --min-w and
+  // --min-h): about a title bar and a few lines, in units of the model, so it
+  // is the same window at any screen size.
+  const MIN_W_U = 30;
+  const MIN_H_U = 20;
+  // The steps at which a window shows less, in the same units, each read from
+  // the window's own custom property and worn as a class: what a Mac app does
+  // when its window is dragged in, decided per app in the stylesheet.
+  const STEPS = [['narrow', '--narrow'], ['cramped', '--cramped'], ['short', '--short'], ['squat', '--squat']];
+  const units = (win, name, fallback) => {
+    const v = parseFloat(getComputedStyle(win).getPropertyValue(name));
+    return isNaN(v) ? fallback : v;
+  };
+  // The window's size in units, against its steps.
+  const dress = (win, wU, hU) => {
+    STEPS.forEach(([name, prop]) => {
+      const at = units(win, prop, NaN);
+      win.classList.toggle('is-' + name, (name === 'narrow' || name === 'cramped' ? wU : hU) < at);
+    });
+  };
+
+  const edgesAt = (front, x, y) => {
+    for (const win of front()) {
+      const r = win.getBoundingClientRect();
+      if (x < r.left - SLOP || x > r.right + SLOP || y < r.top - SLOP || y > r.bottom + SLOP) continue;
+      const edges = {
+        left: Math.abs(x - r.left) <= SLOP,
+        right: Math.abs(x - r.right) <= SLOP,
+        top: Math.abs(y - r.top) <= SLOP,
+        bottom: Math.abs(y - r.bottom) <= SLOP,
+      };
+      if (edges.left || edges.right || edges.top || edges.bottom) return { win: win, edges: edges };
+      // Over this window's body, which covers whatever is under it.
+      return null;
+    }
+    return null;
+  };
+  const cursorFor = (e) =>
+    (e.left && e.top) || (e.right && e.bottom) ? 'nwse'
+      : (e.right && e.top) || (e.left && e.bottom) ? 'nesw'
+        : e.left || e.right ? 'ew' : 'ns';
+
+  const attach = (opts) => {
+    const stage = opts.stage;
+    let grab = null;
+    // Not the overlay, the stack or the switcher: those are above the windows
+    // and have pointers of their own.
+    const ignore = (event) =>
+      event.pointerType !== 'mouse'
+      || !!event.target.closest('.demo-overlay, .demo-history, .demo-search, .demo-switcher');
+
+    const end = () => {
+      if (!grab) return;
+      if (stage.hasPointerCapture(grab.pointerId)) stage.releasePointerCapture(grab.pointerId);
+      grab = null;
+      delete stage.dataset.resize;
+    };
+
+    // In the capture phase, ahead of the title bar's own pointerdown: the top
+    // edge's band lies across the bar, and a press there is a resize.
+    stage.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || ignore(event)) return;
+      const hit = edgesAt(opts.front, event.clientX, event.clientY);
+      if (!hit) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try { stage.setPointerCapture(event.pointerId); } catch (e) { /* pointer gone */ }
+      const bounds = stage.getBoundingClientRect();
+      // The model's unit, as the stylesheet sets it on the stage:
+      // clamp(4px, 0.8182cqw, 7.2px) of the screen. Computed rather than
+      // read, because a custom property comes back from getComputedStyle as
+      // the clamp() it was written as, not as a length.
+      const screen = stage.closest('.demo-screen') || stage;
+      const u = Math.min(7.2, Math.max(4, 0.008182 * screen.getBoundingClientRect().width));
+      grab = {
+        win: hit.win,
+        edges: hit.edges,
+        pointerId: event.pointerId,
+        box: pin(stage, hit.win),
+        x: event.clientX,
+        y: event.clientY,
+        u: u,
+        minW: (units(hit.win, '--min-w', MIN_W_U) * u) / bounds.width,
+        minH: (units(hit.win, '--min-h', MIN_H_U) * u) / bounds.height,
+      };
+      stage.dataset.resize = cursorFor(hit.edges);
+      opts.onGrab(hit.win);
+    }, true);
+
+    stage.addEventListener('pointermove', (event) => {
+      if (!grab) {
+        // Hovering: the cursor says what a press here would take hold of.
+        const hit = ignore(event) ? null : edgesAt(opts.front, event.clientX, event.clientY);
+        if (hit) stage.dataset.resize = cursorFor(hit.edges);
+        else delete stage.dataset.resize;
+        return;
+      }
+      const bounds = stage.getBoundingClientRect();
+      const dx = (event.clientX - grab.x) / bounds.width;
+      const dy = (event.clientY - grab.y) / bounds.height;
+      let { left, top, width, height } = grab.box;
+      const e = grab.edges;
+      // An edge moves and the opposite one stays, so a window pulled by its
+      // left edge grows leftwards; the floor holds the still edge in place.
+      if (e.left) { const w = Math.max(grab.minW, width - dx); left += width - w; width = w; }
+      if (e.right) width = Math.max(grab.minW, width + dx);
+      if (e.top) {
+        let h = Math.max(grab.minH, height - dy);
+        let t = top + height - h;
+        // Upwards it stops at the top of the stage, as moving does: the
+        // underside of the menu bar.
+        if (t < 0) { h += t; t = 0; }
+        top = t; height = h;
+      }
+      if (e.bottom) height = Math.max(grab.minH, height + dy);
+      grab.win.style.left = (left * 100) + '%';
+      grab.win.style.top = (top * 100) + '%';
+      grab.win.style.width = (width * 100) + '%';
+      grab.win.style.height = (height * 100) + '%';
+      dress(grab.win, (width * bounds.width) / grab.u, (height * bounds.height) / grab.u);
+    });
+    stage.addEventListener('pointerleave', () => { if (!grab) delete stage.dataset.resize; });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
+      stage.addEventListener(type, end)
+    );
+  };
+
+  return { attach: attach, pin: pin };
 })();
 
 // Writing, in every window that is a document. While such a window is in
@@ -603,6 +794,7 @@ const stackSearch = (() => {
   const switcher = document.getElementById('switcher');
   const windows = document.querySelectorAll('.demo-window');
   if (!box || !out) return;
+  const demoEl = box.closest('.demo');
 
   // Named as the Mac names them in its menu bar: Zoom's process is zoom.us.
   const APPS = {
@@ -793,15 +985,27 @@ const stackSearch = (() => {
   ];
 
   // An epilogue for the recordings, off on the site: the stack and its search,
-  // narrated. The capture sets window.SUBTITLES_EPILOGUE to two lines, said
-  // before the podcast's last: the stack rises as ⌥ is said in the first, the
-  // field opens and a word goes in as ⌥F is said in the second, and both are
-  // let go under "none of it leaves the Mac", which then closes the loop as it
-  // always did. Without it the loop is the three scenes it always was; the
-  // scene bar has no fourth segment and ⌥ is the reader's.
+  // narrated. The capture sets window.SUBTITLES_EPILOGUE and two lines are
+  // said before the podcast's last: the stack rises as ⌥ is said in the first,
+  // the field opens and a word goes in as ⌥F is said in the second, and both
+  // are let go under "none of it leaves the Mac", which then closes the loop
+  // as it always did. Without it the loop is the three scenes it always was;
+  // the scene bar has no fourth segment and ⌥ is the reader's.
+  //
+  // `true` takes the lines from the page, translated with the rest of the
+  // demo's, and with them the word typed into the search: one the stack holds
+  // twice by then, in the call's second line and the notes' first, in that
+  // language. An array of two lines is the older contract and keeps its
+  // English word.
   const EPILOGUE = Array.isArray(window.SUBTITLES_EPILOGUE) && window.SUBTITLES_EPILOGUE.length === 2
     ? window.SUBTITLES_EPILOGUE.map(String)
-    : null;
+    : window.SUBTITLES_EPILOGUE === true
+      ? [
+        I18N('line.epilogue1', 'Missed a line? Hold ⌥ and every caption that closed stacks back up.'),
+        I18N('line.epilogue2', 'Press ⌥F and type: the stack narrows to the boxes that match.'),
+      ]
+      : null;
+  const EPILOGUE_QUERY = window.SUBTITLES_EPILOGUE === true ? I18N('epilogue.query', 'meeting') : 'meeting';
 
   front(SCENES[0].app);
   select(SCENES[0].app);
@@ -964,7 +1168,7 @@ const stackSearch = (() => {
       await saidYet('⌥F');
       search.focus();
       await step(600);
-      for (const ch of 'meeting') { search.type(ch); await step(150); }
+      for (const ch of EPILOGUE_QUERY) { search.type(ch); await step(150); }
     })());
     // Let go: the field empties and the stack fades under the line that
     // follows, the podcast's last.
@@ -993,21 +1197,22 @@ const stackSearch = (() => {
         // Against what is actually in front, not against what the last switch
         // meant to leave there: an interrupted one may have fronted its window
         // already, and this scene's may be it.
+        if (scene.app !== frontApp && (index === 0 || deliberate)) {
+          // Coming back round to the top, or somebody picked this scene. The
+          // switch runs on its own, with the captions starting after it lands,
+          // so the loop reads as beginning again rather than as a first line
+          // that started while the previous scene's window was still in front.
+          // Every other switch stays concurrent, below, because that is the
+          // point being made.
+          await switchTo(scene.app);
+        }
+        // The top of the loop, its switch landed and nothing said yet: where
+        // tools/make-video.py cuts a recording, one turn from here to here.
+        if (index === 0) demoEl.dispatchEvent(new CustomEvent('subtitles:loop', { bubbles: true }));
         if (scene.app !== frontApp) {
-          if (index === 0 || deliberate) {
-            // Coming back round to the top, or somebody picked this scene. The
-            // switch runs on its own, with the captions starting after it lands,
-            // so the loop reads as beginning again rather than as a first line
-            // that started while the previous scene's window was still in front.
-            // Every other switch stays concurrent, below, because that is the
-            // point being made.
-            await switchTo(scene.app);
-            await say(scene.lines[0], 0, slice);
-          } else {
-            // Deliberately concurrent: the caption keeps running straight
-            // through the app switch, which is the whole point being made.
-            await both(say(scene.lines[0], 0, slice), switchTo(scene.app));
-          }
+          // Deliberately concurrent: the caption keeps running straight
+          // through the app switch, which is the whole point being made.
+          await both(say(scene.lines[0], 0, slice), switchTo(scene.app));
         } else {
           await say(scene.lines[0], 0, slice);
         }
@@ -1140,25 +1345,15 @@ const stackSearch = (() => {
       try { handle.setPointerCapture(event.pointerId); } catch (e) { /* pointer gone */ }
 
       const bounds = stage.getBoundingClientRect();
-      const box2 = win.getBoundingClientRect();
+      const box2 = windowResize.pin(stage, win);
       windowGrab = {
         win: win,
         handle: handle,
         pointerId: event.pointerId,
-        width: box2.width / bounds.width,
-        height: box2.height / bounds.height,
-        x: (event.clientX - box2.left) / bounds.width,
-        y: (event.clientY - box2.top) / bounds.height,
+        x: (event.clientX - bounds.left) / bounds.width - box2.left,
+        y: (event.clientY - bounds.top) / bounds.height - box2.top,
       };
       win.classList.add('is-held');
-      win.style.inset = 'auto';
-      // The position below is absolute; a margin the window was centred with
-      // would move it by that much the moment it is picked up.
-      win.style.marginInline = '0';
-      win.style.width = (windowGrab.width * 100) + '%';
-      win.style.height = (windowGrab.height * 100) + '%';
-      win.style.left = ((box2.left - bounds.left) / bounds.width * 100) + '%';
-      win.style.top = ((box2.top - bounds.top) / bounds.height * 100) + '%';
       // Taking hold of a window raises it, which here means playing its scene.
       jumpTo(sceneOf(win.dataset.app), true);
     });
@@ -1176,6 +1371,18 @@ const stackSearch = (() => {
       handle.addEventListener(type, endWindowDrag)
     );
   });
+
+  // ── resizing the windows ──────────────────────────────────────────────────
+  // By any edge or corner, see windowResize. Front to back is the stack's
+  // order read backwards, and taking hold raises, as moving does.
+  if (stage) {
+    const byApp = (app) => [...windows].find((w) => w.dataset.app === app);
+    windowResize.attach({
+      stage: stage,
+      front: () => [...stack].reverse().map(byApp).filter(Boolean),
+      onGrab: (win) => jumpTo(sceneOf(win.dataset.app), true),
+    });
+  }
 
   // ── moving the caption box ────────────────────────────────────────────────
   //
@@ -1461,6 +1668,7 @@ const stackSearch = (() => {
     const nearFade = parked ? 0 : Math.min(em * NEAR_FADE_MAX, near, history.clientHeight / 2);
     history.style.setProperty('--fade', fade.toFixed(1) + 'px');
     history.style.setProperty('--near-fade', nearFade.toFixed(1) + 'px');
+    placeFade(history);
   };
 
   // Follows the wheel, not just the moment the stack is built: scrolling is

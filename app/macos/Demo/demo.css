@@ -182,7 +182,7 @@
     --meeting-bg: #16171d;
     --notes-bg: #17171a;
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
-    --controls-bg: rgb(9 9 12 / 0.94);
+    --controls-bg: rgb(36 36 45 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
     --menu-bg: rgb(44 44 50 / 0.9);
     --menu-accent: #3b7cf7;
@@ -200,8 +200,8 @@
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
-      radial-gradient(42% 58% at 26% 32%, rgb(112 108 255 / 0.44), transparent 66%),
-      radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
+      radial-gradient(52% 58% at 26% 32%, rgb(112 108 255 / 0.3), transparent 66%),
+      radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
     --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.6);
@@ -220,7 +220,7 @@
     --meeting-bg: #16171d;
     --notes-bg: #17171a;
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
-    --controls-bg: rgb(9 9 12 / 0.94);
+    --controls-bg: rgb(36 36 45 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
     --menu-bg: rgb(44 44 50 / 0.9);
     --menu-accent: #3b7cf7;
@@ -237,8 +237,8 @@
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
-      radial-gradient(42% 58% at 26% 32%, rgb(112 108 255 / 0.44), transparent 66%),
-      radial-gradient(38% 52% at 74% 28%, rgb(255 138 106 / 0.26), transparent 68%),
+      radial-gradient(52% 58% at 26% 32%, rgb(112 108 255 / 0.3), transparent 66%),
+      radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
     --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.6);
@@ -475,16 +475,17 @@
   right:  clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
   bottom: clamp(5.24904cqw, 4.2862cqw + 8.47301px, 5.65281cqw);   /* 10.5% ->  9.75% */
   left:   clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
-  /* Five per cent narrower than the insets alone give, taken evenly from both
-     sides so it keeps its centre. */
-  margin-inline: 1.85cqw;
+  /* Narrower than the insets alone give, taken evenly from both sides so it
+     keeps its centre: five per cent off, then five per cent off that (1.85cqw
+     a side, then 3.6), so about a tenth all told at the fan's width. */
+  margin-inline: 3.6cqw;
 }
 .win-notes {
   --z: 1;
   top:    clamp(5.7874cqw, 4.18267cqw + 14.1217px, 6.46036cqw);   /* 12%   -> 10.75% */
   right:  clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
   bottom: clamp(5.65281cqw, 13.397cqw - 48.0137px, 7.94086cqw);   /* 10.5% -> 14.75% */
-  left:   clamp(15cqw, 32.7692cqw - 110.169px, 20.25cqw);   /* 15%   -> 20.25% */
+  left:   clamp(15cqw, 53.0769cqw - 236.077px, 26.25cqw);   /* 15%   -> 26.25% */
 }
 .win-player {
   --z: 2;
@@ -494,6 +495,28 @@
   left:   clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
 }
 
+
+/* Resizing, see windowResize in script.js. Each window says, in units of the
+   model, how small it can be pulled and where it starts showing less, the way
+   the app it is drawn as does when its window is dragged in: --min-w and
+   --min-h are the floor; under --narrow and --cramped in width, --short and
+   --squat in height, the script puts the class of that name on the window and
+   the rules further down take something out. Set from what each has to show,
+   not shared: a call is four tiles and a bar, a note is three columns, and they
+   run out of room in different places. A window with none of these keeps the
+   script's own floor and shows everything at every size. */
+.win-meeting { --min-w: 30; --min-h: 24; --short: 30; }
+.win-notes, .app-notes { --min-w: 30; --min-h: 18; --narrow: 52; --cramped: 40; }
+.win-player  { --min-w: 28; --min-h: 20; --narrow: 48; --cramped: 36; --short: 30; --squat: 24; }
+
+/* The cursor while resizing by an edge: the stage says which, and for as long
+   as it does the cursor is that edge's over whatever the pointer happens to be
+   on, the window behind and the desktop included, since half of the band is
+   outside the window being pulled. */
+.demo-stage[data-resize="ew"], .demo-stage[data-resize="ew"] * { cursor: ew-resize !important; }
+.demo-stage[data-resize="ns"], .demo-stage[data-resize="ns"] * { cursor: ns-resize !important; }
+.demo-stage[data-resize="nwse"], .demo-stage[data-resize="nwse"] * { cursor: nwse-resize !important; }
+.demo-stage[data-resize="nesw"], .demo-stage[data-resize="nesw"] * { cursor: nesw-resize !important; }
 
 /* No z-index here any more. Lifting the front window on its own was what made
    the two behind fall back on markup order, and this rule would beat the --z on
@@ -673,6 +696,13 @@
   letter-spacing: -0.02em;
   line-height: 1.1;
   color: rgb(var(--ink) / 0.96);
+  /* One line, whatever the window's width: a show's name that wraps to four
+     lines in a narrow window reads as a broken layout, the way players show
+     it is as much as fits and an ellipsis. */
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pod-meta i {
   font-style: normal;
@@ -806,6 +836,18 @@
 @container (max-width: 430px) {
   .pod-list { display: none; }
 }
+/* And when the window itself is pulled in: narrow loses the library and the
+   rest of the show, cramped brings the artwork and the title down so the name
+   still reads on one or two lines; short loses the rest of the show, squat the
+   waveform too, and what is left is the head and the transport, which is the
+   least a player can be and still be one. */
+.win-player.is-narrow .pod-side,
+.win-player.is-narrow .pod-list { display: none; }
+.win-player.is-cramped .pod-art { width: calc(6 * var(--u)); }
+.win-player.is-cramped .pod-meta b { font-size: calc(1.7 * var(--u)); }
+.win-player.is-short .pod-list { display: none; }
+.win-player.is-short .pod-main { justify-content: flex-start; padding-block: calc(1.4 * var(--u)); gap: calc(1.4 * var(--u)); }
+.win-player.is-squat .pod-wave { display: none; }
 
 @container (max-width: 300px) {
   .pod-main { gap: calc(1.5 * var(--u)); }
@@ -960,6 +1002,15 @@
   color: rgb(var(--ink) / 0.6);
 }
 .tile.is-speaking em { color: rgb(var(--ink) / 0.9); }
+/* Pulled short, the names go and the faces come down a size, so four people
+   still fit in two rows rather than the names landing on the faces. On any
+   call drawn as a grid, the home page's and the landing pages' alike. */
+.demo-window.is-short .meet-grid .tile em { display: none; }
+.demo-window.is-short .meet-grid .face {
+  width: calc(2.9 * var(--u));
+  height: calc(2.9 * var(--u));
+  font-size: calc(0.95 * var(--u));
+}
 
 .meet-bar {
   flex: none;
@@ -1158,6 +1209,8 @@
   padding: 0.47em 0.73em;
   border-radius: 0.47em;
   background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: #fff;
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   /* Off the screen rather than off --u, which is the one thing in here that does
@@ -1337,6 +1390,8 @@
   padding: 0.47em 0.73em;
   border-radius: 0.47em;
   background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.65);
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   line-height: 1.34;
@@ -1356,17 +1411,33 @@
    away from the live box: then that edge hides newer boxes too, and the band
    says so without dimming what is being read. It is zero when parked, and a
    zero-length ramp at the very end of the gradient is the same as no ramp. */
-.demo-history.is-clipped {
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em),
-      #000 calc(100% - var(--near-fade, 0px)), transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade, 2.2em),
-      #000 calc(100% - var(--near-fade, 0px)), transparent);
+/* On each box, not on the stack, see placeFade in script.js: a mask on the
+   stack would take the boxes' backdrop away. The gradient is the stack's, the
+   far band at the far edge and the near band at the near one, shifted up by
+   the box's own position in the view so the boxes together draw one fade. */
+.demo-history.is-clipped .hist-line {
+  -webkit-mask-image: linear-gradient(to bottom,
+      transparent calc(0px - var(--y, 0px)),
+      #000 calc(var(--fade, 2.2em) - var(--y, 0px)),
+      #000 calc(var(--h, 100%) - var(--near-fade, 0px) - var(--y, 0px)),
+      transparent calc(var(--h, 100%) - var(--y, 0px)));
+  mask-image: linear-gradient(to bottom,
+      transparent calc(0px - var(--y, 0px)),
+      #000 calc(var(--fade, 2.2em) - var(--y, 0px)),
+      #000 calc(var(--h, 100%) - var(--near-fade, 0px) - var(--y, 0px)),
+      transparent calc(var(--h, 100%) - var(--y, 0px)));
 }
-.demo-history.is-below.is-clipped {
-  -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em),
-      #000 calc(100% - var(--near-fade, 0px)), transparent);
-  mask-image: linear-gradient(to top, transparent, #000 var(--fade, 2.2em),
-      #000 calc(100% - var(--near-fade, 0px)), transparent);
+.demo-history.is-below.is-clipped .hist-line {
+  -webkit-mask-image: linear-gradient(to bottom,
+      transparent calc(0px - var(--y, 0px)),
+      #000 calc(var(--near-fade, 0px) - var(--y, 0px)),
+      #000 calc(var(--h, 100%) - var(--fade, 2.2em) - var(--y, 0px)),
+      transparent calc(var(--h, 100%) - var(--y, 0px)));
+  mask-image: linear-gradient(to bottom,
+      transparent calc(0px - var(--y, 0px)),
+      #000 calc(var(--near-fade, 0px) - var(--y, 0px)),
+      #000 calc(var(--h, 100%) - var(--fade, 2.2em) - var(--y, 0px)),
+      transparent calc(var(--h, 100%) - var(--y, 0px)));
 }
 
 /* No room left on the chosen side. It stays built, so the next page shrinking
@@ -1410,6 +1481,8 @@
   border-radius: calc(var(--e) * 0.467);
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.65);
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   font-size: max(13px, var(--e) * 0.5);
@@ -1718,3 +1791,12 @@
 @container (max-width: 430px) {
   .nt-list { display: none; }
 }
+/* The same two steps when the window itself is pulled narrow, as Notes takes
+   them: the folders go first, then the list, and the toolbar sheds its tools
+   from the right so the search field is never the thing that gets cut. */
+.app-notes.is-narrow .nt-side { display: none; }
+.app-notes.is-narrow .nt-list { width: 36%; }
+.app-notes.is-narrow .nt-tools .g:nth-of-type(n + 7) { display: none; }
+.app-notes.is-cramped .nt-list { display: none; }
+.app-notes.is-cramped .nt-tools .nt-aa,
+.app-notes.is-cramped .nt-tools .g:nth-of-type(n + 5) { display: none; }

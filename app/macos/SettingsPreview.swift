@@ -37,6 +37,7 @@ struct PreviewStyle: Equatable {
     var fontSize: CGFloat = 30
     var maxLines = SubtitleView.defaultMaxLines
     var boxOpacity = SubtitleView.defaultBackgroundOpacity
+    var blur = Pill.backdropBlur
     var revealOpacity = SubtitleView.defaultMaskStrength
     var revealSize = SubtitleView.defaultMaskSize
     var revealEnabled = true
@@ -49,7 +50,7 @@ struct PreviewStyle: Equatable {
 
 /// Which control was last touched, so the box can explain that one.
 enum PreviewTopic {
-    case lines, background, reveal, keep, dimness, expiry
+    case lines, background, blur, reveal, keep, dimness, expiry
 }
 
 // MARK: - Palette
@@ -681,10 +682,10 @@ final class SettingsPreview: NSView {
     /// does rather than simply running out of room.
     private let scroll = HistoryScrollView()
     private let document = NSView()
-    /// Softens the edge with content beyond it. A mask on the clip view rather
-    /// than a gradient drawn over the top, for the reason `HistoryController`
-    /// gives: there is no colour to fade to over the picture behind.
-    private let fadeMask = CAGradientLayer()
+    /// The blur under the live box, sampling this window's own drawing — the
+    /// overlay's arrangement exactly, with the stage for a desktop. The stack's
+    /// boxes carry their own, told which way to look by their style.
+    private let boxBlur = BackdropBlurView(blending: .withinWindow)
     private var boundsObserver: NSObjectProtocol?
     /// Height of the whole stack and of the room it was last given, so a box
     /// closing under a reader who has scrolled back can be anchored against
@@ -842,10 +843,13 @@ final class SettingsPreview: NSView {
             self?.updateFade()
         }
 
-        // Below the live box, so a sentence growing to three lines rides over
-        // the stack rather than being hidden behind it.
+        // The stack below the live box, so a sentence growing to three lines
+        // rides over the stack rather than being hidden behind it; the blur
+        // under the box, told its shape by the box, as on the overlay.
+        box.backdrop = boxBlur
         stage.addSubview(scroll)
-        stage.addSubview(box, positioned: .above, relativeTo: scroll)
+        stage.addSubview(boxBlur)
+        stage.addSubview(box, positioned: .above, relativeTo: boxBlur)
         beginLine()
     }
 
@@ -927,7 +931,7 @@ final class SettingsPreview: NSView {
             // Not while settling: a control being given its value as the window
             // is built is not somebody touching it.
             if Date() > settledAt { stackUntil = focusUntil }
-        case .lines, .background, .reveal:
+        case .lines, .background, .blur, .reveal:
             break
         }
         // Immediately, not on the next tick: the sentence is the answer to a
@@ -950,6 +954,11 @@ final class SettingsPreview: NSView {
             return style.boxOpacity < 0.02
                 ? "No pill at all. Bare text over the picture, the way some players draw subtitles."
                 : "The pill behind the text is \(pct(style.boxOpacity)) solid."
+        case .blur:
+            let points = Int(style.blur.rounded())
+            return points == 0
+                ? "No blur. The picture shows through the pill exactly as it is."
+                : "The picture behind the pill is softened by \(points) point\(points == 1 ? "" : "s")."
         case .reveal:
             guard style.revealEnabled else {
                 return "The box stays solid under the pointer. Move it instead: hold ⇧ and drag."
@@ -1053,6 +1062,7 @@ final class SettingsPreview: NSView {
         box.fontSize = style.fontSize
         box.maxLines = style.maxLines
         box.backgroundOpacity = style.boxOpacity
+        boxBlur.radius = style.blur
         box.maskStrength = style.revealOpacity
         box.maskSize = style.revealSize
         box.committed = page
@@ -1064,6 +1074,9 @@ final class SettingsPreview: NSView {
         box.frame = NSRect(x: ((stage.bounds.width - size.width) / 2).rounded(),
                            y: bottom.rounded(),
                            width: size.width, height: size.height)
+        // The same frame as the box, so the shape the box hands it lands where
+        // the box draws it — the pill inside the ⇧ ring's margin.
+        boxBlur.frame = box.frame
 
         layoutStack(above: box.frame.maxY - SubtitleView.pad)
         syncStack()
@@ -1089,7 +1102,10 @@ final class SettingsPreview: NSView {
             // Stepped back from the live box exactly as the overlay steps it, so
             // dragging Background moves both and keeps the stack behind it.
             fill: style.boxOpacity * HistoryPillView.recession,
-            textOpacity: style.historyTextOpacity)
+            textOpacity: style.historyTextOpacity,
+            blur: style.blur,
+            // The stage is the boxes' desktop, and it is this window's own drawing.
+            backdrop: .withinWindow)
 
         let key = "\(visible.joined(separator: "\u{1}"))|\(pillStyle.fontSize)|\(pillStyle.maxLines)"
             + "|\(pillStyle.fill)|\(pillStyle.textOpacity)|\(ceiling)"
@@ -1198,7 +1214,7 @@ final class SettingsPreview: NSView {
         // fits. A fade with nothing behind it promises more and does not deliver.
         guard visible.height > 0, contentHeight > visible.height + 1,
               farHidden > 0.5 || nearHidden > 0.5 else {
-            if clip.layer?.mask != nil { clip.layer?.mask = nil }
+            for pill in pills { pill.wear(nil) }
             return
         }
 
@@ -1209,17 +1225,6 @@ final class SettingsPreview: NSView {
         let farStop = far / visible.height
         let nearStop = near / visible.height
 
-        // No implicit animation: this is recomputed on every scroll event, and
-        // CoreAnimation's default quarter-second interpolation would leave the
-        // fade lagging visibly behind the content.
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        // The mask lives in the clip view's own coordinates, whose origin *is*
-        // the scroll offset — so tracking `bounds` is what keeps it still while
-        // the content moves under it.
-        fadeMask.frame = visible
-        fadeMask.startPoint = CGPoint(x: 0.5, y: 0)
-        fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         let clear = NSColor.clear.cgColor
         let solid = NSColor.black.cgColor
         // Bottom to top. A band of zero is left out rather than written as a
@@ -1240,10 +1245,9 @@ final class SettingsPreview: NSView {
             colors.append(solid)
             locations.append(1)
         }
-        fadeMask.colors = colors
-        fadeMask.locations = locations
-        if clip.layer?.mask !== fadeMask { clip.layer?.mask = fadeMask }
-        CATransaction.commit()
+        // Worn by each box, as on the overlay — see StackFade.
+        let fade = StackFade(visible: visible, colors: colors, locations: locations)
+        for pill in pills { pill.wear(fade) }
     }
 
     // MARK: raising the stack
