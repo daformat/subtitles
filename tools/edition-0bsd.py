@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent.parent
 EXCLUDED = [
     "app/macos/Updater.swift",
     "app/macos/UpdateWindow.swift",
-    "app/macos/Dialog.swift",
+    "app/macos/Attention.swift",
     "app/macos/License.swift",
     "app/macos/LicenseStore.swift",
     "app/macos/LicenseVerifier.swift",

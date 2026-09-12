@@ -16,8 +16,8 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.6.4"
-BUILD="26"
+VERSION="1.6.5"
+BUILD="27"
 # [main-edition]
 # The updater's public key (PLAN.md §23). Its private half is in the login
 # Keychain of the machine that ran Sparkle's generate_keys, and is what

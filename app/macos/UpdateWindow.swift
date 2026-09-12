@@ -160,7 +160,7 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
                     ? "You have \(current). This one fixes something that matters. \(what), so the audio permission stays."
                     : "You have \(current). \(what), so the audio permission stays.")
             if let notes, !notes.isEmpty {
-                let box = Self.notesBox(notes)
+                let box = Dialog.textBox(Self.attributed(notes))
                 stack.addArrangedSubview(box)
                 stack.setCustomSpacing(16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
             }
@@ -229,55 +229,6 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
         detail = label
     }
 
-    /// The notes, set in the window's own type inside a soft box, scrolling
-    /// once they run past what a dialog should hold.
-    private static func notesBox(_ notes: ReleaseNotes) -> NSView {
-        let padH: CGFloat = 14, padV: CGFloat = 12, maxHeight: CGFloat = 220
-        let textWidth = width - padH * 2
-        let text = NSTextField(wrappingLabelWithString: "")
-        text.attributedStringValue = attributed(notes)
-        text.isSelectable = true
-        text.preferredMaxLayoutWidth = textWidth
-        // The cell's answer, not `fittingSize`: a wrapping label outside any
-        // constraint system reports its one-line width and a height to match.
-        let textHeight = text.cell!.cellSize(forBounds:
-            NSRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)).height
-        let full = ceil(textHeight + padV * 2)
-        let height = min(full, maxHeight)
-
-        let box = NSView()
-        box.translatesAutoresizingMaskIntoConstraints = false
-        box.wantsLayer = true
-        box.layer?.cornerRadius = 10
-        box.layer?.backgroundColor = Dialog.boxFill.cgColor
-
-        // The document is laid out by frame — a document view sized by
-        // constraints against its clip view is the one layout AppKit gets
-        // wrong most reliably — and flipped, so its top is the top. The scroll
-        // view itself is pinned to the box by constraints, because the box has
-        // no size until its own constraints run, and an autoresizing mask
-        // scaling from a zero frame stays zero.
-        let document = FlippedView(frame: NSRect(x: 0, y: 0, width: width, height: full))
-        text.frame = NSRect(x: padH, y: padV, width: textWidth, height: ceil(textHeight))
-        document.addSubview(text)
-        let scroll = NSScrollView()
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = full > maxHeight
-        scroll.autohidesScrollers = true
-        scroll.documentView = document
-        box.addSubview(scroll)
-        NSLayoutConstraint.activate([
-            box.widthAnchor.constraint(equalToConstant: width),
-            box.heightAnchor.constraint(equalToConstant: height),
-            scroll.topAnchor.constraint(equalTo: box.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: box.bottomAnchor),
-            scroll.leadingAnchor.constraint(equalTo: box.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: box.trailingAnchor),
-        ])
-        return box
-    }
-
     private static func attributed(_ notes: ReleaseNotes) -> NSAttributedString {
         let out = NSMutableAttributedString()
         if let heading = notes.heading {
@@ -314,9 +265,5 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
             }
         }
         return out
-    }
-
-    private final class FlippedView: NSView {
-        override var isFlipped: Bool { true }
     }
 }

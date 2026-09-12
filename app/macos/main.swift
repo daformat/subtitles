@@ -12,6 +12,7 @@
 // delivers all-zero audio with no error anywhere — PLAN.md §8b.
 
 import AppKit
+import NaturalLanguage
 import CaptionCore
 import CSubs
 // [main-edition]
@@ -226,6 +227,14 @@ nonisolated(unsafe) var useVAD =
 /// all, which meant it could not check whether the pair needed downloading, so
 /// picking a language whose pack was missing quietly produced nothing.
 nonisolated(unsafe) var lastDetectedLanguage: FluidLanguage?
+/// The language of the words on screen, read from the text itself, for as long
+/// as the multilingual checkpoint has not named one. Its tag arrives at the
+/// start of a sentence as the model hears one, not on the first words, so a
+/// session that begins mid-sentence goes untagged until the next full stop,
+/// and a translation turned on in that stretch would wait as long for a
+/// source. A guess, so the translator is told it is one, and the tag replaces
+/// it when it comes.
+nonisolated(unsafe) var guessedLanguage: FluidLanguage?
 nonisolated(unsafe) var translateTo: FluidLanguage?
 nonisolated(unsafe) var translationMode: TranslationMode = .hybrid
 /// Live translation, while a target is set. Typed `AnyObject?` because a global of
@@ -599,6 +608,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         onWords: { words in
             DispatchQueue.main.async {
                 guard generation == loadGeneration else { return }
+                guessLanguage(from: words)
                 renderer.setWords(words)
             }
         },
@@ -738,9 +748,33 @@ func applyLanguage(_ language: FluidLanguage) {
 var effectiveSource: Locale.Language? {
     guard currentVariant.isMultilingual else { return FluidLanguage.en.locale }
     guard currentLanguage == .auto else { return currentLanguage.locale }
-    // On auto, whatever was last heard. A guess, and marked as one below, but a
-    // guess is enough to ask whether the pair needs downloading, and nil is not.
-    return lastDetectedLanguage?.locale
+    // On auto, whatever was last heard, or read off the transcript until then.
+    // A guess, and marked as one below, but a guess is enough to ask whether
+    // the pair needs downloading, and nil is not.
+    return (lastDetectedLanguage ?? guessedLanguage)?.locale
+}
+
+/// Name the language from the transcript while the checkpoint has not: eight
+/// words are enough for NaturalLanguage to tell the sixteen apart, and the
+/// last forty are what it reads so a change of speaker is caught too.
+func guessLanguage(from words: [TimedWord]) {
+    guard lastDetectedLanguage == nil, currentVariant.isMultilingual, currentLanguage == .auto,
+          words.count >= 8 else { return }
+    let recognizer = NLLanguageRecognizer()
+    recognizer.languageConstraints = [
+        .english, .spanish, .french, .italian, .portuguese, .german, .dutch, .turkish,
+        .russian, .arabic, .hindi, .japanese, .korean, .vietnamese, .ukrainian, .simplifiedChinese,
+    ]
+    recognizer.processString(words.suffix(40).map(\.text).joined(separator: " "))
+    guard let best = recognizer.languageHypotheses(withMaximum: 1).max(by: { $0.value < $1.value }),
+          best.value >= 0.5,
+          let guess = FluidLanguage.matching(code: best.key.rawValue),
+          guess != guessedLanguage else { return }
+    guessedLanguage = guess
+    err("language from text: \(guess.displayName)")
+    if #available(macOS 15, *) {
+        MainActor.assumeIsolated { translation?.setSource(guess.locale) }
+    }
 }
 
 /// True when `effectiveSource` is a fact rather than a guess — see
@@ -792,6 +826,16 @@ func applyTranslation(_ target: FluidLanguage?) {
         translationBox = controller
         renderer.overlay?.prefersTranslation = true
         err("translating to \(target.displayName) · \(translationMode.displayName)")
+        // A fresh decode from here. The multilingual checkpoint latches its
+        // language tag for a decode session and the engine reports it once, so
+        // a translator built mid-utterance would otherwise hear no source until
+        // the recogniser next started over, at a fade or a switch of source,
+        // and the words until then would show untranslated. Same path as a
+        // switch of source: the transcript and the encoder context go, the next
+        // words start a fresh box, and the first of them carries the tag again.
+        renderer.overlay?.markPause()
+        renderer.discardLine()
+        if let fluid = fluidEngine { Task { await fluid.resetContext() } }
         Task { @MainActor in
             let state = await controller.prepare()
             if state == .unsupported {
@@ -1120,8 +1164,16 @@ if useOverlay {
     updater.start()
     if updater.started {
         menu.itemsUnderPause = { updater.menuItems() }
-        menu.decorateStatusButton = { button, glyph in updater.decorate(button, glyph: glyph) }
         updater.onPendingChange = { menu.updateHealthIndicator() }
+    }
+    // One red badge for whatever waits on the person: an update found, or a
+    // key to enter once the trial is over. Wired whether or not the updater
+    // started, since a build without a bundle still has a trial.
+    let attention = AttentionBadge()
+    menu.decorateStatusButton = { button, glyph in
+        attention.decorate(button, glyph: glyph,
+                           count: (updater.pendingVersion != nil ? 1 : 0)
+                               + (license.entitlement.allowsTranscription ? 0 : 1))
     }
     // [/main-edition]
     menu.onSelectVariant = { applyVariant($0) }
@@ -1131,13 +1183,6 @@ if useOverlay {
     menu.currentTranslationID = { translateTo?.rawValue }
     menu.onSelectTranslationMode = { applyTranslationMode($0) }
     menu.currentTranslationMode = { translationMode }
-    menu.speakerBreaksEnabled = { speakerBreaksEnabled }
-    menu.vadEnabled = { useVAD }
-    menu.onToggleVAD = {
-        useVAD.toggle()
-        UserDefaults.standard.set(useVAD, forKey: Defaults.useVAD)
-        applyVariant(currentVariant)   // detector is built with the engine
-    }
     menu.screenShareEnabled = { screenShareEnabled }
     menu.onToggleScreenShare = {
         screenShareEnabled.toggle()
@@ -1155,12 +1200,6 @@ if useOverlay {
         historyEnabled.toggle()
         controller.isHistoryEnabled = historyEnabled
         UserDefaults.standard.set(historyEnabled, forKey: Defaults.history)
-    }
-    menu.onToggleSpeakerBreaks = {
-        speakerBreaksEnabled.toggle()
-        UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
-        // Cheapest correct path: the tracker is built with the engine, so rebuild.
-        applyVariant(currentVariant)
     }
     menu.onFontSize = { size in
         fontSize = size

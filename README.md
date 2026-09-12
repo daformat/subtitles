@@ -106,8 +106,9 @@ against a local server; release.sh writes the real one, and
 **The trial and the key** (PLAN.md §24). The app works in full for seven days,
 counted from the first `engine ready` rather than the first launch, so the
 model download costs nothing. When the trial ends the app keeps running and
-stops transcribing: the icon dims as it does for Pause, the status line says
-why, and Resume opens the licence window instead. One item above Settings…
+stops transcribing: the icon dims as it does for Pause and wears the red badge
+an update does, the status line says why, and Resume opens the licence window
+instead. One item above Settings…
 reads **Trial: N days left**, **Enter License Key…** or **Licensed**, and opens
 that window: a field for the key, Activate, Buy a Key and Where Is My Key?, and
 every outcome shown in place. Activating sends the key and the product id to
@@ -205,16 +206,16 @@ files already fetched are kept, so switching back resumes rather than restarts.
 The overlay fades four seconds after the last *new* text, not after the audio goes
 quiet — so a backing track no longer pins a stale subtitle on screen.
 
-**Skip Non-Speech (VAD)** runs Silero ahead of the recogniser so music never
-reaches it — without this, a backing track fills the encoder's context and the
-first words after it are lost. Measured at ~0.01 RTF, and it identified a 12 s tone
-as non-speech to within one percent. On by default. The status line shows what
-fraction of the audio it considers speech.
+**Skip non-speech**, under Models in Settings, runs Silero ahead of the
+recogniser so music never reaches it — without this, a backing track fills the
+encoder's context and the first words after it are lost. Measured at ~0.01 RTF,
+and it identified a 12 s tone as non-speech to within one percent. On by
+default. The status line shows what fraction of the audio it considers speech.
 
-**New Box On Speaker Change** starts a fresh subtitle box when someone else starts
-talking, the same way a pause or end-of-utterance does. Off by default because it
-runs a second model (Sortformer) on the Neural Engine: measured RTF went from
-0.13–0.18 to 0.27–0.33 with it on.
+**New box on speaker change**, beside it, starts a fresh subtitle box when
+someone else starts talking, the same way a pause or end-of-utterance does. Off
+by default because it runs a second model (Sortformer) on the Neural Engine:
+measured RTF went from 0.13–0.18 to 0.27–0.33 with it on.
 `pkill -USR1 -f Subtitles.app` cycles them, which makes A/B comparison scriptable.
 `pkill -USR2 -f Subtitles.app` does the same for sources, cycling over whatever is
 audible right now.
@@ -409,5 +410,6 @@ variants you actually ship; this table is a summary, not advice.
 Only FluidAudio is compiled in, so it is the only one whose licence has to travel
 with the app: `build.sh` assembles `THIRD-PARTY-NOTICES.txt` into the bundle from
 the checkout itself — a copy kept here would go stale the next time the dependency
-is bumped — and **Acknowledgements…** in the menu opens it. The models are not
+is bumped — and the **Acknowledgements** button in the About window shows it.
+The models are not
 distributed with the app; your machine fetches them on first use.

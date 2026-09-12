@@ -7,7 +7,7 @@
 // version, the copyright — is a dozen lines to reproduce and is reproduced here.
 //
 // The demo lives in the welcome window, not here. This one is opened by somebody
-// checking a version number.
+// checking a version number, or after the changelog or the third-party notices.
 
 import AppKit
 
@@ -91,9 +91,20 @@ final class AboutWindow: NSObject, NSWindowDelegate {
             last = licence
         }
 
-        let credits = buildCredits()
+        let credits = Self.textView(Self.credits)
         stack.addArrangedSubview(credits)
         stack.setCustomSpacing(18, after: last)
+
+        // Under the app's own licence, which is where what changed and the
+        // licences of what it is built on belong; the copyright and signature
+        // stay at the foot.
+        let buttons = Self.buttons()
+        stack.addArrangedSubview(buttons)
+        stack.setCustomSpacing(12, after: credits)
+
+        let footer = Self.textView(Self.footer)
+        stack.addArrangedSubview(footer)
+        stack.setCustomSpacing(14, after: buttons)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: Self.width + Self.insetH * 2, height: 200),
@@ -131,7 +142,8 @@ final class AboutWindow: NSObject, NSWindowDelegate {
 
     // MARK: credits
 
-    private func buildCredits() -> NSView {
+    /// A text view sized to its content, with links drawn as plain text.
+    private static func textView(_ content: NSAttributedString) -> NSView {
         let text = NSTextView()
         text.translatesAutoresizingMaskIntoConstraints = false
         text.isEditable = false
@@ -139,7 +151,7 @@ final class AboutWindow: NSObject, NSWindowDelegate {
         text.drawsBackground = false
         text.textContainerInset = .zero
         text.textContainer?.lineFragmentPadding = 0
-        text.textContainer?.size = NSSize(width: Self.width, height: .greatestFiniteMagnitude)
+        text.textContainer?.size = NSSize(width: width, height: .greatestFiniteMagnitude)
         // Ordinary text rather than blue and underlined. A text view paints every
         // .link range with these, as temporary attributes applied over whatever
         // the string says — so this, and not the string, is where it is decided.
@@ -149,37 +161,57 @@ final class AboutWindow: NSObject, NSWindowDelegate {
             // The only thing left saying these are clickable.
             .cursor: NSCursor.pointingHand,
         ]
-        text.textStorage?.setAttributedString(Self.credits)
+        text.textStorage?.setAttributedString(content)
 
         text.layoutManager?.ensureLayout(for: text.textContainer!)
         let height = ceil(text.layoutManager?.usedRect(for: text.textContainer!).height ?? 0)
         NSLayoutConstraint.activate([
-            text.widthAnchor.constraint(equalToConstant: Self.width),
+            text.widthAnchor.constraint(equalToConstant: width),
             text.heightAnchor.constraint(equalToConstant: height),
         ])
         return text
     }
 
-    /// What the app is, its licence, and who made it.
-    private static var credits: NSAttributedString {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        paragraph.paragraphSpacing = 5
+    // MARK: buttons
 
-        // The last two lines each sit away from what precedes them rather than
-        // reading as more of it. `paragraphSpacingBefore` rather than the
-        // `paragraphSpacing` above, because that one belongs to the paragraph on
-        // the near side of the gap and these gaps are owned by the far side.
-        let footer = NSMutableParagraphStyle()
-        footer.setParagraphStyle(paragraph)
-        footer.paragraphSpacingBefore = 12
+    /// The site's changelog and the third-party notices, in the dialogs'
+    /// button. Neither takes an ellipsis: one opens a page, the other a
+    /// window that asks nothing.
+    private static func buttons() -> NSView {
+        var buttons = [Dialog.button("Changelog") {
+            NSWorkspace.shared.open(URL(string: "https://subtitles-live.com/changelog/")!)
+        }]
+        // Left out when the file is absent, rather than offered dead.
+        if AcknowledgementsWindow.noticesURL != nil {
+            buttons.append(Dialog.button("Acknowledgements") {
+                AcknowledgementsWindow.shared.show()
+            })
+        }
+        let row = NSStackView(views: buttons)
+        row.orientation = .horizontal
+        row.spacing = 8
+        return row
+    }
 
+    // MARK: text
+
+    /// Centred, with a little air between paragraphs.
+    private static var paragraph: NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        style.paragraphSpacing = 5
+        return style
+    }
+
+    /// Sets one block of the window's text, so both blocks are set the same way.
+    private struct Composer {
         let text = NSMutableAttributedString()
+
         func add(_ string: String, colour: NSColor? = nil, link: String? = nil,
-                 style: NSParagraphStyle? = nil, size: CGFloat = 11) {
+                 style: NSParagraphStyle = AboutWindow.paragraph, size: CGFloat = 11) {
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: size),
-                .paragraphStyle: style ?? paragraph,
+                .paragraphStyle: style,
             ]
             if let link { attributes[.link] = URL(string: link)! }
             if let colour { attributes[.foregroundColor] = colour }
@@ -215,31 +247,45 @@ final class AboutWindow: NSObject, NSWindowDelegate {
                               range: NSRange(location: 0, length: run.length))
             text.append(run)
         }
+    }
 
-        add("subtitles-live.com\n", link: "https://subtitles-live.com")
-        add("Live captions for whatever your Mac is playing.\u{2028}"
-            + "Nothing is recorded; no audio ever leaves the machine.\n",
-            colour: .labelColor)
+    /// What the app is, and its licence.
+    private static var credits: NSAttributedString {
+        let block = Composer()
+        block.add("subtitles-live.com\n", link: "https://subtitles-live.com")
+        block.add("Live captions for whatever your Mac is playing.\u{2028}"
+                  + "Nothing is recorded; no audio ever leaves the machine.\n",
+                  colour: .labelColor)
         // [main-edition]
-        add("FSL-1.1-ALv2", colour: .secondaryLabelColor)
+        block.add("FSL-1.1-ALv2", colour: .secondaryLabelColor)
         // [/main-edition]
         // [0bsd-edition]
-        // add("0BSD", colour: .secondaryLabelColor)
+        // block.add("0BSD", colour: .secondaryLabelColor)
         // [/0bsd-edition]
+        return block.text
+    }
 
-        add("\nCopyright © 2026 Mathieu Jouhet (CSS labs)",
-            colour: .secondaryLabelColor, style: footer, size: 10)
+    /// Who made it, at the very foot of the window: the same two marks these
+    /// links wear on hello-mat.com, so the pair reads as a signature rather
+    /// than as more of the app's own business.
+    private static var footer: NSAttributedString {
+        // The signature sits away from the copyright rather than reading as
+        // more of it. `paragraphSpacingBefore` rather than `paragraphSpacing`,
+        // because that one belongs to the paragraph on the near side of the gap
+        // and this gap is owned by the far side.
+        let signature = NSMutableParagraphStyle()
+        signature.setParagraphStyle(paragraph)
+        signature.paragraphSpacingBefore = 12
 
-        // Who made it, at the very foot of the window: the same two marks these
-        // links wear on hello-mat.com, so the pair reads as a signature rather
-        // than as more of the app's own business.
-        add("\n", style: footer)
-        addMark("LogoMat", height: 13, link: "https://hello-mat.com", style: footer)
-        add(" hello-mat.com", link: "https://hello-mat.com", style: footer)
-        add("   ", style: footer)
-        addMark("LogoTwitter", height: 11, link: "https://x.com/daformat", style: footer)
-        add(" @daformat", link: "https://x.com/daformat", style: footer)
-        return text
+        let block = Composer()
+        block.add("Copyright © 2026 Mathieu Jouhet (CSS labs)\n",
+                  colour: .secondaryLabelColor, size: 10)
+        block.addMark("LogoMat", height: 13, link: "https://hello-mat.com", style: signature)
+        block.add(" hello-mat.com", link: "https://hello-mat.com", style: signature)
+        block.add("   ", style: signature)
+        block.addMark("LogoTwitter", height: 11, link: "https://x.com/daformat", style: signature)
+        block.add(" @daformat", link: "https://x.com/daformat", style: signature)
+        return block.text
     }
 
     // MARK: bundle

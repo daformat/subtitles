@@ -4,6 +4,37 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.6.5 · 2026-09-12
+
+- The menu is shorter. **Skip non-speech** and **New box on speaker change**
+  live only in Settings now, under Models, where they already had switches:
+  each one reloads the engine, which is not a thing to flip from a menu while
+  watching. **Reset Overlay Position** sits in a group of its own, apart from
+  the toggles above it.
+- **Acknowledgements** is a button in the About window rather than a menu
+  item, beside a new **Changelog** button that opens the site's changelog. It
+  opens a window of the app's own instead of a text file in another app: the
+  third-party notices, reflowed into paragraphs and set in the app's type, in
+  a soft box that scrolls.
+- Translation starts as soon as it is turned on. It used to wait for the
+  recogniser to name the language it was hearing, which the multilingual model
+  does at the start of a sentence rather than on the first words, so captions
+  that began mid-sentence, or a target picked in that stretch, went
+  untranslated until the next full stop. The language is read off the
+  transcript itself until the model names one, and turning translation on or
+  changing its target starts the recogniser afresh, so the next words open a
+  new box in the new language instead of finishing the old one.
+<!-- [main-edition] -->
+- The trial ending puts the same red badge on the menu bar icon that a
+  waiting update does, so it is seen without opening the menu. The badge is
+  never dimmed: pausing fades the icon, and used to fade the badge with it.
+  An update and an ended trial at once show a 2.
+- The update window's release notes box shows in light mode now; its grey was
+  too faint to read as a well. It also takes its colour when drawn rather than
+  when the window is built, so a window open through a change of appearance
+  gets the right one.
+<!-- [/main-edition] -->
+
 ## 1.6.4 · 2026-09-12
 
 - The picture behind the boxes is blurred, six points of it. Dark text on a

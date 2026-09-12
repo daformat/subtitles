@@ -6,8 +6,11 @@
 // through to UserDefaults as it goes — there is no OK button, because the
 // overlay sitting in front of you is the preview.
 //
-// The on/off switches for these features stay in the menu, where they were and
-// where they are one click away. This window is for the dials behind them.
+// The on/off switches for the overlay's features stay in the menu, where they
+// are one click away; this window is for the dials behind them. The recogniser's
+// two switches, skipping non-speech and breaking on a speaker change, live only
+// here, under Models: each one reloads the engine, which is not a thing to flip
+// from a menu while watching.
 
 import AppKit
 
@@ -48,10 +51,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// The same state as the menu's "Recent Boxes On ⌥".
     var historyEnabled: () -> Bool = { true }
     var onToggleHistory: ((Bool) -> Void)?
-    /// The same state as the menu's "Skip Non-Speech (VAD)".
+    /// Whether non-speech is skipped before it reaches the recogniser. This
+    /// window is the only place that changes it.
     var vadEnabled: () -> Bool = { true }
     var onToggleVAD: ((Bool) -> Void)?
-    /// The same state as the menu's "New Box On Speaker Change".
+    /// Whether a speaker change starts a new box. Also changed only from here.
     var speakerBreaksEnabled: () -> Bool = { false }
     var onToggleSpeakerBreaks: ((Bool) -> Void)?
     /// Put every overlay setting back to its default. The window rebuilds itself
@@ -106,7 +110,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     private let revealSwitch = NSSwitch()
     private let historySwitch = NSSwitch()
-    /// Held so the menu changing them behind this window can be picked up.
+    /// Held because a switch's target is weak: without a strong reference the
+    /// row is gone by the time the switch is flipped, and nothing hears it.
     private var vadRow: ToggleRow?
     private var speakerRow: ToggleRow?
     /// The rows each switch governs, dimmed with it.
@@ -170,12 +175,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// changes both what is removable and what must be kept.
     func windowDidBecomeKey(_ notification: Notification) {
         // All of these can be changed from the menu while the window is open.
+        // The Models pane's switches cannot, so they are not re-read.
         revealSwitch.state = revealEnabled() ? .on : .off
         syncRevealEnabled()
         historySwitch.state = historyEnabled() ? .on : .off
         syncHistoryEnabled()
-        vadRow?.isOn = vadEnabled()
-        speakerRow?.isOn = speakerBreaksEnabled()
         preview?.apply(currentStyle())
         refreshCacheSize()
     }

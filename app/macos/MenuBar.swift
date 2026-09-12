@@ -153,16 +153,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var currentTranslationID: () -> String? = { nil }
     var onSelectTranslationMode: ((TranslationMode) -> Void)?
     var currentTranslationMode: () -> TranslationMode = { .hybrid }
-    var onToggleSpeakerBreaks: (() -> Void)?
-    var onToggleVAD: (() -> Void)?
-    var vadEnabled: () -> Bool = { true }
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
     var onToggleScreenShare: (() -> Void)?
     var screenShareEnabled: () -> Bool = { true }
     var onToggleHistory: (() -> Void)?
     var historyEnabled: () -> Bool = { true }
-    var speakerBreaksEnabled: () -> Bool = { false }
     var onFontSize: ((CGFloat) -> Void)?
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -200,7 +196,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             // A status item whose button has neither image nor title renders as
             // zero-width — i.e. invisible, with no error. Always keep a textual
             // fallback so the item cannot silently vanish.
-            if let image = Self.statusIcon() {
+            if let image = Self.icon {
                 button.image = image
             } else {
                 button.title = "CC"
@@ -210,6 +206,20 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         menu.delegate = self
         statusItem.menu = menu
+    }
+
+    private static let icon = statusIcon()
+    /// The same mark at half strength, for Pause. The image rather than the
+    /// button's alpha, because the button's alpha takes its badges down with
+    /// it, and a red badge at half strength on a paused icon reads as nothing
+    /// waiting, when a trial ending is exactly what paused it.
+    private static let dimmedIcon: NSImage? = icon.map { image in
+        let out = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.45)
+            return true
+        }
+        out.isTemplate = true
+        return out
     }
 
     /// The bundled caption-bubble mark, falling back to the SF Symbol.
@@ -242,7 +252,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// was carrying that signal anyway.
     private func refreshIcon() {
         guard let button = statusItem.button else { return }
-        button.alphaValue = isPaused() ? 0.45 : 1.0
+        if let icon = Self.icon, let dimmed = Self.dimmedIcon {
+            // Swapping the image, not fading the button: see `dimmedIcon`.
+            let wanted = isPaused() ? dimmed : icon
+            if button.image !== wanted { button.image = wanted }
+        } else {
+            // The text fallback has no dimmed twin, so the button fades instead.
+            button.alphaValue = isPaused() ? 0.45 : 1.0
+        }
         // Tooltip deliberately not touched here: `updateHealthIndicator` sets it
         // on every branch, and two owners meant it depended on call order.
     }
@@ -442,20 +459,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(textSizeMenuItem())
 
-        let vad = NSMenuItem(title: "Skip Non-Speech (VAD)",
-                             action: #selector(toggleVAD), keyEquivalent: "")
-        vad.target = self
-        vad.state = vadEnabled() ? .on : .off
-        vad.toolTip = "Stops music reaching the recogniser"
-        menu.addItem(vad)
-
-        let speakers = NSMenuItem(title: "New Box On Speaker Change",
-                                  action: #selector(toggleSpeakerBreaks), keyEquivalent: "")
-        speakers.target = self
-        speakers.state = speakerBreaksEnabled() ? .on : .off
-        speakers.toolTip = "Runs a second model on the Neural Engine"
-        menu.addItem(speakers)
-
         let share = NSMenuItem(title: "Show Overlay In Screen Share / Capture",
                                action: #selector(toggleScreenShare), keyEquivalent: "")
         share.target = self
@@ -476,6 +479,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         history.toolTip = "Hold ⌥ to stack the last few boxes back up; scroll for older"
         menu.addItem(history)
 
+        // An action among checkmarks, set apart from them.
+        menu.addItem(.separator())
         let reset = NSMenuItem(title: "Reset Overlay Position",
                                action: #selector(resetPosition), keyEquivalent: "")
         reset.target = self
@@ -488,7 +493,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(welcomeMenuItem())
         menu.addItem(aboutMenuItem())
-        menu.addItem(acknowledgementsMenuItem())
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: "Quit Subtitles", action: #selector(quit), keyEquivalent: "q")
@@ -829,34 +833,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// The window lives in About.swift: it carries a webview showing the
-    /// site's demo, which the standard About panel has nowhere to put.
+    /// The window lives in About.swift: the version, the credits, and the
+    /// buttons for the changelog and the acknowledgements, which the standard
+    /// About panel has nowhere to put.
     @objc private func showAbout() { AboutWindow.shared.show() }
-
-    /// Opens the notices file `build.sh` puts in the bundle.
-    ///
-    /// Apache-2.0 is satisfied by the file being *in* the bundle; this only makes
-    /// it findable, which is worth one menu item and no window. Hidden when the
-    /// file is absent rather than offering a dead item — a dev build run straight
-    /// from `.build` has no bundle around it.
-    private func acknowledgementsMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Acknowledgements…",
-                              action: #selector(openAcknowledgements), keyEquivalent: "")
-        item.target = self
-        item.isHidden = Self.noticesURL == nil
-        return item
-    }
-
-    private static var noticesURL: URL? {
-        guard let url = Bundle.main.url(forResource: "THIRD-PARTY-NOTICES",
-                                        withExtension: "txt") else { return nil }
-        return url
-    }
-
-    @objc private func openAcknowledgements() {
-        guard let url = Self.noticesURL else { return }
-        NSWorkspace.shared.open(url)
-    }
 
     @objc private func openPrivacySettings() {
         // No documented anchor for the audio-recording pane specifically, so open
@@ -869,10 +849,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: actions
 
     @objc private func togglePause() { onTogglePause?() }
-    @objc private func toggleVAD() { onToggleVAD?() }
     @objc private func toggleReveal() { onToggleReveal?() }
     @objc private func toggleHistory() { onToggleHistory?() }
-    @objc private func toggleSpeakerBreaks() { onToggleSpeakerBreaks?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }
 }

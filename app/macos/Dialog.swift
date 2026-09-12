@@ -1,11 +1,12 @@
 // The parts the app's dialogs are built from.
 //
-// The update window and the licence window are the same kind of thing — one
-// window in the About window's style whose states swap inside it — and these
-// are the pieces they share: the icon at the top, the two label styles, a
-// button that carries its action as a closure, a progress bar. Kept here so
-// the two windows cannot drift apart by a point, and so each harness under
-// tools/ compiles one file for them rather than the other window.
+// The update window, the licence window and the acknowledgements window are
+// the same kind of thing — one window in the About window's style whose
+// states swap inside it — and these are the pieces they share: the icon at
+// the top, the two label styles, a button that carries its action as a
+// closure, a box of text, a progress bar. Kept here so the windows cannot
+// drift apart by a point, and so each harness under tools/ compiles one file
+// for them rather than another window.
 
 import AppKit
 
@@ -126,6 +127,77 @@ enum Dialog {
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
     }
 
+    /// Text in the window's own type inside a soft box, scrolling once it
+    /// runs past `maxHeight`.
+    static func textBox(_ content: NSAttributedString, maxHeight: CGFloat = 220) -> NSView {
+        let padH: CGFloat = 14, padV: CGFloat = 12
+        let textWidth = width - padH * 2
+        let text = NSTextField(wrappingLabelWithString: "")
+        text.attributedStringValue = content
+        text.isSelectable = true
+        text.preferredMaxLayoutWidth = textWidth
+        // The cell's answer, not `fittingSize`: a wrapping label outside any
+        // constraint system reports its one-line width and a height to match.
+        let textHeight = text.cell!.cellSize(forBounds:
+            NSRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)).height
+        let full = ceil(textHeight + padV * 2)
+        let height = min(full, maxHeight)
+
+        let box = BoxView()
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.wantsLayer = true
+        box.layer?.cornerRadius = 10
+
+        // The document is laid out by frame — a document view sized by
+        // constraints against its clip view is the one layout AppKit gets
+        // wrong most reliably — and flipped, so its top is the top. The scroll
+        // view itself is pinned to the box by constraints, because the box has
+        // no size until its own constraints run, and an autoresizing mask
+        // scaling from a zero frame stays zero.
+        let document = FlippedView(frame: NSRect(x: 0, y: 0, width: width, height: full))
+        text.frame = NSRect(x: padH, y: padV, width: textWidth, height: ceil(textHeight))
+        document.addSubview(text)
+        let scroll = NSScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = full > maxHeight
+        scroll.autohidesScrollers = true
+        scroll.documentView = document
+        box.addSubview(scroll)
+        NSLayoutConstraint.activate([
+            box.widthAnchor.constraint(equalToConstant: width),
+            box.heightAnchor.constraint(equalToConstant: height),
+            scroll.topAnchor.constraint(equalTo: box.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: box.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: box.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: box.trailingAnchor),
+        ])
+        return box
+    }
+
+    private final class FlippedView: NSView {
+        override var isFlipped: Bool { true }
+    }
+
+    /// The box, filled in `updateLayer` rather than once when built. A
+    /// dynamic colour's `cgColor` is resolved against whatever appearance is
+    /// current at the call, and at build time that is the app's, not the
+    /// window's: the harness sets a window dark after building it, and a
+    /// system that switches while a dialog is up does the same. AppKit calls
+    /// this under the view's own appearance, and again when it changes.
+    private final class BoxView: NSView {
+        override var wantsUpdateLayer: Bool { true }
+
+        override func updateLayer() {
+            layer?.backgroundColor = Dialog.boxFill.cgColor
+        }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            needsDisplay = true
+        }
+    }
+
     static func progressBar(indeterminate: Bool) -> NSProgressIndicator {
         let bar = NSProgressIndicator()
         bar.style = .bar
@@ -140,11 +212,12 @@ enum Dialog {
 
     /// The fill for a box inside a dialog. The system's quaternary fill is a
     /// shade too close to a dark window to read as a box; these are set by
-    /// eye against both.
+    /// eye against both, and the light one twice, since a first try at five
+    /// percent barely showed.
     static let boxFill = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? NSColor.white.withAlphaComponent(0.08)
-            : NSColor.black.withAlphaComponent(0.05)
+            : NSColor.black.withAlphaComponent(0.08)
     }
 
     final class ClosureButton: NSButton {
