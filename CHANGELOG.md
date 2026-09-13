@@ -41,9 +41,15 @@ and the DMG name show.
   It used to leave the blur whole under a box that had faded, which read as
   a frosted band where the stack was cut.
 - Re-vendored the site's demo for the welcome window, whose boxes name their
-  app the same way and whose first scene drops the app's menu. The settings
-  preview's call is a Google Meet call now, with the icon the site draws it
-  with.
+  app the same way and whose first scene drops the app's menu. Three things
+  in it are fixed on the way: the boxes' icons show, where the script had
+  named them by a path only a web server could resolve; the translation
+  scene no longer stops for good on the line that invites ⌃, which threw on
+  a flag the vendored script was missing; and in Safari's engine a window
+  no longer paints its content into the one in front of it for a few frames
+  after the scenes have been switched by hand, since each window renders to
+  a layer of its own. The settings preview's call is a Google Meet call now,
+  with the icon the site draws it with.
 
 ## 1.6.5 · 2026-09-12
 
