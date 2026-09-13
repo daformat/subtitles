@@ -75,7 +75,7 @@ const wearApp = (box, app) => {
   row.hidden = !app;
   if (!app) return;
   const img = row.querySelector('img');
-  const src = '/assets/apps/dock/' + app.icon + '.png';
+  const src = 'assets/apps/dock/' + app.icon + '.png';
   if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
   const name = row.querySelector('.ov-name');
   if (name && name.textContent !== app.name) name.textContent = app.name;
