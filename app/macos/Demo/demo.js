@@ -108,6 +108,24 @@ const newBox = (app) => {
 };
 const textOf = (el) => el.querySelector('.ov-text') || el;
 
+// The ⇧ ring on a live box, see .ov-ring in styles.css: one rounded rect
+// stroked twice, white dashes and black dashes a dash apart, so one tone or
+// the other shows against whatever the box sits over. Built here rather than
+// in the markup, since only script can hold ⇧.
+const ringFor = (box) => {
+  if (!box || box.querySelector('.ov-ring')) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'ov-ring');
+  svg.setAttribute('aria-hidden', 'true');
+  ['ring-white', 'ring-black'].forEach((tone) => {
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('class', tone);
+    svg.append(rect);
+  });
+  box.append(svg);
+};
+
 const stackSearch = (() => {
   const CALM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -839,6 +857,7 @@ const windowResize = (() => {
   const windows = document.querySelectorAll('.demo-window');
   if (!box || !out) return;
   const demoEl = box.closest('.demo');
+  ringFor(box);
 
   // Named as the Mac names them in its menu bar: Zoom's process is zoom.us.
   const APPS = {
@@ -1605,8 +1624,14 @@ const windowResize = (() => {
   };
 
   // Tabbing away with the key down would otherwise leave it armed forever.
-  const armBox = (on) => box.classList.toggle('is-movable', on);
-  window.addEventListener('keydown', (e) => { if (e.key === 'Shift') armBox(true); });
+  // ⇧ also takes the stack down while it is held, as the landing pages and
+  // the app do: the box is being picked up, and the stack is pinned to it.
+  const armBox = (on) => {
+    shiftKey = on;
+    box.classList.toggle('is-movable', on);
+    showHistory();
+  };
+  window.addEventListener('keydown', (e) => { if (e.key === 'Shift' && !e.repeat) armBox(true); });
   window.addEventListener('keyup', (e) => { if (e.key === 'Shift') armBox(false); });
   window.addEventListener('blur', () => armBox(false));
 
@@ -1675,6 +1700,7 @@ const windowResize = (() => {
   });
   const follow = history && stackSearch.follow(history, search);
   let altKey = false;
+  let shiftKey = false;
 
   // Closed pages, oldest first, at what was the app's `defaultHistoryDepth`
   // until 1.4.0, where the default became every box. The demo keeps the cap:
@@ -2030,11 +2056,12 @@ const windowResize = (() => {
     });
   };
 
-  // Up while ⌥ is held, or while the search has it pinned, when it stays up
-  // whatever the modifier keys are doing.
+  // Up while ⌥ is held, never alongside ⇧, which is the app's rule too, or
+  // while the search has it pinned, when it stays up whatever the modifier
+  // keys are doing.
   const showHistory = () => {
     if (!history || !stage) return;
-    const want = (altKey || search.pinned) && past.length > 0;
+    const want = ((altKey && !shiftKey) || search.pinned) && past.length > 0;
 
     if (want) {
       // A fresh press builds the stack from nothing, so every box rises. Only

@@ -1243,10 +1243,42 @@
 .demo-overlay.is-movable {
   pointer-events: auto;
   cursor: grab;
-  /* Just enough to say it can be picked up now. */
-  outline: 1px dashed rgba(255, 255, 255, 0.2);
-  outline-offset: 3px;
 }
+/* The ⇧ ring, as the app draws it (SubtitleView.draw): a 1pt dashed line
+   3.5pt outside the pill, tracing its corners, in two tones. White dashes of
+   3pt, and black dashes phase-shifted by one dash into the gaps the white
+   left, both at 0.75: the ring hangs over whatever is behind the box, and a
+   single colour loses to half of it, white vanishing against a white window
+   and black against a dark one. One colour or the other shows against
+   anything. An SVG rather than a dashed border, since a border's dash is the
+   browser's and cannot be phased; script.js puts the element on the box
+   (ringFor), and the rect takes its geometry from CSS so it follows the box
+   as it grows. Only while ⇧ is held, which is also when the mask is off. */
+.ov-ring {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  /* Sized outright: an svg is a replaced element, and inset alone leaves it
+     at its 300×150 default rather than stretching it to the box. */
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  display: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.demo-overlay.is-movable .ov-ring { display: block; }
+.ov-ring rect {
+  x: 0.5px;
+  y: 0.5px;
+  width: calc(100% - 1px);
+  height: calc(100% - 1px);
+  rx: calc(0.533em + 3.5px);
+  fill: none;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.ov-ring .ring-white { stroke: rgb(255 255 255 / 0.75); }
+.ov-ring .ring-black { stroke: rgb(0 0 0 / 0.75); stroke-dashoffset: 3; }
 .demo-overlay.is-dragging { cursor: grabbing; }
 
 /* Two ways the box goes solid, and both drop the mask rather than merely parking

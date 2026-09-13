@@ -39,6 +39,16 @@
      window it lands on the window's own material and reads as grime, so it is
      replaced with the hairline that frames it. */
   .demo-screen { box-shadow: none; }
+
+  /* Each window on a layer of its own. WebKit here paints the Notes document
+     into the Spotify window for a few frames at a time in the podcast scene,
+     under the waveform, once the scenes have been switched by hand: the notes
+     go on being written behind the player, their content is dimmed through a
+     filter, and the repaint of that filtered content lands on the window over
+     it, which shares the page's backing store. Filmed at 60 Hz, three such
+     stretches in a minute, none in Chrome. A window that renders to its own
+     layer cannot be painted into by another. */
+  .demo-window { will-change: transform; }
 </style>
 </head>
 <body>
