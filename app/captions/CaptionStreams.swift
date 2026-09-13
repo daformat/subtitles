@@ -39,6 +39,11 @@ public struct CaptionStreams {
         pager(stream).closed
     }
 
+    /// The same boxes, with the app each one belongs to.
+    public func boxes(_ stream: Stream) -> [StreamPager.Box] {
+        pager(stream).boxes
+    }
+
     public func currentWords(_ stream: Stream) -> [TimedWord] {
         pager(stream).currentWords
     }
@@ -89,10 +94,14 @@ public struct CaptionStreams {
     /// `fits` must measure the words as the box will draw them, dimmed tail
     /// included: a page overflows sooner with one than without, and measuring
     /// without it is what made the stack lag a clause behind the screen.
+    ///
+    /// `app` is the app playing as the words arrive; a box that closes is
+    /// tagged with the one its words came under — see `StreamPager.ingest`.
     public mutating func ingest(_ stream: Stream, words: [TimedWord],
                                 chunkStarts: [TimeInterval], depth: Int,
                                 allowCarry: Bool,
                                 speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
+                                app: String? = nil,
                                 fits: ([String]) -> Int) -> Page {
         let before = closed(stream).count
         let visible: [TimedWord]
@@ -100,11 +109,12 @@ public struct CaptionStreams {
         case .source:
             visible = sourcePager.ingest(words, chunkStarts: chunkStarts, depth: depth,
                                          allowCarry: allowCarry,
-                                         speculativeFrom: speculativeFrom, fits: fits)
+                                         speculativeFrom: speculativeFrom, app: app, fits: fits)
         case .translated:
             visible = translatedPager.ingest(words, chunkStarts: chunkStarts, depth: depth,
                                              allowCarry: allowCarry,
-                                             speculativeFrom: speculativeFrom, fits: fits)
+                                             speculativeFrom: speculativeFrom, app: app,
+                                             fits: fits)
         }
         return Page(visible: visible, brokePage: closed(stream).count != before)
     }

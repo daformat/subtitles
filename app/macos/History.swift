@@ -159,20 +159,23 @@ struct HistoryStyle: Equatable {
     /// whose backdrop is other apps' windows, and within it in the Settings
     /// preview, whose desktop is its own drawing. See BackdropBlur.swift.
     var backdrop: NSVisualEffectView.BlendingMode = .behindWindow
+    /// Where each box wears its app's icon — see `Pill.IconStyle`.
+    var iconStyle: Pill.IconStyle = .header
+    /// How the text sits in each box — see `Pill.TextAlignment`.
+    var textAlignment: Pill.TextAlignment = .start
 }
 
 /// The fade at the stack's clipped edge, as each box wears it.
 ///
 /// A mask rather than a gradient drawn over the top: the panel is transparent,
 /// so an overlaid gradient would have to fade to a colour that is not there,
-/// and would darken the desktop showing through instead of the boxes. And on
-/// each box's face rather than on the clip view over all of them: a mask on the
-/// clip takes the blur down with the fill, and the blur is meant to stay whole
-/// under a box that is fading out — the picture softened to the last pixel of
-/// the box, a frosted band where the stack is cut, which is how it read when
-/// the window server did the blurring and how it reads best. The site found
-/// the same: a mask on its stack left each box's backdrop-filter nothing to
-/// blur, so each box carries its own.
+/// and would darken the desktop showing through instead of the boxes. Worn by
+/// each box rather than by the clip view over all of them, so a box's own
+/// animations carry it. It takes the whole box down — fill, text and the blur
+/// under them together, the way the reveal's hole opens through all three —
+/// so what is left where the stack is cut is the picture as it is, not a
+/// frosted band with nothing on it. (Keeping the blur whole under a fading
+/// box was tried first, and read as exactly that band.)
 ///
 /// The clip's visible rect, in the document's coordinates, and the ramp across
 /// it; each box places the ramp where it sits in that rect.
@@ -183,6 +186,35 @@ struct StackFade {
 }
 
 // MARK: - One past box
+
+/// One box of the stack: its text, and the icon of the app whose audio it
+/// transcribed, when that is known.
+///
+/// Compared by the icon's identity rather than its pixels. The overlay asks on
+/// every poll whether the stack it wants is the one on screen, and the icons
+/// come from a cache that hands out one instance per app, so identity is exact
+/// and free; comparing bitmaps sixty times a second would be neither.
+struct HistoryEntry: Hashable {
+    let text: String
+    let icon: NSImage?
+    /// The app's name, for the styles that show it.
+    let name: String?
+
+    init(text: String, icon: NSImage? = nil, name: String? = nil) {
+        self.text = text
+        self.icon = icon
+        self.name = name
+    }
+
+    static func == (a: HistoryEntry, b: HistoryEntry) -> Bool {
+        a.text == b.text && a.icon === b.icon && a.name == b.name
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        if let icon { hasher.combine(ObjectIdentifier(icon)) }
+    }
+}
 
 final class HistoryPillView: NSView {
     /// How far the stack's text sits behind the live box's. Uniform across every
@@ -203,8 +235,24 @@ final class HistoryPillView: NSView {
     /// lands on when scanning down the stack for it.
     private static let highlight = NSColor(calibratedRed: 1, green: 0.8, blue: 0.2, alpha: 0.45)
 
-    private let text: String
+    private let entry: HistoryEntry
+    private var text: String { entry.text }
     private let style: HistoryStyle
+    /// What the icon takes around the pill.
+    private var room: Pill.IconRoom {
+        Self.room(entry, style: style)
+    }
+
+    private static func room(_ entry: HistoryEntry, style: HistoryStyle) -> Pill.IconRoom {
+        Pill.room(style.iconStyle, size: style.fontSize, icon: entry.icon != nil, name: entry.name)
+    }
+
+    /// The text's direction — see `SubtitleView.isRightToLeft`.
+    private var isRightToLeft: Bool { Pill.isRightToLeft(entry.text) }
+
+    private var squareCorners: Set<Pill.Corner> {
+        Pill.squareCorners(style: style.iconStyle, icon: entry.icon != nil, rtl: isRightToLeft)
+    }
     /// Where the search query occurs, in UTF-16 units of `text`.
     private let highlights: [NSRange]
     /// The picture under the pill, softened, and the pill drawn over it. Two
@@ -213,19 +261,20 @@ final class HistoryPillView: NSView {
     /// well to land on top of it.
     private let blur: BackdropBlurView
     private let face = PillFace()
-    /// The stack's fade, on the face alone — see StackFade.
+    /// The stack's fade, on this view's layer, over blur and face both — see
+    /// StackFade.
     private let fade = CAGradientLayer()
 
-    init(text: String, style: HistoryStyle, highlights: [NSRange] = []) {
-        self.text = text
+    init(entry: HistoryEntry, style: HistoryStyle, highlights: [NSRange] = []) {
+        self.entry = entry
         self.style = style
         self.highlights = highlights
         blur = BackdropBlurView(blending: style.backdrop)
         super.init(frame: .zero)
+        // A layer from the start, so the fade has one to mask the moment the
+        // stack is laid, not after the first scroll.
         wantsLayer = true
         face.drawing = { [unowned self] bounds in self.drawFace(in: bounds) }
-        // A layer of its own from the start, so the fade has one to mask the
-        // moment the stack is laid, not after the first scroll.
         face.wantsLayer = true
         addSubview(blur)
         addSubview(face)
@@ -239,8 +288,8 @@ final class HistoryPillView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        guard let stackFade, let layer = face.layer else {
-            if face.layer?.mask != nil { face.layer?.mask = nil }
+        guard let stackFade, let layer else {
+            if self.layer?.mask != nil { self.layer?.mask = nil }
             return
         }
         // The clip's rect brought into this box's coordinates, so the one ramp
@@ -260,7 +309,7 @@ final class HistoryPillView: NSView {
 
     private var attributed: NSAttributedString {
         let base = Pill.attributed(committed: text, tentative: "", size: style.fontSize,
-                                   opacity: style.textOpacity)
+                                   opacity: style.textOpacity, alignment: style.textAlignment)
         guard !highlights.isEmpty else { return base }
         let lit = NSMutableAttributedString(attributedString: base)
         for range in highlights {
@@ -273,14 +322,17 @@ final class HistoryPillView: NSView {
     /// Independent of any highlight: a background colour changes no glyph's
     /// advance, so a box measures the same lit or not, and the stack does not
     /// reflow as the query changes.
-    static func fittingSize(_ text: String, style: HistoryStyle, maxWidth: CGFloat) -> NSSize {
+    static func fittingSize(_ entry: HistoryEntry, style: HistoryStyle,
+                            maxWidth: CGFloat) -> NSSize {
         Pill.fittingSize(
-            Pill.attributed(committed: text, tentative: "", size: style.fontSize, centered: false),
-            size: style.fontSize, maxWidth: maxWidth, maxLines: style.maxLines, pad: 0)
+            Pill.attributed(committed: entry.text, tentative: "", size: style.fontSize,
+                            measuring: true),
+            size: style.fontSize, maxWidth: maxWidth, maxLines: style.maxLines, pad: 0,
+            room: room(entry, style: style))
     }
 
     func fittingSize(maxWidth: CGFloat) -> NSSize {
-        Self.fittingSize(text, style: style, maxWidth: maxWidth)
+        Self.fittingSize(entry, style: style, maxWidth: maxWidth)
     }
 
     override func layout() {
@@ -289,7 +341,15 @@ final class HistoryPillView: NSView {
         face.frame = bounds
         blur.radius = style.blur
         // No pill, no blur: at zero the setting says bare text over the picture.
-        blur.shape = style.fill > 0 ? .init(rect: bounds, corner: Pill.corner) : nil
+        // The pill only, not the icon's room around it.
+        let pill = Pill.pillRect(in: bounds, pad: 0, room: room)
+        let rtl = isRightToLeft
+        let tab: BackdropBlurView.Shape.Tab? = entry.icon != nil && style.iconStyle == .nameTab
+            ? .init(rect: Pill.tabRect(on: pill, name: entry.name, size: style.fontSize, rtl: rtl), rtl: rtl)
+            : nil
+        blur.shape = style.fill > 0
+            ? .init(rect: pill, corner: Pill.corner, square: squareCorners, tab: tab)
+            : nil
     }
 
     private func drawFace(in bounds: NSRect) {
@@ -297,9 +357,21 @@ final class HistoryPillView: NSView {
         // was tried and is wrong: a per-box ramp reads as each box fading on its
         // own, and it fights the one gradient that is meant to be doing that job
         // — the mask across the whole scroll view.
+        let pill = Pill.pillRect(in: bounds, pad: 0, room: room)
+        let rtl = isRightToLeft
         NSColor.black.withAlphaComponent(style.fill).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
-        attributed.draw(with: bounds.insetBy(dx: Pill.inset.width, dy: Pill.inset.height),
+        Pill.pillPath(pill, radius: Pill.corner, square: squareCorners).fill()
+        let scale = window?.backingScaleFactor ?? 2
+        if style.fill > 0 {
+            Pill.outline(pill: pill, style: style.iconStyle, icon: entry.icon != nil,
+                         name: entry.name, size: style.fontSize, rtl: rtl, scale: scale)
+        }
+        // At full strength, unlike the text — see `Pill.draw(icon:...)`.
+        if let icon = entry.icon {
+            Pill.draw(icon: icon, name: entry.name, style: style.iconStyle, on: pill,
+                      size: style.fontSize, fill: style.fill, rtl: rtl, scale: scale)
+        }
+        attributed.draw(with: Pill.textRect(in: pill, room: room),
                         options: [.usesLineFragmentOrigin, .usesFontLeading])
     }
 }
@@ -311,6 +383,12 @@ private final class PillFace: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         drawing?(bounds)
+    }
+
+    /// The hairline's colour follows the appearance.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
     }
 }
 
@@ -414,6 +492,11 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         face.drawing = { [unowned self] bounds in
             NSColor.black.withAlphaComponent(self.style.fill).setFill()
             NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
+            // One more box, so it wears the boxes' hairline.
+            if self.style.fill > 0 {
+                Pill.outline(pill: bounds, style: .off, icon: false, name: nil, size: 0,
+                             rtl: false, scale: self.window?.backingScaleFactor ?? 2)
+            }
         }
         addSubview(blur)
         addSubview(face)
@@ -696,12 +779,12 @@ final class HistoryController {
     /// last called with, before the search narrows it. Compared against on
     /// every poll so a page closing while ⌥ is still down animates itself in
     /// rather than waiting for the next press.
-    private(set) var shown: [String] = []
+    private(set) var shown: [HistoryEntry] = []
 
     /// The boxes actually in the document, oldest first: `shown` after the
     /// search has had its say. What the entrance animation compares against, so
     /// a box that was already up does not rise a second time.
-    private var laidOut: [String] = []
+    private var laidOut: [HistoryEntry] = []
 
     private var isVisible = false
     private var placedAbove = true
@@ -720,7 +803,7 @@ final class HistoryController {
     /// every page close while ⌥ is down, and on every keystroke in the search,
     /// that is a hitch. Nothing about a box's size changes between rebuilds
     /// unless the style or the ceiling does, so the answers are kept.
-    private var measured: [String: NSSize] = [:]
+    private var measured: [HistoryEntry: NSSize] = [:]
     private var measuredFor: (style: HistoryStyle, ceiling: CGFloat)?
 
     // ── search ──
@@ -886,7 +969,7 @@ final class HistoryController {
     /// changes parity on every word. Following the frame passed that on to the
     /// stack, which twitched sideways under the reader for the whole of an
     /// utterance.
-    func present(entries: [String], style: HistoryStyle, anchor: NSRect,
+    func present(entries: [HistoryEntry], style: HistoryStyle, anchor: NSRect,
                  centreX: CGFloat, maxWidth: CGFloat, animated: Bool = true) {
         guard !entries.isEmpty else { dismiss(); return }
         guard let screen = Self.screen(for: anchor) else { return }
@@ -961,11 +1044,11 @@ final class HistoryController {
         // narrowed as the query did would jitter under each keystroke, and the
         // search pill takes its width from the stack's.
         var width: CGFloat = 0
-        for text in shown { width = max(width, size(of: text).width) }
+        for entry in shown { width = max(width, size(of: entry).width) }
 
         let matching = query.isEmpty
             ? shown
-            : shown.filter { HistorySearch.matches($0, query: query) }
+            : shown.filter { HistorySearch.matches($0.text, query: query) }
         // Newest first: index 0 is the box nearest the live one, which is where
         // the eye goes and so where the animation starts.
         let ordered = Array(matching.reversed())
@@ -974,11 +1057,11 @@ final class HistoryController {
 
         var pills: [HistoryPillView] = []
         var sizes: [NSSize] = []
-        for text in ordered {
-            let pill = HistoryPillView(text: text, style: style,
-                                       highlights: HistorySearch.ranges(of: query, in: text))
+        for entry in ordered {
+            let pill = HistoryPillView(entry: entry, style: style,
+                                       highlights: HistorySearch.ranges(of: query, in: entry.text))
             pills.append(pill)
-            sizes.append(size(of: text))
+            sizes.append(size(of: entry))
         }
 
         stackWidth = width
@@ -1031,10 +1114,10 @@ final class HistoryController {
         return fits
     }
 
-    private func size(of text: String) -> NSSize {
-        if let known = measured[text] { return known }
-        let size = HistoryPillView.fittingSize(text, style: style, maxWidth: ceiling)
-        measured[text] = size
+    private func size(of entry: HistoryEntry) -> NSSize {
+        if let known = measured[entry] { return known }
+        let size = HistoryPillView.fittingSize(entry, style: style, maxWidth: ceiling)
+        measured[entry] = size
         return size
     }
 
@@ -1423,8 +1506,8 @@ final class HistoryController {
     /// `withSearch` is the stack opening: the search pill is the nearest thing
     /// to the live box, so it goes first and the boxes follow it. A page joining
     /// a stack already up leaves it where it is.
-    private func animateIn(_ pills: [HistoryPillView], ordered: [String],
-                           alreadyShowing: [String], above: Bool, withSearch: Bool) {
+    private func animateIn(_ pills: [HistoryPillView], ordered: [HistoryEntry],
+                           alreadyShowing: [HistoryEntry], above: Bool, withSearch: Bool) {
         let carried = Set(alreadyShowing)
         let now = CACurrentMediaTime()
         var step = 0

@@ -145,6 +145,9 @@ enum Defaults {
     static let speakerBreaks = "engine.speakerBreaks"
     static let useVAD = "engine.vad"
     static let screenShare = "overlay.screenShare"
+    /// See `Pill.IconStyle` and `Pill.TextAlignment`.
+    static let iconStyle = "overlay.iconStyle"
+    static let textAlignment = "overlay.textAlignment"
     static let translateTo = "translate.target"
     static let translateMode = "translate.mode"
 }
@@ -952,6 +955,15 @@ if useOverlay {
     controller.isRevealEnabled = revealEnabled
     var historyEnabled = UserDefaults.standard.object(forKey: Defaults.history) as? Bool ?? true
     controller.isHistoryEnabled = historyEnabled
+    // Where the source app's icon and name go, and how the text sits, both
+    // from the menu. A stored value the current build does not know — a style
+    // since dropped — falls back to the default.
+    var iconStyle = UserDefaults.standard.string(forKey: Defaults.iconStyle)
+        .flatMap(Pill.IconStyle.init(rawValue:)) ?? .header
+    controller.iconStyle = iconStyle
+    var textAlignment = UserDefaults.standard.string(forKey: Defaults.textAlignment)
+        .flatMap(Pill.TextAlignment.init(rawValue:)) ?? .start
+    controller.textAlignment = textAlignment
 
     // Dials behind those switches, all live-adjustable in the settings window.
     let defaultSize = SubtitleView.defaultMaskSize
@@ -1045,7 +1057,8 @@ if useOverlay {
                     Defaults.historyExpiry, Defaults.historyExpires,
                     Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
                     Defaults.revealOpacity,
-                    Defaults.revealWidth, Defaults.revealHeight] {
+                    Defaults.revealWidth, Defaults.revealHeight,
+                    Defaults.iconStyle, Defaults.textAlignment] {
             UserDefaults.standard.removeObject(forKey: key)
         }
 
@@ -1057,6 +1070,10 @@ if useOverlay {
         controller.isRevealEnabled = true
         historyEnabled = true
         controller.isHistoryEnabled = true
+        iconStyle = .header
+        controller.iconStyle = .header
+        textAlignment = .start
+        controller.textAlignment = .start
         controller.maxLines = SubtitleView.defaultMaxLines
         controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
         controller.backdropBlur = Pill.backdropBlur
@@ -1109,6 +1126,16 @@ if useOverlay {
         UserDefaults.standard.set(depth, forKey: Defaults.historyDepth)
     }
     renderer.overlay = controller
+
+    // Which app the boxes belong to: the live box wears its icon, and each box
+    // in the ⌥ stack the icon of the app it transcribed. See PlayingApp.swift.
+    let playingApp = PlayingAppMonitor()
+    playingApp.source = { tap.source }
+    playingApp.isPaused = { isPaused }
+    playingApp.onChange = { controller.playingApp = $0 }
+    playingApp.start()
+    settings.iconStyle = { iconStyle }
+    settings.textAlignment = { textAlignment }
 
     let menu = StatusMenuController()
     menu.isPaused = { isPaused }
@@ -1208,6 +1235,22 @@ if useOverlay {
     }
     menu.onSelectSource = { source in
         selectSource(source, overlay: controller)
+    }
+    menu.currentTextAlignment = { textAlignment }
+    menu.onSelectTextAlignment = { choice in
+        textAlignment = choice
+        controller.textAlignment = choice
+        settings.refreshPreview()
+        UserDefaults.standard.set(choice.rawValue, forKey: Defaults.textAlignment)
+        err("text alignment: \(choice.title)")
+    }
+    menu.currentIconStyle = { iconStyle }
+    menu.onSelectIconStyle = { style in
+        iconStyle = style
+        controller.iconStyle = style
+        settings.refreshPreview()
+        UserDefaults.standard.set(style.rawValue, forKey: Defaults.iconStyle)
+        err("app icon on boxes: \(style.title)")
     }
     // Speech has stopped even if audio has not. Drop the recogniser's context so
     // a backing track cannot swallow the first words of whoever speaks next.

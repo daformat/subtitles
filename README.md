@@ -88,7 +88,7 @@ The app lives in the menu bar (no Dock icon).
 | **Hold ⌥** | stack the last few boxes back up above the live one; scroll for older, or ⌥F and type to filter them — the stack then stays up until Escape |
 | **⌘,** | settings — from the menu bar |
 <!-- [main-edition] -->
-| Menu bar | model, source, text size, overlay position, permission state, updates |
+| Menu bar | model, source, text size and alignment, source app name, overlay position, permission state, updates |
 
 **Updates** come through the same menu, at the top under Pause. **Check for
 Updates…** asks subtitles-live.com for a newer version and installs it in place,
@@ -126,13 +126,22 @@ no flag to skip it — a copy built from source that should not ask is one line
 deleted in `License.swift`.
 <!-- [/main-edition] -->
 <!-- [0bsd-edition]
-| Menu bar | model, source, text size, overlay position, permission state |
+| Menu bar | model, source, text size and alignment, source app name, overlay position, permission state |
 [/0bsd-edition] -->
 
 The icon badges what the app is doing: **indigo** pulsing while listening, **blue**
 while a model downloads, **yellow** if the pipeline falls behind (RTF ≥ 0.8), and
 nothing at all when paused, where the icon dims instead. Deliberately never red —
 red means recording, and nothing is ever written anywhere.
+
+Every box names the app it is transcribing: a row above the caption with the
+app's icon and name, or a tab on the box's top edge, or nothing, under **Show
+Source App Name**. With one app chosen as the source that is the app; with all
+system audio it is whichever app Core Audio reports playing, held steady across
+notification sounds, and each box in the ⌥ stack keeps the app its words came
+from. Text starts from its script's edge, the left or, for Arabic and Hebrew,
+the right, because a line that grows from a fixed edge is easier to follow as
+the words arrive; **Text Size and Alignment** can centre it instead.
 
 **Settings** (⌘, from the menu) holds the dials the menu has no room for, in two
 panes:

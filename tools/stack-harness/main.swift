@@ -52,11 +52,11 @@ func capture(_ name: String) {
 let short = ["Short one.", "Tiny."]
 let wide = short + ["A much wider box than either of the two above it, arriving now."]
 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-    history.present(entries: short, style: style, anchor: anchor, centreX: centreX, maxWidth: 700, animated: false)
+    history.present(entries: short.map { HistoryEntry(text: $0) }, style: style, anchor: anchor, centreX: centreX, maxWidth: 700, animated: false)
 }
 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { capture("0-before") }
 DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
-    history.present(entries: wide, style: style, anchor: anchor, centreX: centreX, maxWidth: 700, animated: false)
+    history.present(entries: wide.map { HistoryEntry(text: $0) }, style: style, anchor: anchor, centreX: centreX, maxWidth: 700, animated: false)
 }
 for (i, delay) in [0.016, 0.04, 0.08, 0.5].enumerated() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.3 + delay) { capture("\(i + 1)-after-\(Int(delay * 1000))ms") }

@@ -13,10 +13,30 @@
 import Foundation
 
 public struct StreamPager {
+    /// A box that has left the screen.
+    public struct Box: Equatable {
+        public let text: String
+        /// The app whose audio it transcribed, as the tap names the family, or
+        /// nil when nothing was known to be playing. The stack wears its icon.
+        public let app: String?
+
+        public init(text: String, app: String? = nil) {
+            self.text = text
+            self.app = app
+        }
+    }
+
     private var anchor = PageAnchor()
 
     /// Boxes that have left the screen, oldest first.
-    public private(set) var closed: [String] = []
+    public private(set) var boxes: [Box] = []
+
+    /// The same boxes, as text.
+    public var closed: [String] { boxes.map(\.text) }
+
+    /// The app the page on screen belongs to: the one that was playing when its
+    /// words last arrived.
+    private var currentApp: String?
 
     public init() {}
 
@@ -35,7 +55,8 @@ public struct StreamPager {
 
     public mutating func clear() {
         anchor.reset()
-        closed.removeAll()
+        boxes.removeAll()
+        currentApp = nil
     }
 
     /// Keep at most `depth` boxes. A depth of zero or less keeps none.
@@ -46,31 +67,42 @@ public struct StreamPager {
     /// than there is and traps.
     public mutating func trim(to depth: Int) {
         let keep = max(depth, 0)
-        guard closed.count > keep else { return }
-        closed.removeFirst(closed.count - keep)
+        guard boxes.count > keep else { return }
+        boxes.removeFirst(boxes.count - keep)
     }
 
     /// Advance this stream and return the page to draw.
+    ///
+    /// `app` is the app playing as these words arrive. A box that closes here
+    /// is tagged with the app its words arrived *under*, not the one arriving
+    /// with the words that close it: after a fade the next words can come a
+    /// minute later from somewhere else, and the box they close was not theirs.
     @discardableResult
     public mutating func ingest(_ words: [TimedWord], chunkStarts: [TimeInterval],
                                 depth: Int, allowCarry: Bool,
                                 speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
+                                app: String? = nil,
                                 fits: ([String]) -> Int) -> [TimedWord] {
         let page = anchor.page(words, chunkStarts: chunkStarts, allowCarry: allowCarry,
                                speculativeFrom: speculativeFrom, fits: fits)
-        for box in page.closed { append(box, depth: depth) }
+        // Only the first box to close was on screen before this call; any
+        // after it are pages of the words arriving now.
+        for (index, box) in page.closed.enumerated() {
+            append(box, app: index == 0 ? currentApp ?? app : app, depth: depth)
+        }
+        currentApp = app
         return page.visible
     }
 
-    private mutating func append(_ words: [TimedWord], depth: Int) {
+    private mutating func append(_ words: [TimedWord], app: String?, depth: Int) {
         guard depth > 0 else { return }
         let text = words.map(\.text).joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // A page can close by more than one route in the same beat, an overflow
         // straight after a pause say, and two identical boxes in the stack read
         // as a stutter rather than as history.
-        guard !text.isEmpty, text != closed.last else { return }
-        closed.append(text)
+        guard !text.isEmpty, text != boxes.last?.text else { return }
+        boxes.append(Box(text: text, app: app))
         trim(to: depth)
     }
 }

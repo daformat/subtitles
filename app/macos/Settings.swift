@@ -34,6 +34,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var historyExpires: () -> Bool = { true }
     var onHistoryExpires: ((Bool) -> Void)?
     var maxLines: () -> Int = { SubtitleView.defaultMaxLines }
+    /// See `Pill.IconStyle`.
+    var iconStyle: () -> Pill.IconStyle = { .header }
+    /// See `Pill.TextAlignment`.
+    var textAlignment: () -> Pill.TextAlignment = { .start }
     var onMaxLines: ((Int) -> Void)?
     var boxOpacity: () -> CGFloat = { SubtitleView.defaultBackgroundOpacity }
     var onBoxOpacity: ((CGFloat) -> Void)?
@@ -1037,7 +1041,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             historyDepth: historyDepth(),
             historyTextOpacity: historyTextOpacity(),
             historyExpiry: historyExpiry(),
-            historyExpires: historyExpires())
+            historyExpires: historyExpires(),
+            iconStyle: iconStyle(),
+            textAlignment: textAlignment())
+    }
+
+    /// Something the menu changed: redraw the preview from the getters.
+    func refreshPreview() {
+        preview?.apply(currentStyle())
     }
 
     /// A control was touched: show what it did, and say what it does.

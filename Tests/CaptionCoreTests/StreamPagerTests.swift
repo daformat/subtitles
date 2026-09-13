@@ -83,6 +83,35 @@ final class StreamPagerTests: XCTestCase {
         XCTAssertEqual(seen, words.map(\.text))
     }
 
+    // MARK: the app a box belongs to
+
+    /// A box wears the app its words arrived under, not the app of the words
+    /// that close it: after a fade the next words can come from somewhere else.
+    func testAClosedBoxKeepsTheAppItsWordsArrivedUnder() {
+        let (words, starts) = stream(sample)
+        var pager = StreamPager()
+        pager.ingest(Array(words.prefix(4)), chunkStarts: starts, depth: 20,
+                     allowCarry: false, app: "zoom", fits: fits(6))
+        // Speech stopped, the box faded, and a minute later Chrome has the floor.
+        pager.markFresh()
+        pager.ingest(words, chunkStarts: starts, depth: 20,
+                     allowCarry: false, app: "chrome", fits: fits(6))
+        XCTAssertEqual(pager.boxes.map(\.app), ["zoom", "chrome"])
+        XCTAssertEqual(pager.closed, ["the cat sat down", "and then it slept until the"])
+    }
+
+    /// Before anything is known to be playing, the first words' app is taken.
+    func testAnUnknownAppIsFilledInByTheFirstKnownOne() {
+        let (words, starts) = stream(sample)
+        var pager = StreamPager()
+        pager.ingest(Array(words.prefix(4)), chunkStarts: starts, depth: 20,
+                     allowCarry: false, app: nil, fits: fits(6))
+        pager.markFresh()
+        pager.ingest(words, chunkStarts: starts, depth: 20,
+                     allowCarry: false, app: "chrome", fits: fits(6))
+        XCTAssertEqual(pager.boxes.first?.app, "chrome")
+    }
+
     func testDepthCapsTheStack() {
         let (words, starts) = stream(sample)
         var pager = StreamPager()

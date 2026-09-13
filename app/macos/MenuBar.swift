@@ -159,7 +159,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var screenShareEnabled: () -> Bool = { true }
     var onToggleHistory: (() -> Void)?
     var historyEnabled: () -> Bool = { true }
+    /// Where the playing app's icon goes on the boxes — see `Pill.IconStyle`.
+    var onSelectIconStyle: ((Pill.IconStyle) -> Void)?
+    var currentIconStyle: () -> Pill.IconStyle = { .header }
     var onFontSize: ((CGFloat) -> Void)?
+    /// How the text sits in the boxes — see `Pill.TextAlignment`.
+    var onSelectTextAlignment: ((Pill.TextAlignment) -> Void)?
+    var currentTextAlignment: () -> Pill.TextAlignment = { .start }
     var onResetPosition: (() -> Void)?
     var onQuit: (() -> Void)?
     /// Items from outside this file, in the two places they can go. Whatever
@@ -458,6 +464,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // to their availability.
         menu.addItem(.separator())
         menu.addItem(textSizeMenuItem())
+        menu.addItem(iconStyleMenuItem())
 
         let share = NSMenuItem(title: "Show Overlay In Screen Share / Capture",
                                action: #selector(toggleScreenShare), keyEquivalent: "")
@@ -764,7 +771,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func textSizeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Text Size", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: "Text Size and Alignment", action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentFontSize()
         for (label, size) in [("Small", CGFloat(22)), ("Medium", 30), ("Large", 40), ("Huge", 52)] {
@@ -774,8 +781,25 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             entry.state = abs(size - current) < 0.5 ? .on : .off
             sub.addItem(entry)
         }
+        // The alignment, in a group of its own under the sizes.
+        sub.addItem(.separator())
+        let alignment = currentTextAlignment()
+        for choice in Pill.TextAlignment.allCases {
+            let entry = NSMenuItem(title: choice.title, action: #selector(selectTextAlignment(_:)),
+                                   keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = choice.rawValue
+            entry.state = choice == alignment ? .on : .off
+            sub.addItem(entry)
+        }
         item.submenu = sub
         return item
+    }
+
+    @objc private func selectTextAlignment(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let choice = Pill.TextAlignment(rawValue: raw) else { return }
+        onSelectTextAlignment?(choice)
     }
 
     @objc private func toggleScreenShare() { onToggleScreenShare?() }
@@ -850,6 +874,30 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleReveal() { onToggleReveal?() }
+
+    // MARK: icon style
+
+    private func iconStyleMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Show Source App Name", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentIconStyle()
+        for style in Pill.IconStyle.allCases {
+            let entry = NSMenuItem(title: style.title, action: #selector(selectIconStyle(_:)),
+                                   keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = style.rawValue
+            entry.state = style == current ? .on : .off
+            sub.addItem(entry)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectIconStyle(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let style = Pill.IconStyle(rawValue: raw) else { return }
+        onSelectIconStyle?(style)
+    }
     @objc private func toggleHistory() { onToggleHistory?() }
     @objc private func resetPosition() { onResetPosition?() }
     @objc private func quit() { onQuit?() }

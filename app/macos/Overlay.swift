@@ -69,6 +69,52 @@ final class SubtitleView: NSView {
     var tentative = "" { didSet { needsDisplay = true } }
     var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
 
+    /// The icon of the app whose audio is on screen, or nil for text alone,
+    /// and the app's name for the styles that show it. Where it goes is
+    /// `iconStyle`; the box makes room for it — see Pill.
+    var icon: NSImage? {
+        didSet { if icon !== oldValue { needsDisplay = true } }
+    }
+    var appName: String? {
+        didSet { if appName != oldValue { needsDisplay = true } }
+    }
+    var iconStyle: Pill.IconStyle = .header {
+        didSet { if iconStyle != oldValue { needsDisplay = true } }
+    }
+
+    /// How the text sits in the box — see `Pill.TextAlignment`. Changes no
+    /// measurement: the box hugs its widest line either way.
+    var textAlignment: Pill.TextAlignment = .start {
+        didSet { if textAlignment != oldValue { needsDisplay = true } }
+    }
+
+    /// What the icon takes around the pill right now.
+    private var iconRoom: Pill.IconRoom {
+        Pill.room(iconStyle, size: fontSize, icon: icon != nil, name: appName)
+    }
+
+    /// The text's direction, from its first strong character: what natural
+    /// alignment lays it out by, and which edge the icon sits at.
+    private var isRightToLeft: Bool {
+        Pill.isRightToLeft(committed.isEmpty ? tentative : committed)
+    }
+
+    private var squareCorners: Set<Pill.Corner> {
+        Pill.squareCorners(style: iconStyle, icon: icon != nil, rtl: isRightToLeft)
+    }
+
+    /// The tab for the blur to cover, when there is one.
+    private func blurTab(on pill: NSRect, rtl: Bool) -> BackdropBlurView.Shape.Tab? {
+        guard icon != nil, iconStyle == .nameTab else { return nil }
+        return .init(rect: Pill.tabRect(on: pill, name: appName, size: fontSize, rtl: rtl), rtl: rtl)
+    }
+
+    /// The hairline's colour follows the appearance.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     /// Draws the dashed ring that says the box can be picked up right now. Set
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
@@ -152,8 +198,8 @@ final class SubtitleView: NSView {
     /// re-laying it out mid-gesture.
     static let pad: CGFloat = 4
 
-    /// The pill itself, inside that margin.
-    private var boxRect: NSRect { bounds.insetBy(dx: Self.pad, dy: Self.pad) }
+    /// The pill itself, inside that margin and the icon's room.
+    private var boxRect: NSRect { Pill.pillRect(in: bounds, pad: Self.pad, room: iconRoom) }
 
     /// Committed text at full strength, the in-flight tail dimmed.
     ///
@@ -162,14 +208,14 @@ final class SubtitleView: NSView {
     /// empty. It stays because it costs nothing and is what makes a revising
     /// engine survivable if the model is ever swapped.
     func attributed(committed: String, tentative: String,
-                    centered: Bool = true) -> NSAttributedString {
+                    measuring: Bool = false) -> NSAttributedString {
         Pill.attributed(committed: committed, tentative: tentative,
-                        size: fontSize, centered: centered)
+                        size: fontSize, measuring: measuring, alignment: textAlignment)
     }
 
     private func metrics(committed: String, tentative: String,
                          maxWidth: CGFloat) -> (used: NSSize, lines: Int) {
-        Pill.metrics(attributed(committed: committed, tentative: tentative, centered: false),
+        Pill.metrics(attributed(committed: committed, tentative: tentative, measuring: true),
                      textWidth: maxWidth - (inset.width + Self.pad) * 2)
     }
 
@@ -181,9 +227,9 @@ final class SubtitleView: NSView {
     ///
     /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
     func fittingSize(maxWidth: CGFloat) -> NSSize {
-        Pill.fittingSize(attributed(committed: committed, tentative: tentative, centered: false),
+        Pill.fittingSize(attributed(committed: committed, tentative: tentative, measuring: true),
                          size: fontSize, maxWidth: maxWidth,
-                         maxLines: maxLines, pad: Self.pad)
+                         maxLines: maxLines, pad: Self.pad, room: iconRoom)
     }
 
     /// A resize must repaint the whole box, not just the newly exposed strip.
@@ -270,9 +316,10 @@ final class SubtitleView: NSView {
             backdrop.shape = nil
             return
         }
+        let rtl = isRightToLeft
         backdrop.shape = .init(rect: boxRect, corner: corner, hole: maskCenter.map {
             .init(center: $0, size: maskSize, strength: maskStrength)
-        })
+        }, square: squareCorners, tab: blurTab(on: boxRect, rtl: rtl))
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -296,8 +343,15 @@ final class SubtitleView: NSView {
         }
 
         let box = boxRect
+        let rtl = isRightToLeft
         NSColor.black.withAlphaComponent(backgroundOpacity).setFill()
-        NSBezierPath(roundedRect: box, xRadius: corner, yRadius: corner).fill()
+        Pill.pillPath(box, radius: corner, square: squareCorners).fill()
+        // No pill, no outline: at zero the setting says bare text over the picture.
+        let scale = window?.backingScaleFactor ?? 2
+        if backgroundOpacity > 0 {
+            Pill.outline(pill: box, style: iconStyle, icon: icon != nil, name: appName,
+                         size: fontSize, rtl: rtl, scale: scale)
+        }
 
         if showsDragOutline {
             // Just enough to say it can be picked up now: a hairline dashed ring
@@ -315,9 +369,10 @@ final class SubtitleView: NSView {
             // contrast has to be carried in the ink itself: white dashes, black
             // dashes phase-shifted into the gaps between them, and whichever tone
             // the background happens to be, the other one shows against it.
-            let ring = NSBezierPath(
-                roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                xRadius: corner + Self.pad, yRadius: corner + Self.pad)
+            // Around the pill and its tab, not the panel: the icon's room is
+            // outside it, and a tab is part of the shape being picked up.
+            let ring = Pill.silhouette(pill: box, style: iconStyle, icon: icon != nil, name: appName,
+                                       size: fontSize, rtl: rtl, grow: Self.pad - 0.5)
             ring.lineWidth = 1
 
             let dash: [CGFloat] = [3, 3]
@@ -332,7 +387,13 @@ final class SubtitleView: NSView {
             ring.stroke()
         }
 
-        text.draw(with: box.insetBy(dx: inset.width, dy: inset.height),
+        // Inside the transparency layer with the rest, so the reveal opens
+        // through the icon as it does through the text.
+        if let icon {
+            Pill.draw(icon: icon, name: appName, style: iconStyle, on: box,
+                      size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale)
+        }
+        text.draw(with: Pill.textRect(in: box, room: iconRoom),
                   options: [.usesLineFragmentOrigin, .usesFontLeading])
     }
 }
@@ -435,6 +496,38 @@ final class OverlayController {
     var revealSize: NSSize {
         get { view.maskSize }
         set { view.maskSize = newValue }
+    }
+
+    /// The app whose audio is being transcribed, as the tap names its family,
+    /// or nil while nothing is known to be playing. Set from the poll in
+    /// PlayingApp.swift. The live box wears its icon, and every page that
+    /// closes under it is tagged with it, so the ⌥ stack shows a Zoom box over
+    /// a Chrome box when that is what happened.
+    var playingApp: String? {
+        didSet {
+            guard playingApp != oldValue else { return }
+            view.icon = playingApp.map { AppCatalog.shared.icon(for: $0) }
+            view.appName = playingApp.map { AppCatalog.shared.name(for: $0) }
+            // The box makes room for the icon, so whatever is on screen re-fits.
+            layout()
+        }
+    }
+
+    /// Where the icon goes, on the live box and the stack alike — see
+    /// `Pill.IconStyle`.
+    var iconStyle: Pill.IconStyle {
+        get { view.iconStyle }
+        set {
+            guard newValue != view.iconStyle else { return }
+            view.iconStyle = newValue
+            layout()
+        }
+    }
+
+    /// How the text sits in the boxes — see `Pill.TextAlignment`.
+    var textAlignment: Pill.TextAlignment {
+        get { view.textAlignment }
+        set { view.textAlignment = newValue }
     }
 
     /// The untranslated transcript, kept even while the translated one is on
@@ -587,9 +680,14 @@ final class OverlayController {
         Date().timeIntervalSince(lastTranslatedAt) >= translationPatience
     }
 
-    /// The stack for whichever language is on screen.
-    private var pastPages: [String] {
-        streams.closed(showingSourceLanguage ? .source : .translated)
+    /// The stack for whichever language is on screen, each box wearing the
+    /// icon of the app it came from.
+    private var pastPages: [HistoryEntry] {
+        streams.boxes(showingSourceLanguage ? .source : .translated).map { box in
+            HistoryEntry(text: box.text,
+                         icon: box.app.map { AppCatalog.shared.icon(for: $0) },
+                         name: box.app.map { AppCatalog.shared.name(for: $0) })
+        }
     }
 
     /// How many closed pages ⌥ can reach back through. Adjustable in Settings;
@@ -832,7 +930,9 @@ final class OverlayController {
                 maxLines: view.maxLines,
                 fill: view.backgroundOpacity * HistoryPillView.recession,
                 textOpacity: historyTextOpacity,
-                blur: backdropBlur)
+                blur: backdropBlur,
+                iconStyle: view.iconStyle,
+                textAlignment: view.textAlignment)
             history.present(entries: entries, style: style, anchor: panel.frame,
                             centreX: boxCentreX, maxWidth: maxWidth,
                             animated: !isSwappingLanguage)
@@ -979,7 +1079,7 @@ final class OverlayController {
         }
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
                                    depth: effectiveHistoryDepth, allowCarry: allowsCarry,
-                                   speculativeFrom: speculativeFrom) { texts in
+                                   speculativeFrom: speculativeFrom, app: playingApp) { texts in
             longestFittingPrefix(texts, from: 0)
         }
         if paged.brokePage { pageShownAt = Date() }

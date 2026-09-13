@@ -4,6 +4,43 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.7.0 · 2026-09-13
+
+- Every box says which app it is transcribing. A row inside the box carries
+  the app's icon and name above the caption, the way Live Captions heads its
+  box; **Show Source App Name** in the menu swaps it for a tab on the box's
+  top edge, or turns it off. With all system audio selected a box gave no
+  hint where its words came from, and the ⌥ stack could hold a call and a
+  video with nothing to tell them apart.
+- Each box in the ⌥ stack wears the app its words arrived under, not the app
+  of the words that closed it: a box that faded during a call stays the
+  call's when a video's first words open the next one. Icons in the stack
+  keep their full colour, since a dimmed icon reads as a disabled app rather
+  than an older box.
+- Under all system audio the app is worked out from what Core Audio reports
+  playing, and that is a noisy answer: browsers hold the audio device open
+  with a video paused, and a notification sound is an app playing for half a
+  second. So the choice is sticky, and nothing takes it over until it has
+  been playing for two polls running. With one app chosen as the source, it
+  is that app. Polled once a second, off the main thread.
+- Text starts from its script's leading edge rather than being centred: the
+  left for most languages, the right for Arabic and Hebrew, where the tab or
+  header sits on the right with it. The box fills a word at a time, and a
+  line that grows from a fixed edge is easier to follow than one re-centred
+  on every word. **Text Size and Alignment** in the menu offers **Center
+  Alignment** for the old look.
+- A hairline round every box, one pixel wide, the way the system edges its
+  own panels: a shade lighter than the box in dark mode, a shade darker in
+  light mode, where the picture behind is bright and a light rim read as a
+  glint rather than an edge.
+- Box corners are 16 points, from 14. The name tab shares that radius, sits
+  flush with the box's edge over a squared corner, flares into the top edge
+  through a concave foot, and is blurred with the box; the ⇧ ring traces box
+  and tab as one shape.
+- The ⌥ stack's fade at its clipped edges takes the blur down with each box.
+  It used to leave the blur whole under a box that had faded, which read as
+  a frosted band where the stack was cut.
+
 ## 1.6.5 · 2026-09-12
 
 - The menu is shorter. **Skip non-speech** and **New box on speaker change**

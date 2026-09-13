@@ -46,6 +46,10 @@ struct PreviewStyle: Equatable {
     var historyTextOpacity = HistoryPillView.defaultTextOpacity
     var historyExpiry = OverlayController.defaultHistoryExpiry
     var historyExpires = true
+    /// See `Pill.IconStyle`.
+    var iconStyle: Pill.IconStyle = .header
+    /// See `Pill.TextAlignment`.
+    var textAlignment: Pill.TextAlignment = .start
 }
 
 /// Which control was last touched, so the box can explain that one.
@@ -702,6 +706,16 @@ final class SettingsPreview: NSView {
 
     private var style = PreviewStyle()
 
+    /// The app the preview's captions belong to. The stage draws a call, and
+    /// FaceTime is the call app every Mac has, so its icon stands in for the
+    /// one the real boxes wear. Nil on a Mac without it: the boxes go without,
+    /// as the real ones do when nothing is known to be playing.
+    private static let callIcon: NSImage? = {
+        let path = "/System/Applications/FaceTime.app"
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        return NSWorkspace.shared.icon(forFile: path)
+    }()
+
     /// Gap between boxes in the stack, matching `HistoryController`.
     private static let gap: CGFloat = 6
     /// Air between the pill and the edges of the stage.
@@ -1061,6 +1075,10 @@ final class SettingsPreview: NSView {
     private func relayout() {
         box.fontSize = style.fontSize
         box.maxLines = style.maxLines
+        box.icon = Self.callIcon
+        box.appName = "FaceTime"
+        box.iconStyle = style.iconStyle
+        box.textAlignment = style.textAlignment
         box.backgroundOpacity = style.boxOpacity
         boxBlur.radius = style.blur
         box.maskStrength = style.revealOpacity
@@ -1105,10 +1123,13 @@ final class SettingsPreview: NSView {
             textOpacity: style.historyTextOpacity,
             blur: style.blur,
             // The stage is the boxes' desktop, and it is this window's own drawing.
-            backdrop: .withinWindow)
+            backdrop: .withinWindow,
+            iconStyle: style.iconStyle,
+            textAlignment: style.textAlignment)
 
         let key = "\(visible.joined(separator: "\u{1}"))|\(pillStyle.fontSize)|\(pillStyle.maxLines)"
-            + "|\(pillStyle.fill)|\(pillStyle.textOpacity)|\(ceiling)"
+            + "|\(pillStyle.fill)|\(pillStyle.textOpacity)|\(ceiling)|\(pillStyle.iconStyle)"
+            + "|\(pillStyle.textAlignment)"
         if key != pillKey {
             pillKey = key
             rebuild(visible, style: pillStyle)
@@ -1146,7 +1167,9 @@ final class SettingsPreview: NSView {
 
         var sizes: [NSSize] = []
         for text in visible {
-            let pill = HistoryPillView(text: text, style: pillStyle)
+            let pill = HistoryPillView(entry: HistoryEntry(text: text, icon: Self.callIcon,
+                                                           name: "FaceTime"),
+                                       style: pillStyle)
             sizes.append(pill.fittingSize(maxWidth: ceiling))
             pills.append(pill)
             laidOut.append(text)

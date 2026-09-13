@@ -37,6 +37,15 @@ final class BackdropBlurView: NSVisualEffectView {
         var rect: CGRect
         var corner: CGFloat
         var hole: Hole?
+        /// Corners left square — the one under a name tab. See `Pill.pillPath`.
+        var square: Set<Pill.Corner> = []
+        /// The name tab on the pill's top edge, blurred with it.
+        var tab: Tab?
+
+        struct Tab: Equatable {
+            var rect: CGRect
+            var rtl: Bool
+        }
 
         /// The reveal as SubtitleView draws it: an ellipse about the pointer,
         /// clear to `strength` for most of its radius and easing off at the rim.
@@ -168,9 +177,14 @@ final class BackdropBlurView: NSVisualEffectView {
             outline.mask = nil
             return
         }
-        let corner = min(shape.corner, shape.rect.width / 2, shape.rect.height / 2)
-        outline.path = CGPath(roundedRect: shape.rect, cornerWidth: corner, cornerHeight: corner,
-                              transform: nil)
+        let path = Pill.pillPath(shape.rect, radius: shape.corner, square: shape.square)
+        if let tab = shape.tab {
+            // Carried a few points down into the pill: two shapes that merely
+            // touch leave a seam of half-covered pixels where they meet.
+            path.append(Pill.tabPath(tab: tab.rect, pill: shape.rect, rtl: tab.rtl, offset: 0,
+                                     closed: true, baseDepth: 4))
+        }
+        outline.path = path.cgPath
 
         guard let cut = shape.hole, bounds.width > 0, bounds.height > 0 else {
             outline.mask = nil
