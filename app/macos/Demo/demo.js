@@ -13,6 +13,13 @@ const I18N = (() => {
   return (name, fallback) => map[name] || fallback;
 })();
 
+// Set by tools/make-video.py before any of this runs: the page is being
+// recorded, and a recording is one turn of a demo's loop. Each demo announces
+// the top of its loop with a `subtitles:loop` event on its own element, always,
+// so the recorder knows where to cut; under this flag the demos also start
+// every turn from nothing, so the turn recorded is the one a visitor sees first.
+const CAPTURE = window.SUBTITLES_CAPTURE === true;
+
 (function waveFit() {
   const wave = document.getElementById('pod-wave');
   if (!wave || !('ResizeObserver' in window)) return;
