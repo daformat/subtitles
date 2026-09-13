@@ -40,6 +40,10 @@ and the DMG name show.
 - The ⌥ stack's fade at its clipped edges takes the blur down with each box.
   It used to leave the blur whole under a box that had faded, which read as
   a frosted band where the stack was cut.
+- Re-vendored the site's demo for the welcome window, whose boxes name their
+  app the same way and whose first scene drops the app's menu. The settings
+  preview's call is a Google Meet call now, with the icon the site draws it
+  with.
 
 ## 1.6.5 · 2026-09-12
 

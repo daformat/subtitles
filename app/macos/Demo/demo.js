@@ -64,6 +64,43 @@ const placeFade = (history) => {
   lines.forEach((line, i) => line.style.setProperty('--y', ys[i].toFixed(1) + 'px'));
 };
 
+// The source app's row on a box, see .ov-app in styles.css: the icon of the
+// app whose audio the box holds and its name, as the app's header row draws
+// them since 1.7.0. `app` is {icon, name}, the icon a file in assets/apps/dock/
+// (the switcher's, as the Dock draws it), or null for a box with no known
+// source, when the row goes and the box is text alone, as the app's is.
+const wearApp = (box, app) => {
+  const row = box.querySelector('.ov-app');
+  if (!row) return;
+  row.hidden = !app;
+  if (!app) return;
+  const img = row.querySelector('img');
+  const src = '/assets/apps/dock/' + app.icon + '.png';
+  if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
+  const name = row.querySelector('.ov-name');
+  if (name && name.textContent !== app.name) name.textContent = app.name;
+};
+
+// A box for the ⌥ stack, wearing `app`: the row, and under it the text,
+// which is what the search writes into.
+const newBox = (app) => {
+  const el = document.createElement('div');
+  el.className = 'hist-line';
+  const row = document.createElement('span');
+  row.className = 'ov-app';
+  const img = document.createElement('img');
+  img.alt = '';
+  const name = document.createElement('span');
+  name.className = 'ov-name';
+  row.append(img, name);
+  const text = document.createElement('span');
+  text.className = 'ov-text';
+  el.append(row, text);
+  wearApp(el, app);
+  return el;
+};
+const textOf = (el) => el.querySelector('.ov-text') || el;
+
 const stackSearch = (() => {
   const CALM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -957,6 +994,19 @@ const windowResize = (() => {
     );
   };
 
+  // Which app the box names: the one making the sound, see playingApp, the
+  // way the app reads it off what Core Audio reports playing. The call's and
+  // the player's windows carry data-audio, naming their icon in
+  // assets/apps/dock/; the notes never do, so fronting them leaves the call's
+  // name on the box, and fronting the player hands it over.
+  const sourceOf = (app) => {
+    const w = [...windows].find((x) => x.dataset.app === app);
+    return w && w.dataset.audio
+      ? { icon: w.dataset.audio, name: I18N('app.' + app, APP_NAMES[app]) }
+      : null;
+  };
+  const playing = () => sourceOf(playingApp());
+
   // Three scenes: the call, whatever you switch to while it keeps playing, and
   // the podcast. The captions are what the audio is saying.
   const SCENES = [
@@ -1001,13 +1051,28 @@ const windowResize = (() => {
     ? window.SUBTITLES_EPILOGUE.map(String)
     : window.SUBTITLES_EPILOGUE === true
       ? [
-        I18N('line.epilogue1', 'Missed a line? Hold ⌥ and every caption that closed stacks back up.'),
+        I18N('line.epilogue1', 'Missed a line? Hold ⌥ to rewind: every caption that closed stacks back up.'),
         I18N('line.epilogue2', 'Press ⌥F and type: the stack narrows to the boxes that match.'),
       ]
       : null;
   const EPILOGUE_QUERY = window.SUBTITLES_EPILOGUE === true ? I18N('epilogue.query', 'meeting') : 'meeting';
+  // Translation, between the podcast's two lines, on the site as well as on
+  // film, as the translation pages show it: a first sentence in another
+  // language, shown as it was said; the status menu opening and picking
+  // Translate To and this page's language; a second sentence in that other
+  // language, shown in this one, with ⌃ giving back what was said. The other
+  // language is Spanish on the English page and English everywhere else, so
+  // what the visitor hears turn into their own is the one they most often
+  // have to follow.
+  const TRANSLATE = {
+    first: I18N('line.translate1', '¿Y cuando es en otro idioma?'),
+    source: I18N('line.translate2-src', 'La traducción se hace en tiempo real para ti: pulsa ⌃ para ver el original.'),
+    shown: I18N('line.translate2', 'The translation runs live for you: press ⌃ to reveal the original.'),
+  };
+  const LANG = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
 
   front(SCENES[0].app);
+  wearApp(box, playing());
   select(SCENES[0].app);
   if (glyph) glyph.classList.add('is-live');
 
@@ -1021,6 +1086,7 @@ const windowResize = (() => {
       (button, index) =>
         button.addEventListener('click', () => {
           front(SCENES[index].app);
+          wearApp(box, playing());
           out.textContent = SCENES[index].lines[0];
           document
             .querySelectorAll('.demo-scenes .scene-button')
@@ -1080,36 +1146,89 @@ const windowResize = (() => {
   // — because those are the only two moments the loop knows how long the next
   // stretch will take. The second starts from wherever the first actually got
   // to, so the jitter in the typing corrects itself rather than piling up.
-  async function say(line, from, to) {
+  // `source` is what was actually said when `line` is its translation. While
+  // the line is up, typing or held, ⌃ swaps the box to the source and back,
+  // as it does in the app and on the translation pages, since the line says
+  // it will: `cur` is the pair and the word reached, and drawLive draws it
+  // in whichever language the key asks for. ⌃ swaps in a sentence that is
+  // not the same length as the one being drawn, so progress carries across
+  // as a fraction of the line rather than a word index, and the source keeps
+  // arriving word by word instead of landing in one block. On the site the
+  // key is the visitor's to try; on film, where there is no hand, `ctrlBeat`
+  // presses it for a moment in the middle of the hold.
+  let cur = null;
+  let ctrlKey = false;
+  let ctrlBeat = false;
+  const drawLive = () => {
+    if (!cur) return;
+    const text = (ctrlKey || ctrlBeat) && cur.source ? cur.source : cur.line;
+    if (cur.i < 0) { out.textContent = text; live.textContent = ''; return; }
+    const words = text.split(' ');
+    let i = cur.i;
+    if (text !== cur.line) {
+      const of = cur.line.split(' ').length;
+      i = Math.min(Math.round((cur.i / of) * words.length), words.length - 1);
+    }
+    out.textContent = i ? words.slice(0, i).join(' ') + ' ' : '';
+    live.textContent = words[i];
+  };
+  window.addEventListener('keydown', (e) => { if (e.key === 'Control') { ctrlKey = true; drawLive(); } });
+  window.addEventListener('keyup', (e) => { if (e.key === 'Control') { ctrlKey = false; drawLive(); } });
+  window.addEventListener('blur', () => { ctrlKey = false; drawLive(); });
+
+  // `wears` is the app the line belongs to, when the scene knows better than
+  // the stack: the podcast's first line starts while its ⌘-tab is still
+  // landing, and its words are the podcast's, not the call's still playing
+  // under it. Without it the box wears whatever is making the sound.
+  async function say(line, from, to, source, wears) {
     const words = line.split(' ');
     const hold = holdFor(words.length);
     const typing = words.length * (WORD_MS + JITTER / 2);
     const typed = from + (to - from) * (typing / (typing + hold + GAP_MS));
 
-    out.textContent = '';
-    live.textContent = '';
+    // The box wears the app its words arrive under, and keeps it when it
+    // closes into the stack, whatever is playing by then.
+    const app = wears || playing();
+    cur = { line: line, source: source || null, i: 0 };
+    wearApp(box, app);
+    drawLive();
     box.classList.add('is-visible');
     progress(typed, typing);
 
-    for (let i = 0; i < words.length; i++) {
-      if (jump) throw JUMPED;
-      out.textContent = i ? words.slice(0, i).join(' ') + ' ' : '';
-      live.textContent = words[i];
-      // A comma or full stop gets a beat, the way speech does.
-      const punctuated = /[,.;:—]$/.test(words[i]);
-      await step(WORD_MS + Math.random() * JITTER + (punctuated ? 180 : 0));
+    try {
+      for (let i = 0; i < words.length; i++) {
+        if (jump) throw JUMPED;
+        cur.i = i;
+        drawLive();
+        // A comma or full stop gets a beat, the way speech does.
+        const punctuated = /[,.;:—]$/.test(words[i]);
+        await step(WORD_MS + Math.random() * JITTER + (punctuated ? 180 : 0));
+      }
+
+      // Everything commits once the utterance ends.
+      cur.i = -1;
+      drawLive();
+      progress(to, hold + GAP_MS);
+
+      if (source && CAPTURE) {
+        await step(hold * 0.45);
+        ctrlBeat = true;
+        drawLive();
+        await step(1400);
+        ctrlBeat = false;
+        drawLive();
+        await step(hold * 0.55);
+      } else {
+        await step(hold);
+      }
+    } finally {
+      cur = null;
+      ctrlBeat = false;
     }
-
-    // Everything commits once the utterance ends.
-    out.textContent = line;
-    live.textContent = '';
-    progress(to, hold + GAP_MS);
-
-    await step(hold);
     box.classList.remove('is-visible');
     // The page has closed. The app records it here too, at the fade, because
     // fading is precisely when somebody looked away and will want it back.
-    closePage(line);
+    closePage(line, app);
     await step(GAP_MS);
   }
 
@@ -1152,27 +1271,84 @@ const windowResize = (() => {
     search.unpin();
     showHistory();
   };
+
+  // The app's status menu, drawn on the page for the recordings only, and
+  // walked as the translation pages walk it: the panel opens, Translate To
+  // lights, the submenu hangs off it, the language lights, blinks as macOS
+  // blinks the item it is about to act on, and takes the check. No pointer
+  // is drawn; the highlight moving is the hand.
+  const menu = demoEl && demoEl.querySelector('.mn-root');
+  const submenu = menu && menu.querySelector('.mn-sub');
+  const closeMenu = () => {
+    if (!menu) return;
+    menu.classList.remove('is-open');
+    submenu.classList.remove('is-open');
+    menu.querySelectorAll('.is-hot').forEach((r) => r.classList.remove('is-hot'));
+  };
+  const setTranslation = (target) => {
+    if (!submenu) return;
+    submenu.querySelectorAll('.mn-row').forEach((r) => r.classList.toggle('is-on', r.dataset.id === target));
+    const timing = menu.querySelector('[data-id="timing"]');
+    if (timing) timing.classList.toggle('is-dim', target === 'off');
+  };
+  async function pickTranslation(target) {
+    const entry = menu && menu.querySelector('[data-id="translate"]');
+    const row = submenu && submenu.querySelector('[data-id="' + target + '"]');
+    if (!entry || !row) return;
+    menu.classList.add('is-open');
+    entry.classList.add('is-hot');
+    await step(500);
+    submenu.style.top = (entry.offsetTop - parseFloat(getComputedStyle(submenu).paddingTop)) + 'px';
+    submenu.classList.add('is-open');
+    await step(450);
+    row.classList.add('is-hot');
+    await step(650);
+    for (let k = 0; k < 2; k++) {
+      row.classList.remove('is-hot');
+      await step(70);
+      row.classList.add('is-hot');
+      await step(70);
+    }
+    setTranslation(target);
+    closeMenu();
+    await step(350);
+  }
   // Resolves once `text` has been typed into the live box, tentative word
   // included, so a move can land on the word that names it.
   const saidYet = async (text) => {
     while (!(out.textContent + live.textContent).includes(text)) await step(30);
   };
-  async function epilogue(at) {
-    if (!search) return;
-    await both(say(EPILOGUE[0], at, at), (async () => {
-      await saidYet('⌥');
-      altKey = true;
-      showHistory();
-    })());
-    await both(say(EPILOGUE[1], at, at), (async () => {
-      await saidYet('⌥F');
-      search.focus();
-      await step(600);
-      for (const ch of EPILOGUE_QUERY) { search.type(ch); await step(150); }
-    })());
-    // Let go: the field empties and the stack fades under the line that
-    // follows, the podcast's last.
-    endEpilogue();
+  // Between the podcast's two lines. The stack and its search only on film,
+  // with the bar holding where the first line left it; translation on the
+  // site as well, taking the first half of what the bar had left for the last
+  // line, which then takes the rest. Returns where the bar got to.
+  async function epilogue(from, to) {
+    if (EPILOGUE && search) {
+      await both(say(EPILOGUE[0], from, from), (async () => {
+        await saidYet('⌥');
+        altKey = true;
+        showHistory();
+      })());
+      await both(say(EPILOGUE[1], from, from), (async () => {
+        await saidYet('⌥F');
+        search.focus();
+        await step(600);
+        for (const ch of EPILOGUE_QUERY) { search.type(ch); await step(150); }
+      })());
+      // Let go: the field empties and the stack fades under the line that
+      // follows.
+      endEpilogue();
+    }
+    if (!menu) return from;
+    // Somebody speaks the other language and the box shows it as said;
+    // Translate To goes on; the next sentence arrives in this page's
+    // language, and ⌃ shows for a beat what was actually said.
+    const mid = from + (to - from) / 2;
+    const quarter = from + (to - from) / 4;
+    await say(TRANSLATE.first, from, quarter);
+    await pickTranslation(LANG);
+    await say(TRANSLATE.shown, quarter, mid, TRANSLATE.source);
+    return mid;
   }
 
   async function loop() {
@@ -1184,6 +1360,9 @@ const windowResize = (() => {
     for (;;) {
       const scene = SCENES[index];
       const slice = 1 / scene.lines.length;
+      // The scene's own app when it makes a sound, for the boxes to wear;
+      // the notes make none, and their lines are the call's.
+      const wears = sourceOf(scene.app);
       const deliberate = picked;
       picked = false;
 
@@ -1212,18 +1391,19 @@ const windowResize = (() => {
         if (scene.app !== frontApp) {
           // Deliberately concurrent: the caption keeps running straight
           // through the app switch, which is the whole point being made.
-          await both(say(scene.lines[0], 0, slice), switchTo(scene.app));
+          await both(say(scene.lines[0], 0, slice, null, wears), switchTo(scene.app));
         } else {
-          await say(scene.lines[0], 0, slice);
+          await say(scene.lines[0], 0, slice, null, wears);
         }
 
         for (let j = 1; j < scene.lines.length; j++) {
           // Before the last line of the last scene, so that line closes the
-          // loop with the stack fading under it.
-          if (EPILOGUE && index === SCENES.length - 1 && j === scene.lines.length - 1) {
-            await epilogue(j * slice);
+          // loop, with the stack fading under it on film.
+          let from = j * slice;
+          if (index === SCENES.length - 1 && j === scene.lines.length - 1) {
+            from = await epilogue(from, (j + 1) * slice);
           }
-          await say(scene.lines[j], j * slice, (j + 1) * slice);
+          await say(scene.lines[j], from, (j + 1) * slice, null, wears);
         }
 
         index = (index + 1) % SCENES.length;
@@ -1232,10 +1412,15 @@ const windowResize = (() => {
         // boxes start again from nothing each time round, or the search
         // would light the same line once per turn the page had run.
         if (EPILOGUE && index === 0) past.length = 0;
+        // Each turn switches translation on; the next starts with it off.
+        if (index === 0) setTranslation('off');
       } catch (error) {
         if (error !== JUMPED) throw error;
-        // A jump out of the epilogue leaves nothing raised behind it.
+        // A jump out of the epilogue leaves nothing raised behind it, no menu
+        // open, and translation off again.
         if (EPILOGUE) endEpilogue();
+        closeMenu();
+        setTranslation('off');
         // Somebody picked a scene. Drop whatever was mid-sentence and let the
         // next turn of the loop get there, which is also what makes a second
         // click during a switch work: it lands here again. A window click has
@@ -1511,11 +1696,13 @@ const windowResize = (() => {
   // Deduplicated against the last entry, as the app's own closePage is: a page
   // can close twice in a beat, and two identical boxes read as a stutter rather
   // than as history.
-  const closePage = (line) => {
+  const closePage = (line, app) => {
     const trimmed = line.trim();
     const last = past[past.length - 1];
     if (!trimmed || (last && trimmed === last.text)) return;
-    past.push({ id: ++pageId, text: trimmed });
+    // Each box wears the app its words arrived under, as the app's pager tags
+    // it, not the app of whatever is playing when it closes.
+    past.push({ id: ++pageId, text: trimmed, app: app || playing() });
     if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
     // A stack already up takes the box in. One that is not may be wanted
     // anyway: ⌥ pressed before anything had closed, and still held, which the
@@ -1784,8 +1971,7 @@ const windowResize = (() => {
     ordered.forEach((page, i) => {
       const here = history.children[i];
       if (here && here.dataset.pid === String(page.id)) return;
-      const el = document.createElement('div');
-      el.className = 'hist-line';
+      const el = newBox(page.app);
       el.dataset.pid = page.id;
       history.insertBefore(el, here || null);
       risen.push(el);
@@ -1801,7 +1987,7 @@ const windowResize = (() => {
     history.style.minWidth = '';
     kids.forEach((el) => {
       const page = pageOf(el);
-      if (page) search.write(el, page.text);
+      if (page) search.write(textOf(el), page.text);
       el.classList.remove('is-hidden');
     });
     history.style.minWidth = history.offsetWidth + 'px';

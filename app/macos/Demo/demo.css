@@ -118,6 +118,10 @@
   --ink: 22 23 28;
   --bar-bg: rgb(246 246 250 / 0.35);
   --window-bg: #fdfdff;
+  /* The hairline round every caption box: a shade darker than the box in the
+     light appearance, where the picture behind is bright and a light rim would
+     read as a glint rather than an edge. Pill.outlineInk in the app. */
+  --pill-line: rgb(0 0 0 / 0.55);
   /* Light title bars darken downwards, and want more of it than the dark ones:
      against a white window a few per cent of ink is nothing, and the bar has to
      read as a surface of its own. */
@@ -177,6 +181,7 @@
     --ink: 255 255 255;
     --bar-bg: rgb(24 25 29 / 0.55);
     --window-bg: #101116;
+    --pill-line: rgb(210 210 211 / 0.16);
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
     --meeting-bg: #16171d;
@@ -215,6 +220,7 @@
     --ink: 255 255 255;
     --bar-bg: rgb(24 25 29 / 0.55);
     --window-bg: #101116;
+    --pill-line: rgb(210 210 211 / 0.16);
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
     --meeting-bg: #16171d;
@@ -1207,8 +1213,9 @@
   min-width: 4.67em;
   max-width: min(73cqw, 640px);
   padding: 0.47em 0.73em;
-  border-radius: 0.47em;
+  border-radius: 0.533em;
   background: rgba(0, 0, 0, 0.72);
+  box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: #fff;
@@ -1220,8 +1227,11 @@
   font-size: clamp(14px, 2.61cqw, 23px);
   line-height: 1.34;
   font-weight: 600;
-  text-align: center;
-  text-wrap: balance;
+  /* From the script's leading edge, as the app sets it since 1.7.0: the left,
+     or the right on the Arabic pages, where dir="rtl" turns start round. The
+     box fills a word at a time, and a line that grows from a fixed edge is
+     easier to follow than one re-centred on every word. */
+  text-align: start;
   opacity: 0;
   transition: opacity 0.4s ease;
   /* Clicks go through it, which is the app's own behaviour and what lets a click
@@ -1388,16 +1398,16 @@
   min-width: 4.67em;
   max-width: min(73cqw, 640px);
   padding: 0.47em 0.73em;
-  border-radius: 0.47em;
+  border-radius: 0.533em;
   background: rgba(0, 0, 0, 0.66);
+  box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.65);
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   line-height: 1.34;
   font-weight: 600;
-  text-align: center;
-  text-wrap: balance;
+  text-align: start;
   will-change: transform;
 }
 
@@ -1478,9 +1488,10 @@
   box-sizing: border-box;
   gap: calc(var(--e) * 0.233);
   padding: calc(var(--e) * 0.233) calc(var(--e) * 0.467);
-  border-radius: calc(var(--e) * 0.467);
+  border-radius: calc(var(--e) * 0.533);
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.66);
+  box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.65);
@@ -1594,6 +1605,50 @@
 /* The in-flight word, before the recogniser commits it. */
 .demo-overlay .tentative { color: rgba(255, 255, 255, 0.55); }
 
+/* The source app's row: the icon and name of the app whose audio the box
+   holds, above the caption, the way Live Captions heads its box and the way
+   the app draws it by default since 1.7.0 (Show Source App Name, Header Row).
+   The numbers are Pill.header's at 30pt, in em so they scale with the box: an
+   icon 0.9 of the text size, 10pt to the name, the name at 0.6 of the size in
+   a fixed light grey (Pill.tabInk, on the live box and in the stack alike,
+   rather than the text's white at the box's opacity), and 0.3 of the size
+   between the row and the text. The icon is the app's own as the Dock draws
+   it, at full strength even in the stack, where the text dims: a dimmed icon
+   reads as a disabled app rather than a box that sits back. The row follows
+   the text's direction, so on the Arabic pages the icon sits on the right
+   with the text. A long name is cut short with an ellipsis, as the app's is,
+   rather than widening the box past its cap. */
+.ov-app {
+  display: flex;
+  align-items: center;
+  gap: 0.333em;
+  height: 0.9em;
+  margin-bottom: 0.3em;
+  min-width: 0;
+}
+.ov-app[hidden] { display: none; }
+.ov-app img {
+  flex: none;
+  display: block;
+  width: 0.9em;
+  height: 0.9em;
+}
+.ov-name {
+  overflow: hidden;
+  font-size: 0.6em;
+  line-height: 1;
+  color: #d2d2d3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ov-text { display: block; }
+
+/* One device pixel, the width the app draws its hairline at. */
+.demo { --hairline: 1px; }
+@media (min-resolution: 2dppx) {
+  .demo { --hairline: 0.5px; }
+}
+
 @keyframes blink { 50% { opacity: 0; } }
 
 /* One segment per scene, sitting under the screen and narrower than it: run the
@@ -1612,6 +1667,9 @@
   flex: 1;
   display: grid;
   gap: 7px;
+  /* Packed to the top: when one label wraps, the other two stay level with
+     its first line rather than drifting to the middle of the taller button. */
+  align-content: start;
   padding: 6px 0;
   appearance: none;
   border: 0;
@@ -1669,6 +1727,51 @@
   .demo-caption-try { display: block; }
 }
 
+/* The app's menu, dropped from the status item. Sized off the bar's unit so it
+   stays a menu at every width; the material and the radius are the ones macOS
+   gives a menu, the accent row is the system highlight. */
+.mn-root { --u: clamp(4px, 0.8182cqw, 7.2px); }
+.mn-panel {
+  position: absolute;
+  z-index: 9;
+  top: calc(3.25 * var(--u));
+  right: calc(1.36 * var(--u));
+  min-width: calc(31 * var(--u));
+  padding: calc(0.5 * var(--u));
+  border-radius: calc(1 * var(--u));
+  background: var(--menu-bg);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25), 0 10px 30px -6px rgb(0 0 0 / 0.35);
+  font-size: calc(1.25 * var(--u));
+  color: rgb(var(--ink) / 0.92);
+  text-align: start;
+  white-space: nowrap;
+  display: none;
+  pointer-events: none;
+}
+.mn-panel.is-open { display: block; }
+.mn-sub { top: 0; right: calc(100% - 0.3 * var(--u)); min-width: calc(19 * var(--u)); }
+.mn-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(0.5 * var(--u));
+  height: calc(2.3 * var(--u));
+  padding-inline: calc(0.6 * var(--u)) calc(1 * var(--u));
+  border-radius: calc(0.5 * var(--u));
+}
+.mn-check { width: calc(1.5 * var(--u)); flex: none; text-align: center; visibility: hidden; font-weight: 600; }
+.mn-row.is-on .mn-check { visibility: visible; }
+.mn-label { flex: 1; }
+.mn-key, .mn-more { margin-inline-start: calc(2 * var(--u)); color: rgb(var(--ink) / 0.5); }
+.mn-more svg { width: calc(0.6 * var(--u)); height: calc(1 * var(--u)); display: block; }
+.mn-row.is-dim { color: rgb(var(--ink) / 0.38); }
+.mn-row.is-dim .mn-key, .mn-row.is-dim .mn-more { color: rgb(var(--ink) / 0.3); }
+.mn-row.is-hot { background: var(--menu-accent); color: #fff; }
+.mn-row.is-hot .mn-key, .mn-row.is-hot .mn-more { color: rgb(255 255 255 / 0.85); }
+.mn-sep { height: 1px; margin: calc(0.45 * var(--u)) calc(0.6 * var(--u)); background: rgb(var(--ink) / 0.12); }
+
 /* The demo in its frame. The screen inside keeps every rule it had; only the
    box around it changed, and the og card, which draws its own composition
    from the same markup, never carries this class. */
@@ -1680,7 +1783,6 @@
    the help lines sit under it in the open, as they always did. */
 .demo-frame .demo-screen { max-width: none; }
 
-/* ── Notes ───────────────────────────────────────────────────
    Apple's, drawn as it is: the toolbar in the title bar, then three
    columns — the folders, the list, the note — in the demo's tokens, so it
    follows the page the way the real one follows the Mac. */

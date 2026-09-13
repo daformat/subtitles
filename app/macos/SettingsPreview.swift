@@ -706,15 +706,17 @@ final class SettingsPreview: NSView {
 
     private var style = PreviewStyle()
 
-    /// The app the preview's captions belong to. The stage draws a call, and
-    /// FaceTime is the call app every Mac has, so its icon stands in for the
-    /// one the real boxes wear. Nil on a Mac without it: the boxes go without,
-    /// as the real ones do when nothing is known to be playing.
+    /// The app the preview's captions belong to: Google Meet, the call the
+    /// site's demo runs, with the icon the demo's Dock draws it with, which
+    /// tools/vendor-demo.sh carries into the bundle. Nil in a build without
+    /// the bundle: the boxes go without, as the real ones do when nothing is
+    /// known to be playing.
     private static let callIcon: NSImage? = {
-        let path = "/System/Applications/FaceTime.app"
-        guard FileManager.default.fileExists(atPath: path) else { return nil }
-        return NSWorkspace.shared.icon(forFile: path)
+        guard let url = Bundle.main.url(forResource: "meet", withExtension: "png",
+                                        subdirectory: "Demo/assets/apps/dock") else { return nil }
+        return NSImage(contentsOf: url)
     }()
+    private static let callName = "Google Meet"
 
     /// Gap between boxes in the stack, matching `HistoryController`.
     private static let gap: CGFloat = 6
@@ -1076,7 +1078,7 @@ final class SettingsPreview: NSView {
         box.fontSize = style.fontSize
         box.maxLines = style.maxLines
         box.icon = Self.callIcon
-        box.appName = "FaceTime"
+        box.appName = Self.callName
         box.iconStyle = style.iconStyle
         box.textAlignment = style.textAlignment
         box.backgroundOpacity = style.boxOpacity
@@ -1168,7 +1170,7 @@ final class SettingsPreview: NSView {
         var sizes: [NSSize] = []
         for text in visible {
             let pill = HistoryPillView(entry: HistoryEntry(text: text, icon: Self.callIcon,
-                                                           name: "FaceTime"),
+                                                           name: Self.callName),
                                        style: pillStyle)
             sizes.append(pill.fittingSize(maxWidth: ceiling))
             pills.append(pill)
