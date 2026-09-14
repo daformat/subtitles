@@ -4,6 +4,33 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.7.1 · 2026-09-14
+
+- A notification sound no longer puts its app's name on the box. Core Audio
+  reports an app as playing for as long as it holds an output stream open,
+  not for as long as it makes sound, and a notification holds one for
+  seconds after the ding: about two in a native app, ten in a Chromium-based
+  one such as Slack or Discord, and for a whole burst of messages the stream
+  never closes at all. So a message arriving during a video renamed the box
+  after Slack for ten seconds, and a busy channel kept it there. The rule
+  from 1.7.0, that a newcomer had to be playing for two polls running, was
+  written for a ding that lasts half a second, which none does.
+- Now a newcomer is listened to before it can take the box. Two seconds
+  after an app starts holding a stream, by which time its own ding is over,
+  the app taps just that app for three seconds and counts how much of it
+  clears a floor of −55 dBFS; only sustained sound earns the name. A ding
+  reads as silence and changes nothing, a burst of dings likewise, and an
+  app heard to be silent is listened to again twenty seconds later in case
+  the burst became a call. A call that starts while a video plays is named
+  within about six seconds, where it used to take two and now takes the
+  measuring. An app nobody managed to listen to takes over after thirty
+  seconds, as a backstop; one heard silent never does, however long it holds
+  its stream. When the named app stops, the box falls to the best of the
+  rest, never to one heard to be silent.
+- Every change of the named app, and every listen and what it heard, is
+  written to the log with the time, so a wrong name can be read against the
+  clock.
+
 ## 1.7.0 · 2026-09-13
 
 - Every box says which app it is transcribing. A row inside the box carries

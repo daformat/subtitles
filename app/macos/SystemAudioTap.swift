@@ -15,6 +15,7 @@ enum TapError: Error, CustomStringConvertible {
     case coreAudio(String, OSStatus)
     case noOutputDevice
     case notPrepared
+    case noProcesses(String)
 
     var description: String {
         switch self {
@@ -24,6 +25,8 @@ enum TapError: Error, CustomStringConvertible {
             return "no default output device"
         case .notPrepared:
             return "start() called before prepare()"
+        case let .noProcesses(family):
+            return "no processes to tap for \(family)"
         case let .coreAudio(what, status):
             let bytes = withUnsafeBytes(of: status.bigEndian) { Array($0) }
             let cc = bytes.allSatisfy { $0 >= 32 && $0 < 127 }
@@ -117,7 +120,7 @@ final class SystemAudioTap {
         return value
     }
 
-    private static func defaultOutputUID() throws -> String {
+    static func defaultOutputUID() throws -> String {
         var device = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
         var addr = address(kAudioHardwarePropertyDefaultOutputDevice)
@@ -233,7 +236,7 @@ final class SystemAudioTap {
     }
 
     /// Object IDs are recycled; resolve them only at the moment of use.
-    private static func objectIDs(forFamily familyID: String) -> [AudioObjectID] {
+    static func objectIDs(forFamily familyID: String) -> [AudioObjectID] {
         var out: [AudioObjectID] = []
         for id in processObjectIDs() {
             if familyID.hasPrefix("pid:") {

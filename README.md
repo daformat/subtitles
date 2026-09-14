@@ -138,10 +138,12 @@ Every box names the app it is transcribing: a row above the caption with the
 app's icon and name, or a tab on the box's top edge, or nothing, under **Show
 Source App Name**. With one app chosen as the source that is the app; with all
 system audio it is whichever app Core Audio reports playing, held steady across
-notification sounds, and each box in the ⌥ stack keeps the app its words came
-from. Text starts from its script's edge, the left or, for Arabic and Hebrew,
-the right, because a line that grows from a fixed edge is easier to follow as
-the words arrive; **Text Size and Alignment** can centre it instead.
+notification sounds: a newcomer is listened to for three seconds and takes the
+name only if it is really making sound. Each box in the ⌥ stack keeps the app
+its words came from. Text starts from its script's edge, the left or, for
+Arabic and Hebrew, the right, because a line that grows from a fixed edge is
+easier to follow as the words arrive; **Text Size and Alignment** can centre it
+instead.
 
 **Settings** (⌘, from the menu) holds the dials the menu has no room for, in two
 panes:

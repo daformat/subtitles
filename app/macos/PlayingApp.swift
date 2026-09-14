@@ -6,8 +6,10 @@
 // the answer is that app. With all system audio it is worked out from what
 // Core Audio says is playing, through the rules in PlayingAppPicker: sticky,
 // and slow to hand over, because "playing" is a noisy set — browsers hold the
-// audio device open with a video paused, and a notification sound is an app
-// playing for half a second.
+// audio device open with a video paused, and a notification ding holds it for
+// seconds after the sound. Under `Rules.byEar` the picker also names an app
+// worth listening to, and the monitor puts a LevelMeter on it for a moment
+// and reports back whether it was really making sound.
 //
 // Polled once a second rather than asked when words arrive. Words arrive many
 // times a second, and the enumeration walks every process Core Audio knows
@@ -100,7 +102,7 @@ final class PlayingAppMonitor {
     var onChange: (String?) -> Void = { _ in }
 
     private(set) var app: String?
-    private var picker = PlayingAppPicker()
+    private var picker: PlayingAppPicker
     private var lastSource: AudioSource?
     private var timer: Timer?
 
@@ -111,6 +113,22 @@ final class PlayingAppMonitor {
     /// — and the pick itself is only ever touched on main.
     private let queue = DispatchQueue(label: "dev.mat.subtitles.playing-app", qos: .utility)
     private var inFlight = false
+
+    /// The meter listening right now, if any, and how long a listen lasts.
+    /// Three seconds is enough speech to be sure of, and short enough that a
+    /// call is labelled while its first sentence is still on screen.
+    private var meter: LevelMeter?
+    private let listenFor: TimeInterval = 3
+    /// Apps a meter could not be put on, and when: tried again after a while
+    /// rather than on every poll.
+    private var unlistenable: [String: TimeInterval] = [:]
+
+    init(rules: PlayingAppPicker.Rules) {
+        picker = PlayingAppPicker(rules: rules)
+    }
+
+    /// Monotonic, so a clock change cannot age an app by an hour.
+    private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
     /// Start polling. The timer holds the monitor, so a caller need not: it
     /// lives for as long as the app does, like the tap it watches.
@@ -132,7 +150,7 @@ final class PlayingAppMonitor {
 
         switch source {
         case let .app(id, _):
-            deliver(id)
+            deliver(id, why: "the source")
         case .allSystemAudio:
             // A poll still on its way is left to finish; the next is a second off.
             guard !inFlight else { return }
@@ -144,15 +162,87 @@ final class PlayingAppMonitor {
                     // The source or the pause may have changed underneath, and
                     // an answer about all system audio says nothing about an app.
                     guard lastSource == .allSystemAudio, !isPaused() else { return }
-                    deliver(picker.update(playing: playing))
+                    let previous = picker.pick
+                    let next = picker.update(playing: playing, at: now)
+                    deliver(next, why: reason(previous: previous))
+                    listenIfDue()
                 }
             }
         }
     }
 
-    private func deliver(_ next: String?) {
+    /// Put a meter on whichever app the picker wants heard, if none is on.
+    private func listenIfDue() {
+        guard meter == nil, let app = picker.candidate() else { return }
+        if let failedAt = unlistenable[app], now - failedAt < picker.rules.recheck { return }
+        let name = name(app)
+        let meter: LevelMeter
+        do {
+            meter = try LevelMeter(family: app)
+        } catch {
+            log("listen to \(name): \(error)")
+            unlistenable[app] = now
+            return
+        }
+        self.meter = meter
+        unlistenable[app] = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + listenFor) { [self] in
+            let reading = meter.stop()
+            self.meter = nil
+            guard let fraction = reading.loudFraction else {
+                log("listened to \(name) for \(seconds(listenFor)): no audio delivered")
+                unlistenable[app] = now
+                return
+            }
+            let sustained = fraction >= Self.sustainedFraction
+            log(String(format: "listened to %@ for %@: %.0f%% of blocks above the floor → %@",
+                       name, seconds(listenFor), fraction * 100, sustained ? "sound" : "silence"))
+            deliver(picker.judge(app, sustained: sustained, at: now),
+                    why: sustained ? "heard" : "\(name) heard to be silent")
+        }
+    }
+
+    /// Share of ~10 ms blocks above the floor that counts as sound. Speech with
+    /// its pauses runs well above half; a ding in a three-second window, or a
+    /// stream held open playing zeros, nowhere near.
+    static let sustainedFraction = 0.3
+
+    private func deliver(_ next: String?, why: String) {
         guard next != app else { return }
+        let was = app.map(name) ?? "nothing"
         app = next
+        log("playing app: \(was) → \(next.map(name) ?? "nothing") (\(why))")
         onChange(next)
+    }
+
+    /// Why a poll changed the pick, for the log. Worked out before it is known
+    /// whether anything changed, which is cheap: three dictionary lookups.
+    private func reason(previous: String?) -> String {
+        guard let previous else { return "first seen" }
+        if picker.age(of: previous) == nil { return "\(name(previous)) stopped" }
+        if let next = picker.pick, let age = picker.age(of: next) {
+            return "took over after \(seconds(age))"
+        }
+        return "changed"
+    }
+
+    private func name(_ family: String) -> String {
+        AppCatalog.shared.name(for: family)
+    }
+
+    /// Stamped, unlike the rest of the log: these lines are read against a
+    /// clock — when the ding was, when the call started — or not at all.
+    private func log(_ line: String) {
+        err("\(Self.clock.string(from: Date())) \(line)")
+    }
+
+    private static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    private func seconds(_ t: TimeInterval) -> String {
+        String(format: "%.1fs", t)
     }
 }

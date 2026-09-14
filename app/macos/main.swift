@@ -1129,7 +1129,7 @@ if useOverlay {
 
     // Which app the boxes belong to: the live box wears its icon, and each box
     // in the ⌥ stack the icon of the app it transcribed. See PlayingApp.swift.
-    let playingApp = PlayingAppMonitor()
+    let playingApp = PlayingAppMonitor(rules: .byEar)
     playingApp.source = { tap.source }
     playingApp.isPaused = { isPaused }
     playingApp.onChange = { controller.playingApp = $0 }
