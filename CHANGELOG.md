@@ -27,10 +27,6 @@ and the DMG name show.
   seconds, as a backstop; one heard silent never does, however long it holds
   its stream. When the named app stops, the box falls to the best of the
   rest, never to one heard to be silent.
-- Every change of the named app, and every listen and what it heard, is
-  written to the log with the time, so a wrong name can be read against the
-  clock.
-
 ## 1.7.0 · 2026-09-13
 
 - Every box says which app it is transcribing. A row inside the box carries
