@@ -1220,17 +1220,20 @@ if useOverlay {
     menu.onToggleReveal = {
         revealEnabled.toggle()
         controller.isRevealEnabled = revealEnabled
+        settings.refreshPreview()
         UserDefaults.standard.set(revealEnabled, forKey: Defaults.reveal)
     }
     menu.historyEnabled = { historyEnabled }
     menu.onToggleHistory = {
         historyEnabled.toggle()
         controller.isHistoryEnabled = historyEnabled
+        settings.refreshPreview()
         UserDefaults.standard.set(historyEnabled, forKey: Defaults.history)
     }
     menu.onFontSize = { size in
         fontSize = size
         controller.setFontSize(size)
+        settings.refreshPreview()
         UserDefaults.standard.set(Double(size), forKey: Defaults.fontSize)
     }
     menu.onSelectSource = { source in
@@ -1317,8 +1320,10 @@ if useOverlay {
     WelcomeWindow.shared.engineBusy = { engineBusyMessage }
     WelcomeWindow.shared.engineProgress = { engineBusyProgress }
     // The demo draws the box the overlay is drawing: the settings window's
-    // getters are the one place all of these are already gathered.
+    // getters are the one place all of these are already gathered, and its
+    // preview the one place every change to them already reports.
     WelcomeWindow.shared.settings = { SettingsWindow.shared.currentStyle() }
+    SettingsWindow.shared.onStyleChange = { WelcomeWindow.shared.follow($0) }
     // [main-edition]
     WelcomeWindow.shared.trialLine = {
         guard case .trial = license.entitlement else { return nil }

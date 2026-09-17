@@ -41,10 +41,17 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// The overlay's settings, for the demo to draw its box to. Read when the
     /// window is built, which is every time it is opened: closing tears it
     /// down (`windowWillClose`), so the demo is never older than the window.
+    /// A change while it is up comes through `follow`.
     var settings: () -> PreviewStyle = { PreviewStyle() }
 
     private var window: NSWindow?
     private var webView: WKWebView?
+    /// What the demo was last given, key by key, as the JSON it went as: the
+    /// seed, then each change `follow` sent. What `follow` compares against.
+    private var given: [String: Any] = [:]
+    /// True once the page has loaded and can be told of a change; until
+    /// then `follow` has nothing to talk to, and `fitDemo` catches up.
+    private var demoLoaded = false
     private var demoHeight: NSLayoutConstraint?
     /// The row that is either the download or the way out of the window.
     private var statusRow: NSStackView?
@@ -137,6 +144,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         pageScroll = nil
         webView?.stopLoading()
         webView = nil
+        demoLoaded = false
         demoHeight = nil
         statusRow = nil
         headline = nil
@@ -438,29 +446,62 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         }
     }
 
+    /// The settings as the demo reads them: the site's script takes them
+    /// under the names of `PreviewStyle`'s own fields (SETTINGS in demo.js),
+    /// so that struct encodes straight into it, `revealSize` as the `[width,
+    /// height]` a CGSize encodes to and `historyDepth` at `Int.max` for every
+    /// box. Back out of the JSON as an object, so `follow` can compare it key
+    /// by key. Empty for a style that fails to encode, which leaves the demo
+    /// on the site's own defaults.
+    private static func json(_ style: PreviewStyle) -> [String: Any] {
+        guard let data = try? JSONEncoder().encode(style),
+              let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [:] }
+        return object
+    }
+
+    private static func text(_ object: [String: Any]) -> String? {
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     /// The demo seeded with the app's settings, so the box it draws is the box
     /// the app is drawing — the header row or the name tab, the size, the
-    /// lines a box fills before it pages, how many boxes ⌥ keeps.
-    ///
-    /// The site's script reads `window.SUBTITLES_SETTINGS` before it runs
-    /// (SETTINGS in demo.js), under the names of `PreviewStyle`'s own fields:
-    /// that struct encodes straight into it, `revealSize` as the `[width,
-    /// height]` a CGSize encodes to and `historyDepth` at `Int.max` for every
-    /// box. The script drops a key it does not know and a value that is not
-    /// one, so nothing here can leave the demo in a state its menu cannot
-    /// show; a seed that fails to encode leaves it on the site's own defaults.
-    /// Injected at document start, well ahead of the script at the end of the
-    /// page, the way the site's own recording flag is set.
-    private static func seed(_ style: PreviewStyle) -> WKUserScript? {
-        guard let json = try? JSONEncoder().encode(style),
-              let text = String(data: json, encoding: .utf8) else { return nil }
+    /// lines a box fills before it pages, how many boxes ⌥ keeps. The script
+    /// drops a key it does not know and a value that is not one, so nothing
+    /// here can leave the demo in a state its menu cannot show. Injected at
+    /// document start, well ahead of the script at the end of the page, the
+    /// way the site's own recording flag is set.
+    private static func seed(_ settings: [String: Any]) -> WKUserScript? {
+        guard let text = text(settings) else { return nil }
         return WKUserScript(source: "window.SUBTITLES_SETTINGS = \(text);",
                             injectionTime: .atDocumentStart, forMainFrameOnly: true)
     }
 
+    /// A setting changed while the window is up: the demo follows it, in
+    /// place. Only the keys that differ from what the demo was last given are
+    /// sent, as a `subtitles:settings` event the site's script listens for
+    /// (applySettings in demo.js), so the rest of the demo's state stays as
+    /// the reader left it — a size picked from the demo's own menu is not
+    /// undone by the app's blur changing. Nothing is sent before the page
+    /// has loaded; `fitDemo` sends what changed in the meantime.
+    func follow(_ style: PreviewStyle) {
+        guard let web = webView, demoLoaded else { return }
+        let now = Self.json(style)
+        let changed = now.filter { key, value in
+            guard let was = given[key] as? NSObject else { return true }
+            return !was.isEqual(value)
+        }
+        guard !changed.isEmpty, let detail = Self.text(changed) else { return }
+        given = now
+        web.evaluateJavaScript(
+            "document.dispatchEvent(new CustomEvent('subtitles:settings', { detail: \(detail) }))")
+    }
+
     private func buildDemo() -> NSView {
         let configuration = WKWebViewConfiguration()
-        if let seed = Self.seed(settings()) {
+        given = Self.json(settings())
+        demoLoaded = false
+        if let seed = Self.seed(given) {
             configuration.userContentController.addUserScript(seed)
         }
         let web = DemoWebView(frame: .zero, configuration: configuration)
@@ -511,6 +552,8 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// time the site's demo changes shape.
     fileprivate func fitDemo() {
         guard let web = webView else { return }
+        demoLoaded = true
+        follow(settings())
         web.evaluateJavaScript("document.querySelector('.demo').getBoundingClientRect().height")
         { [weak self] value, _ in
             guard let self, let height = value as? Double, height > 0 else { return }

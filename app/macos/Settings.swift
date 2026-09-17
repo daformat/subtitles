@@ -180,11 +180,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func windowDidBecomeKey(_ notification: Notification) {
         // All of these can be changed from the menu while the window is open.
         // The Models pane's switches cannot, so they are not re-read.
-        revealSwitch.state = revealEnabled() ? .on : .off
-        syncRevealEnabled()
-        historySwitch.state = historyEnabled() ? .on : .off
-        syncHistoryEnabled()
-        preview?.apply(currentStyle())
+        refreshPreview()
         refreshCacheSize()
     }
 
@@ -808,7 +804,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             screen.widthAnchor.constraint(equalToConstant: Self.contentWidth),
             screen.heightAnchor.constraint(equalToConstant: SettingsPreview.displayHeight),
         ])
-        screen.apply(currentStyle())
+        applyStyle()
 
         section("Subtitle Box",
                 "How many lines a box fills before it clears and starts a new one, "
@@ -1024,6 +1020,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     // MARK: - The preview
 
+    /// Called with the style whenever the preview is drawn to it: a control
+    /// touched here, the menu changing something, a reset. The welcome
+    /// window's demo follows the overlay through it (main.swift), the way the
+    /// preview does — this window is where every change to the box's look
+    /// already reports, whether or not it is open.
+    var onStyleChange: ((PreviewStyle) -> Void)?
+
     /// Everything the preview draws, read back from the same getters the rows
     /// read. Assembled fresh on every edit rather than tracked: the menu can
     /// change half of these while this window is open, and a copy kept here
@@ -1047,16 +1050,28 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             textAlignment: textAlignment())
     }
 
-    /// Something the menu changed: redraw the preview from the getters.
+    /// Something the menu changed: re-read the two switches it can flip, and
+    /// redraw the preview from the getters. Whether or not the window is
+    /// open — what follows the style through `onStyleChange` is not in it.
     func refreshPreview() {
-        preview?.apply(currentStyle())
+        revealSwitch.state = revealEnabled() ? .on : .off
+        syncRevealEnabled()
+        historySwitch.state = historyEnabled() ? .on : .off
+        syncHistoryEnabled()
+        applyStyle()
     }
 
     /// A control was touched: show what it did, and say what it does.
     private func syncPreview(_ topic: PreviewTopic) {
-        guard let preview else { return }
-        preview.apply(currentStyle())
-        preview.explain(topic)
+        applyStyle()
+        preview?.explain(topic)
+    }
+
+    /// The preview drawn from the getters, and whatever else follows them told.
+    private func applyStyle() {
+        let style = currentStyle()
+        preview?.apply(style)
+        onStyleChange?(style)
     }
 
     /// Dim each section's dials when the feature itself is switched off.

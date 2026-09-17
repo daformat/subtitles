@@ -31,6 +31,11 @@ const CAPTURE = window.SUBTITLES_CAPTURE === true;
 // (the landing pages start with the reveal off), so nothing is filled in
 // here; a key that is not a setting, or a value that is not one, is dropped.
 //
+// A setting the app changes while its welcome window is up arrives later,
+// as a `subtitles:settings` event on the document whose detail holds the
+// keys that changed and nothing else, read the same way; the home demo
+// follows those in place, see applySettings in captionDemo.
+//
 //   fontSize            points: the menu's 22 / 30 / 40 / 52, or any other
 //   textAlignment       start | center
 //   iconStyle           off | nameTab | header
@@ -46,7 +51,7 @@ const CAPTURE = window.SUBTITLES_CAPTURE === true;
 //   historyTextOpacity  0…1, the stack's text against the live box's white
 //   historyExpires      whether a silence forgets the stack
 //   historyExpiry       seconds of silence that does
-const SETTINGS = (() => {
+const readSettings = (given) => {
   const NUMBER = {
     fontSize: [1, 400], maxLines: [1, 50], boxOpacity: [0, 1], blur: [0, 200],
     revealOpacity: [0, 1], revealWidth: [1, 1e5], revealHeight: [1, 1e5],
@@ -72,9 +77,14 @@ const SETTINGS = (() => {
       if (WORD[key].includes(value)) out[key] = value;
     }
   };
-  const given = window.SUBTITLES_SETTINGS;
   if (given && typeof given === 'object') Object.keys(given).forEach((k) => take(k, given[k]));
-  try { new URLSearchParams(location.search).forEach((v, k) => take(k, v)); } catch (e) { /* no location */ }
+  return out;
+};
+const SETTINGS = (() => {
+  const out = readSettings(window.SUBTITLES_SETTINGS);
+  try {
+    Object.assign(out, readSettings(Object.fromEntries(new URLSearchParams(location.search))));
+  } catch (e) { /* no location */ }
   return out;
 })();
 
@@ -775,12 +785,11 @@ const DEMO_DEFAULTS = {
   historyEnabled: true, historyDepth: 15, historyTextOpacity: 0.65,
   historyExpires: false, historyExpiry: 30,
 };
-// A demo's settings, its own under the page's seed, and its boxes dressed to
-// them. What is the box's rather than the loop's goes onto the screen as
-// custom properties, which every box on it wears, the stack's and the search
-// pill with the live one; the loop reads the rest off what comes back.
-const seedDemo = (screen, own) => {
-  const S = Object.assign({}, DEMO_DEFAULTS, own, SETTINGS);
+// A demo's boxes dressed to its settings. What is the box's rather than the
+// loop's goes onto the screen as custom properties, which every box on it
+// wears, the stack's and the search pill with the live one; the loop reads
+// the rest off S itself. Once at the seed, and again whenever S changes.
+const dressDemo = (screen, S) => {
   if (screen) {
     const set = (name, value) => screen.style.setProperty(name, String(value));
     set('--text-scale', S.fontSize / 30);
@@ -795,6 +804,12 @@ const seedDemo = (screen, own) => {
     set('--hist-text-alpha', S.historyTextOpacity);
   }
   setIconStyle(S.iconStyle);
+};
+// A demo's settings, its own under the page's seed, and its boxes dressed to
+// them.
+const seedDemo = (screen, own) => {
+  const S = Object.assign({}, DEMO_DEFAULTS, own, SETTINGS);
+  dressDemo(screen, S);
   return S;
 };
 // The menu's checks for a demo's settings: the size row within half a point
@@ -918,8 +933,11 @@ const statusMenu = {
         r.classList.toggle('is-on', r.dataset.id === id);
       });
     };
-    (opts.checked || []).forEach((id) => (id.includes('-') ? pick(id) : check(id, true)));
-    (opts.unchecked || []).forEach((id) => check(id, false));
+    const setChecks = (checks) => {
+      (checks.checked || []).forEach((id) => (id.includes('-') ? pick(id) : check(id, true)));
+      (checks.unchecked || []).forEach((id) => check(id, false));
+    };
+    setChecks(opts);
 
     let manual = false;
     let walking = null;
@@ -1297,6 +1315,9 @@ const statusMenu = {
       // The demos' own take-down, on a scene change: a menu the visitor has
       // up is theirs to take down.
       closeScripted: () => { if (!manual) close(); },
+      // The checks set again, as at attach: for a setting changed from
+      // outside the menu, see menuChecks.
+      check: setChecks,
     };
   },
 };
@@ -2434,7 +2455,7 @@ const windowResize = (() => {
         // starts the next from that word. Measured with the word in the
         // page and before the frame is painted, so nothing is seen to
         // overflow; the box holds its whole sentence otherwise.
-        if (i > page && PAGED && linesOf(box) > S.maxLines) {
+        if (i > page && paged() && linesOf(box) > S.maxLines) {
           closePage(pageOf(line, page, i, words.length), app,
             source && pageOf(source, page, i, words.length));
           page = i;
@@ -2523,7 +2544,8 @@ const windowResize = (() => {
   const menu = demoEl && demoEl.querySelector('.mn-root');
   const submenu = menu && menu.querySelector('.mn-sub[data-for="translate"]');
   // By hand too, see statusMenu: the rows with a Try badge act on this
-  // demo's box and stack.
+  // demo's box and stack, through applySettings below, as the app's own
+  // changes do.
   const menuUI = menu && statusMenu.attach({
     root: menu,
     glyph: glyph,
@@ -2534,11 +2556,11 @@ const windowResize = (() => {
       ({ name: I18N('app.' + w.dataset.app, APP_NAMES[w.dataset.app]), playing: w.dataset.app === playingApp() })),
     watch: [...windows],
     actions: {
-      size: (pt) => { if (screen) screen.style.setProperty('--text-scale', String(pt / 30)); queueHole(); },
-      align: (how) => { if (screen) screen.style.setProperty('--text-align', how); },
-      icon: (style) => { setIconStyle({ tab: 'nameTab', off: 'off' }[style] || 'header'); queueHole(); },
-      reveal: (on) => hole.enable(on),
-      history: (on) => { historyOn = on; showHistory(); },
+      size: (pt) => applySettings({ fontSize: pt }),
+      align: (how) => applySettings({ textAlignment: how }),
+      icon: (style) => applySettings({ iconStyle: { tab: 'nameTab', off: 'off' }[style] || 'header' }),
+      reveal: (on) => applySettings({ revealEnabled: on }),
+      history: (on) => applySettings({ historyEnabled: on }),
       reset: () => {
         box.style.left = '';
         box.style.top = '';
@@ -2549,6 +2571,33 @@ const windowResize = (() => {
     },
   });
   const closeMenu = () => { if (menuUI) menuUI.closeScripted(); };
+  // A change to the settings, in place: the keys given, read as the seed
+  // is, written over S, and the demo dressed to them again — the box and
+  // the stack, the reveal, the stack's depth and expiry, the menu's checks.
+  // What is not given stays: the app changing its blur does not undo a size
+  // the visitor picked from the menu here, since both write the same S and
+  // each writes only what it changed. The menu's rows come through here,
+  // and so does the app while its welcome window shows this demo: its
+  // Welcome.swift dispatches `subtitles:settings` on the document with the
+  // keys that changed, and only those.
+  const applySettings = (given) => {
+    const changed = readSettings(given);
+    if (!Object.keys(changed).length) return;
+    Object.assign(S, changed);
+    dressDemo(screen, S);
+    if (menuUI) menuUI.check(menuChecks(S));
+    if ('revealEnabled' in changed) hole.enable(S.revealEnabled);
+    if ('historyEnabled' in changed) { historyOn = S.historyEnabled; showHistory(); }
+    // A shallower stack loses its oldest boxes now, not at the next close.
+    if ('historyDepth' in changed && past.length > pastMax()) {
+      past.splice(0, past.length - pastMax());
+      if (history && history.classList.contains('is-visible')) paintHistory();
+    }
+    // The expiry re-armed from the last word, on the new terms.
+    if ('historyExpires' in changed || 'historyExpiry' in changed) forget();
+    queueHole();
+  };
+  document.addEventListener('subtitles:settings', (e) => applySettings(e.detail));
   const setTranslation = (target) => {
     if (!submenu) return;
     submenu.querySelectorAll('.mn-row').forEach((r) => r.classList.toggle('is-on', r.dataset.id === target));
@@ -2967,11 +3016,13 @@ const windowResize = (() => {
   // app would do the same with a speaker who repeats themselves: closePage only
   // refuses a line identical to the one before it.
   //
-  // Or the seed's depth, within the app's own historyDepthCap.
-  const PAST_MAX = Math.min(S.historyDepth, 2000);
+  // Or the settings' depth, within the app's own historyDepthCap. Read at
+  // each close rather than once, since the app can change it, see
+  // applySettings.
+  const pastMax = () => Math.min(S.historyDepth, 2000);
   const past = [];
-  // Whether a box pages at the seed's maxLines, see `say`.
-  const PAGED = Number.isFinite(S.maxLines);
+  // Whether a box pages at the settings' maxLines, see `say`.
+  const paged = () => Number.isFinite(S.maxLines);
 
   // The app's expiry for the stack, under a seeded historyExpires: forgotten
   // once no word has arrived for historyExpiry seconds, and not while it is
@@ -3014,7 +3065,7 @@ const windowResize = (() => {
     // it, not the app of whatever is playing when it closes, and carries
     // what was actually said, for ⌃.
     past.push({ id: ++pageId, text: trimmed, source: source ? source.trim() : null, app: app || playing() });
-    if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
+    if (past.length > pastMax()) past.splice(0, past.length - pastMax());
     forget();
     // A stack already up takes the box in. One that is not may be wanted
     // anyway: ⌥ pressed before anything had closed, and still held, which the
