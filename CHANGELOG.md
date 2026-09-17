@@ -27,8 +27,10 @@ and the DMG name show.
   with it. It used to catch up when the window next became key.
 - The ⌥ stack's fades at its clipped edges ease in and out rather than
   ramping straight, on the overlay and in the Settings preview alike.
+<!-- [main-edition] -->
 - The licence window says Buy a Key without naming a price: the price is
   set on Gumroad, and a number in the app went stale the moment it changed.
+<!-- [/main-edition] -->
 
 ## 1.7.1 · 2026-09-14
 
