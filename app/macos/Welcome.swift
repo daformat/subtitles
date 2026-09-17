@@ -18,8 +18,8 @@ import WebKit
 final class WelcomeWindow: NSObject, NSWindowDelegate {
     static let shared = WelcomeWindow()
 
-    /// Matches the About window, and is what the demo is drawn to fill.
-    private static let width: CGFloat = 584
+    /// What the demo is drawn to fill; the window is this plus the side insets.
+    private static let width: CGFloat = 734
     /// Wider at the sides than at the top and bottom: the content is a stack of
     /// centred things, and side margins are what stop it reading as filling the
     /// window edge to edge.
@@ -490,7 +490,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // A starting height in the demo's own proportions, so the window is the
         // right shape before the page has measured itself. It is corrected from
         // the page below, which is what makes this survive the demo changing.
-        let height = web.heightAnchor.constraint(equalToConstant: 392)
+        let height = web.heightAnchor.constraint(equalToConstant: 477)
         NSLayoutConstraint.activate([
             web.widthAnchor.constraint(equalToConstant: Self.width),
             height,

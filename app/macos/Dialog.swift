@@ -12,7 +12,7 @@ import AppKit
 
 enum Dialog {
     /// Content width, and the padding round it, for every dialog. Between
-    /// About's 340 and the Welcome window's 584: wide enough for a paragraph
+    /// About's 340 and the Welcome window's 734: wide enough for a paragraph
     /// to read as prose, narrow enough to be a dialog.
     static let width: CGFloat = 400
     static let inset: CGFloat = 26
