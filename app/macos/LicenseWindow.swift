@@ -120,7 +120,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             let row = NSStackView()
             row.orientation = .horizontal
             row.spacing = 8
-            row.addArrangedSubview(Dialog.button("Buy a Key · $9", buy))
+            row.addArrangedSubview(Dialog.button("Buy a Key", buy))
             row.addArrangedSubview(Dialog.button("Where Is My Key?", findKey))
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -153,26 +153,26 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
 
     // MARK: copy
 
-    private static let price = "Keys are $9 on Gumroad, arrive by email, and cover every Mac you use."
+    private static let keys = "Keys are sold on Gumroad, arrive by email, and cover every Mac you use."
 
     static func formCopy(for entitlement: Entitlement) -> (String, String) {
         switch entitlement {
         case .trial(let days, true):
             return ("Enter your license key",
-                    "Your trial has \(days) \(days == 1 ? "day" : "days") left. \(price)")
+                    "Your trial has \(days) \(days == 1 ? "day" : "days") left. \(keys)")
         case .trial(_, false):
             return ("Enter your license key",
-                    "Your \(LicenseRecord.trialDays)-day trial starts when captions do. \(price)")
+                    "Your \(LicenseRecord.trialDays)-day trial starts when captions do. \(keys)")
         case .expired:
             return ("Your trial has ended",
-                    "Subtitles keeps running but has stopped transcribing until a key is entered. \(price)")
+                    "Subtitles keeps running but has stopped transcribing until a key is entered. \(keys)")
         case .revoked(let why):
             return ("This key was \(why.phrase)",
                     "Gumroad reports the purchase as \(why.phrase), so the key no longer works here. "
-                        + "Enter another to carry on. \(price)")
+                        + "Enter another to carry on. \(keys)")
         case .licensed, .provisional, .grandfathered:
             return ("Enter a license key",
-                    "The key on file stays until the new one is confirmed. \(price)")
+                    "The key on file stays until the new one is confirmed. \(keys)")
         }
     }
 

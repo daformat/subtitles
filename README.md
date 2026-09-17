@@ -13,7 +13,7 @@ at roughly 0.15 real-time factor.
 **[subtitles-live.com](https://subtitles-live.com)** is the app itself: built,
 <!-- [main-edition] -->
 signed and notarised, so the audio permission survives updates. The download
-is a free seven-day trial, and a licence key, $9 on Gumroad, keeps it going.
+is a free seven-day trial, and a licence key from Gumroad keeps it going.
 Everything needed to build your own copy is in this repository, and `build.sh`
 below does exactly that.
 <!-- [/main-edition] -->
