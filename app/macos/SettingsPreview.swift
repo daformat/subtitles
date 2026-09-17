@@ -1250,28 +1250,8 @@ final class SettingsPreview: NSView {
         let farStop = far / visible.height
         let nearStop = near / visible.height
 
-        let clear = NSColor.clear.cgColor
-        let solid = NSColor.black.cgColor
-        // Bottom to top. A band of zero is left out rather than written as a
-        // zero-width ramp, which would put a clear stop on the very edge row.
-        var colors: [CGColor] = []
-        var locations: [NSNumber] = []
-        if nearStop > 0 {
-            colors += [clear, solid]
-            locations += [0, NSNumber(value: Double(nearStop))]
-        } else {
-            colors.append(solid)
-            locations.append(0)
-        }
-        if farStop > 0 {
-            colors += [solid, clear]
-            locations += [NSNumber(value: Double(1 - farStop)), 1]
-        } else {
-            colors.append(solid)
-            locations.append(1)
-        }
         // Worn by each box, as on the overlay — see StackFade.
-        let fade = StackFade(visible: visible, colors: colors, locations: locations)
+        let fade = StackFade(visible: visible, bottom: nearStop, top: farStop)
         for pill in pills { pill.wear(fade) }
     }
 

@@ -180,9 +180,51 @@ struct HistoryStyle: Equatable {
 /// The clip's visible rect, in the document's coordinates, and the ramp across
 /// it; each box places the ramp where it sits in that rect.
 struct StackFade {
-    var visible: CGRect
-    var colors: [CGColor]
-    var locations: [NSNumber]
+    let visible: CGRect
+    let colors: [CGColor]
+    let locations: [NSNumber]
+
+    /// The ramp across `visible` from the band at each of its edges, bottom to
+    /// top, each as its share of the height and 0 for none. A band of zero is
+    /// left out rather than written as a zero-width ramp, which would put a
+    /// clear stop on the very edge row.
+    ///
+    /// Each band is a smoothstep rather than a straight ramp. A straight ramp
+    /// has a crease where it starts and another where it lands, and the eye
+    /// reads both as edges: one line where the fade begins and one where the
+    /// box is suddenly whole. 3t² − 2t³ arrives and leaves flat, so neither
+    /// line is there. Sampled, because a gradient interpolates linearly between
+    /// its stops; sixteen keep it within a third of a percent of the curve
+    /// across the tallest band. The reveal's hole is the same curve — see
+    /// `BackdropBlurView`.
+    init(visible: CGRect, bottom: CGFloat, top: CGFloat) {
+        self.visible = visible
+        var colors: [CGColor] = []
+        var locations: [NSNumber] = []
+        func stop(_ location: CGFloat, alpha: CGFloat) {
+            colors.append(NSColor.black.withAlphaComponent(alpha).cgColor)
+            locations.append(NSNumber(value: Double(location)))
+        }
+        let steps = 16
+        if bottom > 0 {
+            for i in 0...steps {
+                let t = CGFloat(i) / CGFloat(steps)
+                stop(bottom * t, alpha: t * t * (3 - 2 * t))
+            }
+        } else {
+            stop(0, alpha: 1)
+        }
+        if top > 0 {
+            for i in 0...steps {
+                let t = CGFloat(i) / CGFloat(steps)
+                stop(1 - top + top * t, alpha: 1 - t * t * (3 - 2 * t))
+            }
+        } else {
+            stop(1, alpha: 1)
+        }
+        self.colors = colors
+        self.locations = locations
+    }
 }
 
 // MARK: - One past box
@@ -1461,33 +1503,13 @@ final class HistoryController {
         let farStop = far / visible.height
         let nearStop = near / visible.height
 
-        let clear = NSColor.clear.cgColor
-        let solid = NSColor.black.cgColor
-        // Bottom to top. Above the live box the far edge is the top and the near
-        // edge the bottom; below, the other way round. A band of zero is left
-        // out rather than written as a zero-width ramp, which would put a clear
-        // stop on the very edge row.
-        let bottom = placedAbove ? nearStop : farStop
-        let top = placedAbove ? farStop : nearStop
-        var colors: [CGColor] = []
-        var locations: [NSNumber] = []
-        if bottom > 0 {
-            colors += [clear, solid]
-            locations += [0, NSNumber(value: Double(bottom))]
-        } else {
-            colors.append(solid)
-            locations.append(0)
-        }
-        if top > 0 {
-            colors += [solid, clear]
-            locations += [NSNumber(value: Double(1 - top)), 1]
-        } else {
-            colors.append(solid)
-            locations.append(1)
-        }
-        // `visible` is the clip's bounds, whose origin *is* the scroll offset:
-        // the rect in document coordinates that each box measures itself against.
-        let fade = StackFade(visible: visible, colors: colors, locations: locations)
+        // Above the live box the far edge is the top and the near edge the
+        // bottom; below, the other way round. `visible` is the clip's bounds,
+        // whose origin *is* the scroll offset: the rect in document coordinates
+        // that each box measures itself against.
+        let fade = StackFade(visible: visible,
+                             bottom: placedAbove ? nearStop : farStop,
+                             top: placedAbove ? farStop : nearStop)
         for pill in stackPills { pill.wear(fade) }
     }
 
