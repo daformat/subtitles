@@ -1316,6 +1316,9 @@ applyVariant(currentVariant, initial: true)
 if useOverlay {
     WelcomeWindow.shared.engineBusy = { engineBusyMessage }
     WelcomeWindow.shared.engineProgress = { engineBusyProgress }
+    // The demo draws the box the overlay is drawing: the settings window's
+    // getters are the one place all of these are already gathered.
+    WelcomeWindow.shared.settings = { SettingsWindow.shared.currentStyle() }
     // [main-edition]
     WelcomeWindow.shared.trialLine = {
         guard case .trial = license.entitlement else { return nil }

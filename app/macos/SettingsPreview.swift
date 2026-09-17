@@ -33,7 +33,11 @@ import AppKit
 /// the rows read. Passed whole on every edit rather than set piecemeal: the
 /// preview rebuilds from it, so a missed field would be a stale pill rather
 /// than a compile error.
-struct PreviewStyle: Equatable {
+///
+/// Encodable because the welcome window's demo is seeded with it: the site's
+/// script reads these fields under these names (SETTINGS in demo.js), so a
+/// field renamed here is a setting the demo stops following.
+struct PreviewStyle: Equatable, Encodable {
     var fontSize: CGFloat = 30
     var maxLines = SubtitleView.defaultMaxLines
     var boxOpacity = SubtitleView.defaultBackgroundOpacity
@@ -90,17 +94,19 @@ private struct DesktopPalette {
     let glows: [Glow]
     /// `--bar-bg`: the menu bar, without the blur it has on the site.
     let bar: NSColor
-    let window: NSColor
-    /// Ink alphas: the title bar's gradient, and the hairline it ends on.
-    let barTop: CGFloat
-    let barBottom: CGFloat
+    /// `--window-line`, as an ink alpha: the hairline under the title bar.
     let line: CGFloat
-    /// `--meeting-bg`, `--tile-bg` (two stops) and `--recess`.
+    /// `--meeting-bg` and `--tile-bg` (two stops). The call's window is this
+    /// colour through and through, title bar included: Tahoe's bar is the
+    /// window's own surface, not a lid on it.
     let meeting: NSColor
     let tile: [NSColor]
-    let recess: NSColor
-    /// `--window-ring` and `--window-inner`: the translucent line outside a
-    /// window's edge, and the faint light one inside it that dark mode adds.
+    /// `--pane-bg` and `--pane-line`: the glass the call's controls float on,
+    /// and the light hairline round it.
+    let pane: NSColor
+    let paneLine: NSColor
+    /// `--window-ring`'s two lines: the translucent one outside a window's
+    /// edge, and the light rim inside it.
     let ring: NSColor
     let inner: NSColor
     /// `--border-strong`, around the screen.
@@ -129,16 +135,16 @@ private struct DesktopPalette {
                  color: NSColor(srgbRed: 0.314, green: 0.769, blue: 0.922, alpha: 0.50), stop: 0.66),
         ],
         bar: NSColor(srgbRed: 0.965, green: 0.965, blue: 0.980, alpha: 0.35),
-        window: NSColor(srgbRed: 0.992, green: 0.992, blue: 1, alpha: 1),    // #fdfdff
-        barTop: 0.06, barBottom: 0.13, line: 0.13,
+        line: 0.0845,
         meeting: NSColor(srgbRed: 0.945, green: 0.949, blue: 0.965, alpha: 1), // #f1f2f6
         tile: [
             NSColor(srgbRed: 0.992, green: 0.992, blue: 1, alpha: 1),        // #fdfdff
             NSColor(srgbRed: 0.914, green: 0.922, blue: 0.949, alpha: 1),    // #e9ebf2
         ],
-        recess: NSColor(white: 0, alpha: 0.045),
-        ring: NSColor(white: 0, alpha: 0.08),
-        inner: .clear,
+        pane: NSColor(white: 0, alpha: 0.05),
+        paneLine: NSColor(white: 1, alpha: 0.75),
+        ring: NSColor(white: 0, alpha: 0.14),
+        inner: NSColor(white: 1, alpha: 0.65),
         edge: NSColor(srgbRed: 0.071, green: 0.071, blue: 0.094, alpha: 0.16),
         shadow: 0.28)
 
@@ -161,16 +167,18 @@ private struct DesktopPalette {
                  color: NSColor(srgbRed: 0.157, green: 0.627, blue: 0.882, alpha: 0.32), stop: 0.66),
         ],
         bar: NSColor(srgbRed: 0.094, green: 0.098, blue: 0.114, alpha: 0.55),
-        window: NSColor(srgbRed: 0.063, green: 0.067, blue: 0.086, alpha: 1), // #101116
-        barTop: 0.09, barBottom: 0.045, line: 0.045,
+        line: 0.045,
         meeting: NSColor(srgbRed: 0.086, green: 0.090, blue: 0.114, alpha: 1), // #16171d
         tile: [
             NSColor(srgbRed: 0.149, green: 0.157, blue: 0.220, alpha: 1),    // #262838
             NSColor(srgbRed: 0.098, green: 0.102, blue: 0.141, alpha: 1),    // #191a24
         ],
-        recess: NSColor(white: 0, alpha: 0.30),
-        ring: NSColor(white: 0, alpha: 0.60),
-        inner: NSColor(white: 1, alpha: 0.10),
+        pane: NSColor(white: 0, alpha: 0.20),
+        paneLine: NSColor(white: 1, alpha: 0.10),
+        ring: NSColor(white: 0, alpha: 0.70),
+        // The ring's own rim and the window's inner line (`--window-inner`),
+        // one over the other.
+        inner: NSColor(white: 1, alpha: 0.22),
         edge: NSColor(white: 1, alpha: 0.18),
         shadow: 0.60)
 
@@ -408,7 +416,7 @@ private final class PreviewStage: NSView {
         let frame = NSRect(x: ((bounds.width - span) / 2).rounded(), y: margin,
                            width: span, height: bar.minY - top - margin)
         guard frame.width > 0, frame.height > 0 else { return }
-        let radius = 1.25 * u
+        let radius = 2.4 * u
         let shape = NSBezierPath(roundedRect: frame, xRadius: radius, yRadius: radius)
         let ink = palette.ink
 
@@ -418,19 +426,17 @@ private final class PreviewStage: NSView {
         shadow.shadowBlurRadius = 26
         shadow.shadowOffset = NSSize(width: 0, height: -10)
         shadow.set()
-        palette.window.setFill()
+        // The window is the call's colour through and through: on Tahoe the
+        // title bar is the window's own surface, with one hairline under it,
+        // rather than a wash laid over it.
+        palette.meeting.setFill()
         shape.fill()
         NSGraphicsContext.restoreGraphicsState()
 
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
 
-        // Title bar: the same two-stop wash the demo's windows wear, and a
-        // hairline where it ends rather than a line drawn under it.
         let titleBar = NSRect(x: frame.minX, y: frame.maxY - 2.95 * u, width: frame.width, height: 2.95 * u)
-        // Drawn upwards, so `starting` is the bottom edge and `ending` the top.
-        NSGradient(starting: ink.withAlphaComponent(palette.barBottom),
-                   ending: ink.withAlphaComponent(palette.barTop))?.draw(in: titleBar, angle: 90)
         ink.withAlphaComponent(palette.line).setFill()
         NSRect(x: titleBar.minX, y: titleBar.minY - px, width: titleBar.width, height: px).fill()
 
@@ -441,7 +447,7 @@ private final class PreviewStage: NSView {
             NSColor(srgbRed: 0.157, green: 0.784, blue: 0.251, alpha: 1),  // #28c840
         ].enumerated() {
             colour.setFill()
-            NSBezierPath(ovalIn: NSRect(x: frame.minX + 1.48 * u + CGFloat(i) * (light + 0.68 * u),
+            NSBezierPath(ovalIn: NSRect(x: frame.minX + 1.48 * u + CGFloat(i) * (light + 0.75 * u),
                                         y: titleBar.midY - light / 2, width: light, height: light)).fill()
         }
         let titleFont = NSFont.systemFont(ofSize: 1.36 * u, weight: .medium)
@@ -452,22 +458,33 @@ private final class PreviewStage: NSView {
         // The content: the grid of tiles, and the call's buttons under it.
         let content = NSRect(x: frame.minX, y: frame.minY, width: frame.width,
                              height: titleBar.minY - px - frame.minY)
-        palette.meeting.setFill()
-        content.fill()
 
+        // The buttons in a capsule of glass, centred under the tiles with the
+        // window's bottom margin under it, the way Tahoe floats a call's
+        // controls. Glass over a flat surface is the surface's colour under
+        // the tint, so no blur is sampled for it.
         let button = 2.73 * u
-        let controls = NSRect(x: content.minX, y: content.minY, width: content.width,
-                              height: button + 2.04 * u)
-        palette.recess.setFill()
-        controls.fill()
         let gap = 1.02 * u
-        var bx = controls.midX - (3 * button + 2 * gap) / 2
+        let capsule = NSRect(x: 0, y: content.minY + 0.9 * u,
+                             width: 3 * button + 2 * gap + 2 * 0.9 * u + 2 * px,
+                             height: button + 2 * 0.55 * u + 2 * px)
+            .offsetBy(dx: content.midX - (3 * button + 2 * gap + 2 * 0.9 * u + 2 * px) / 2, dy: 0)
+        let glass = NSBezierPath(roundedRect: capsule, xRadius: capsule.height / 2,
+                                 yRadius: capsule.height / 2)
+        palette.pane.setFill()
+        glass.fill()
+        palette.paneLine.setStroke()
+        let rim = NSBezierPath(roundedRect: capsule.insetBy(dx: px / 2, dy: px / 2),
+                               xRadius: capsule.height / 2 - px / 2, yRadius: capsule.height / 2 - px / 2)
+        rim.lineWidth = px
+        rim.stroke()
+        var bx = capsule.minX + px + 0.9 * u
         for (name, fill, tint) in [
             ("mic.fill", ink.withAlphaComponent(0.13), ink.withAlphaComponent(0.85)),
             ("video.fill", ink.withAlphaComponent(0.13), ink.withAlphaComponent(0.85)),
             ("phone.down.fill", NSColor(srgbRed: 0.851, green: 0.282, blue: 0.247, alpha: 1), .white),
         ] {
-            let circle = NSRect(x: bx, y: controls.midY - button / 2, width: button, height: button)
+            let circle = NSRect(x: bx, y: capsule.midY - button / 2, width: button, height: button)
             fill.setFill()
             NSBezierPath(ovalIn: circle).fill()
             // At one point size for all three, the way the demo draws its three
@@ -479,11 +496,13 @@ private final class PreviewStage: NSView {
             bx += button + gap
         }
 
+        // The tiles fill what is left above the capsule, inset by the grid's
+        // own padding on every side.
         let pad = 0.91 * u
         let between = 0.8 * u
-        let grid = NSRect(x: content.minX + pad, y: controls.maxY + pad,
+        let grid = NSRect(x: content.minX + pad, y: capsule.maxY + pad,
                           width: content.width - pad * 2,
-                          height: content.maxY - controls.maxY - pad * 2)
+                          height: content.maxY - capsule.maxY - pad * 2)
         let tileSize = NSSize(width: (grid.width - between) / 2, height: (grid.height - between) / 2)
         // The ring a video app puts round whoever is talking, riding the voice
         // rather than sitting still: 0.85 s each way between a half-strength
@@ -498,8 +517,8 @@ private final class PreviewStage: NSView {
             drawTile(tile, person: person, ring: rings[i], beat: beat, palette: palette)
         }
 
-        // The inner ring, over the content: dark mode's faint light line inside
-        // the edge, nothing at all in light.
+        // The rim, over the content: the light line inside the edge that Tahoe
+        // gives every window.
         palette.inner.setStroke()
         let inner = NSBezierPath(roundedRect: frame.insetBy(dx: px / 4, dy: px / 4),
                                  xRadius: radius, yRadius: radius)
@@ -518,7 +537,7 @@ private final class PreviewStage: NSView {
 
     private func drawTile(_ tile: NSRect, person: (initials: String, name: String, face: [NSColor]),
                           ring: CGFloat, beat: CGFloat, palette: DesktopPalette) {
-        let radius = 0.8 * u
+        let radius = 1.3 * u
         let shape = NSBezierPath(roundedRect: tile, xRadius: radius, yRadius: radius)
         NSGradient(colors: palette.tile)?.draw(in: shape, angle: -60)
 

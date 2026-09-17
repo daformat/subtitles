@@ -1,10 +1,10 @@
 #!/bin/bash
-# Vendors the website's caption demo into the app, for the About window's webview.
+# Vendors the website's caption demo into the app, for the welcome window's webview.
 #
 # The demo is the one thing on subtitles-live.com that shows what the app does
 # without installing it, and it is plain HTML, CSS and JS — so it can be lifted
-# whole rather than rebuilt in AppKit. It is copied rather than fetched: an About
-# box that phones home would be an odd thing to ship in an app whose entire pitch
+# whole rather than rebuilt in AppKit. It is copied rather than fetched: a welcome
+# window that phones home would be an odd thing to ship in an app whose entire pitch
 # is that nothing leaves the machine.
 #
 # Copied means it drifts. This script is the answer to that — re-run it after the
@@ -46,7 +46,7 @@ mkdir -p "$OUT"
 # The caption is a paragraph of page copy, and the welcome window draws its own
 # ⇧ line in AppKit instead: text rendered by a web view inside a native window
 # is text that does not match anything around it.
-HTML=$(extract index.html 381 642)
+HTML=$(extract index.html 384 641)
 expect "the demo markup" "$HTML" '<div class="demo[^"]*" id="demo">'
 expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 # And what the range stops short of. Every check above looks at the start of a
@@ -54,7 +54,7 @@ expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 # so the vendor succeeds with the demo's newest half missing. Twice now the
 # ranges have gone stale that way. The lines just past each range say whether
 # it still ends where the section does.
-expect "the end of the demo markup" "$(extract index.html 643 648)" 'demo-caption'
+expect "the end of the demo markup" "$(extract index.html 642 647)" 'demo-caption'
 # The ⌘-tab switcher wears the apps' icons, which the site keeps as files under
 # /assets and the markup names by absolute path. The webview loads a file URL,
 # so an absolute path would resolve against the root of the disk: the icons the
@@ -102,32 +102,49 @@ fi
 # The palettes come along because every colour in the demo is a var() into them,
 # and the two dark blocks because the webview follows the system appearance.
 CSS_ROOT=$(extract styles.css 1 96)
-CSS_DEMO=$(extract styles.css 761 2423)
+CSS_DEMO=$(extract styles.css 761 2652)
 expect "the light palette" "$CSS_ROOT" -- '--desktop-bg\|:root {'
 expect "the dark palette" "$CSS_ROOT" 'prefers-color-scheme: dark'
 expect "the demo styles" "$CSS_DEMO" '^\.demo {'
 expect "the scene buttons' styles" "$CSS_DEMO" '^\.demo-scenes {'
-expect "the end of the demo styles" "$(extract styles.css 2424 2428)" 'sections'
+expect "the end of the demo styles" "$(extract styles.css 2653 2657)" 'sections'
 # The app's menu, dropped from the status item in the demo's first scene, is
 # styled with the landing pages' windows rather than in the demo section,
 # because those pages drop the same menu. Vendored without it the menu is a
 # bare list of ticks and words.
-CSS_MENU=$(extract styles.css 3685 3728)
+CSS_MENU=$(extract styles.css 3937 4083)
 expect "the menu's styles" "$CSS_MENU" '^\.mn-root {'
-expect "the end of the menu's styles" "$(extract styles.css 3729 3729)" 'landing pages'
+expect "the end of the menu's styles" "$(extract styles.css 4084 4084)" 'landing pages'
 # The frame is the redesign's box around the screen and lives with the hero's
 # styles, a long way past the demo section. It changes nothing at this window's
 # width, but it is the demo's own rule and belongs with the rest.
-CSS_FRAME=$(extract styles.css 3236 3245)
+CSS_FRAME=$(extract styles.css 3485 3494)
 expect "the demo frame" "$CSS_FRAME" '^\.demo-frame {'
-expect "the end of the demo frame" "$(extract styles.css 3246 3248)" 'works with'
+expect "the end of the demo frame" "$(extract styles.css 3495 3497)" 'works with'
 # The Notes window is drawn as Notes: the toolbar in its title bar, the three
 # columns under it. Those styles sit with the landing pages' windows, further
 # past the demo section again, because the landing demos draw the same window.
-CSS_NOTES=$(extract styles.css 4030 4149)
-expect "the Notes window's styles" "$CSS_NOTES" '^\.app-notes '
+CSS_NOTES=$(extract styles.css 4392 4513)
+expect "the Notes window's styles" "$CSS_NOTES" '^/\* ── Notes'
 expect "the Notes window's columns" "$CSS_NOTES" '^\.nt-side {'
-expect "the end of the Notes window's styles" "$(extract styles.css 4150 4152)" 'Visual Studio Code'
+expect "the end of the Notes window's styles" "$(extract styles.css 4514 4516)" 'Visual Studio Code'
+# The Tahoe pass: the windows drawn the way macOS 26 draws them — rounder
+# frames with a rim, sidebars as glass panes with the traffic lights in them,
+# the call's controls as a capsule over the tiles, the menu on the same glass.
+# It restyles the demo's windows from the end of the stylesheet, after every
+# page's own rules, and without it the windows are the old squarer ones under
+# the new markup.
+CSS_TAHOE=$(extract styles.css 4859 5103)
+expect "the Tahoe styles" "$CSS_TAHOE" '^/\* .* Tahoe '
+expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
+# It is the last thing in the file, so what says it still ends where it did is
+# that nothing follows it: a section added after it would move the end, and
+# so would rules added to it.
+[ -z "$(extract styles.css 5104 99999)" ] || {
+  echo "!! styles.css no longer ends with the Tahoe styles — the site's line numbers have moved." >&2
+  echo "   Re-check the ranges in $0 against $SITE." >&2
+  exit 1
+}
 {
   echo "/* Generated by tools/vendor-demo.sh from the site's styles.css. Do not edit. */"
   echo "$CSS_ROOT"
@@ -138,6 +155,8 @@ expect "the end of the Notes window's styles" "$(extract styles.css 4150 4152)" 
   echo "$CSS_FRAME"
   echo
   echo "$CSS_NOTES"
+  echo
+  echo "$CSS_TAHOE"
 } > "$OUT/demo.css"
 
 # ── behaviour: the menu bar clock and the demo itself ──
@@ -149,39 +168,50 @@ expect "the end of the Notes window's styles" "$(extract styles.css 4150 4152)" 
 # reads the translations out of a <template> in the page; there is no template
 # here, so every call falls back to the English literal it was given.
 JS_I18N=$(extract script.js 8 20)
-# The recording flag, declared just past the i18n helper. The caption loop
-# reads it only for a line with a source — the translation scene's — and
-# without it that line threw after its last word and left the box up for good.
-JS_CAPTURE=$(extract script.js 22 27)
-JS_WAVE=$(extract script.js 203 227)
-JS_SEARCH=$(extract script.js 234 825)
-JS_WRITE=$(extract script.js 1664 1807)
-JS=$(extract script.js 1971 3360)
+# The recording flag, declared just past the i18n helper, and under it the
+# settings seed: SETTINGS reads window.SUBTITLES_SETTINGS, which the welcome
+# window sets from the app's own settings before this runs (Welcome.swift),
+# so the box the demo draws is the box the app is drawing. The caption loop
+# reads the flag only for a line with a source — the translation scene's —
+# and without it that line threw after its last word and left the box up for
+# good.
+JS_CAPTURE=$(extract script.js 48 111)
+JS_WAVE=$(extract script.js 290 314)
+JS_SEARCH=$(extract script.js 321 2029)
+JS_WRITE=$(extract script.js 2963 3106)
+JS=$(extract script.js 3283 4741)
 expect "the i18n helper" "$JS_I18N" 'const I18N = '
 expect "the recording flag" "$JS_CAPTURE" '^const CAPTURE = '
-expect "the end of the recording flag" "$(extract script.js 28 29)" 'function theme'
+expect "the settings seed" "$JS_CAPTURE" '^const SETTINGS = '
+expect "the end of the settings seed" "$(extract script.js 112 113)" 'function theme'
 # waveFit sits among the page's IIFEs but is the demo's: it fits the podcast
 # window's waveform to whole device pixels, and the stylesheet's layout of the
 # bars is only what stands in until it runs.
 expect "the waveform fitter" "$JS_WAVE" 'function waveFit'
-expect "the end of the waveform fitter" "$(extract script.js 227 227)" '^})();$'
-# stackSearch is the app's HistorySearchView drawn in the page: the field at the
-# stack's edge that pins it and narrows it to the boxes containing the text. The
-# caption demo attaches it, so it has to be defined before the demo runs.
+expect "the end of the waveform fitter" "$(extract script.js 314 314)" '^})();$'
+# Everything the caption demo shares with the landing pages' demos, from the
+# stack's helpers to the window resizing: the boxes' icon rows, the keycaps,
+# the ⇧ ring, the name tab, the settings seed's defaults and what dresses a
+# demo to them, the pointer reveal, the app's menu, stackSearch — the app's
+# HistorySearchView drawn in the page — and the windows' moving and resizing.
+# All of it has to be defined before the demo runs.
 expect "the stack search" "$JS_SEARCH" '^const stackSearch = '
-expect "the end of the stack search" "$(extract script.js 826 841)" 'function liteDemo'
+expect "the settings seed's defaults" "$JS_SEARCH" '^const DEMO_DEFAULTS = '
+expect "the app's menu" "$JS_SEARCH" '^const statusMenu = '
+expect "the window resizing" "$JS_SEARCH" '^const windowResize = '
+expect "the end of the stack search" "$(extract script.js 2030 2045)" 'function liteDemo'
 # liveWriting moves the caret in every window that is a document, the demo's
 # notes window among them. It lives with the landing pages' scripts because
 # theirs have documents too, but the home demo's notes are what it was drawn for.
 expect "the writing animation" "$JS_WRITE" 'function liveWriting'
-expect "the end of the writing animation" "$(extract script.js 1808 1810)" 'function navFit'
+expect "the end of the writing animation" "$(extract script.js 3107 3109)" 'function navFit'
 expect "the menu bar clock" "$JS" 'function menuBarClock'
 expect "the caption demo" "$JS" 'function captionDemo'
 # The demo used to be the last thing in the site's script, and its range ended
 # at the end of the file. The changelog page's release filter follows it now,
 # and that is the page's, not the demo's: the lines just past the range say
 # whether the demo still ends where it did.
-expect "the end of the caption demo" "$(extract script.js 3361 3364)" 'changelog'
+expect "the end of the caption demo" "$(extract script.js 4742 4745)" 'changelog'
 ALLJS=$(
   echo "// Generated by tools/vendor-demo.sh from the site's script.js. Do not edit."
   echo "$JS_I18N"

@@ -192,7 +192,7 @@ enum Pill {
     /// Where a box wears the icon of the app it transcribes, and its name.
     /// Chosen from the menu. Whichever it is sits on the text's leading edge:
     /// the left, or the right for a right-to-left script.
-    enum IconStyle: String, CaseIterable {
+    enum IconStyle: String, CaseIterable, Encodable {
         case off
         /// A tab on the top edge, flush with the leading side, squaring the
         /// corner under it.
@@ -477,7 +477,7 @@ enum Pill {
     }
 
     /// How the caption sits in its box. Chosen from the menu.
-    enum TextAlignment: String, CaseIterable {
+    enum TextAlignment: String, CaseIterable, Encodable {
         /// From the script's leading edge: the left for most, the right for
         /// Arabic and Hebrew. The box fills a word at a time, and a line that
         /// grows from a fixed edge is easier to follow than one re-centred

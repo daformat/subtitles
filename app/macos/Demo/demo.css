@@ -128,9 +128,9 @@
   --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.06), rgb(var(--ink) / 0.13));
   /* The same value that gradient ends on, so the divider is one more row of it
      rather than a line drawn under it. Move the gradient and this moves too. */
-  --window-line: rgb(var(--ink) / 0.13);
+  --window-line: rgb(var(--ink) / 0.0845);
   --meeting-bg: #f1f2f6;
-  --notes-bg: #fffffe;
+  --notes-bg: #ffffff;
   --tile-bg: linear-gradient(150deg, #fdfdff, #e9ebf2);
   --controls-bg: rgb(250 250 252 / 0.96);
   --panel-bg: rgb(248 248 252 / 0.55);
@@ -156,7 +156,7 @@
     radial-gradient(42% 46% at 12% 90%, rgb(80 196 235 / 0.5), transparent 66%),
     linear-gradient(160deg, #c7c2ff 0%, #ead6f4 48%, #ffd8c2 100%);
   --scene-bg:
-    radial-gradient(42% 58% at 26% 32%, rgb(150 146 255 / 0.42), transparent 66%),
+    radial-gradient(52% 58% at 18% 32%, rgb(150 146 255 / 0.42), transparent 70%),
     radial-gradient(38% 52% at 74% 28%, rgb(255 176 150 / 0.4), transparent 68%),
     radial-gradient(70% 80% at 50% 110%, rgb(232 234 245 / 0.9), transparent 70%),
     linear-gradient(168deg, #eceefb 0%, #f4f2f8 52%, #fafafc 100%);
@@ -185,7 +185,7 @@
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
     --meeting-bg: #16171d;
-    --notes-bg: #17171a;
+    --notes-bg: #1f1f21;
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
     --controls-bg: rgb(36 36 45 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
@@ -205,7 +205,7 @@
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
-      radial-gradient(52% 58% at 26% 32%, rgb(112 108 255 / 0.3), transparent 66%),
+      radial-gradient(62% 58% at 18% 32%, rgb(112 108 255 / 0.3), transparent 70%),
       radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
@@ -224,7 +224,7 @@
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
     --meeting-bg: #16171d;
-    --notes-bg: #17171a;
+    --notes-bg: #1f1f21;
     --tile-bg: linear-gradient(150deg, #262838, #191a24);
     --controls-bg: rgb(36 36 45 / 0.94);
     --panel-bg: rgb(38 38 44 / 0.55);
@@ -243,7 +243,7 @@
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
     --scene-bg:
-      radial-gradient(52% 58% at 26% 32%, rgb(112 108 255 / 0.3), transparent 66%),
+      radial-gradient(62% 58% at 18% 32%, rgb(112 108 255 / 0.3), transparent 70%),
       radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
       radial-gradient(70% 80% at 50% 110%, rgb(20 22 38 / 0.92), transparent 70%),
       linear-gradient(168deg, #1a1c2b 0%, #101119 52%, #0a0b10 100%);
@@ -366,9 +366,21 @@
    top-right corner, exactly as the app draws it. */
 .mb-glyph {
   position: relative;
+  z-index: 0;
   display: inline-flex;
   color: rgb(var(--ink) / 0.82);
+  cursor: default;
 }
+/* Pressed, while its menu is up: a pill of highlight, wider than the glyph,
+   drawn behind it so nothing in the bar moves. */
+.mb-glyph::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-0.4 * var(--u)) calc(-0.8 * var(--u));
+  border-radius: 999px;
+}
+.mb-glyph.is-menu::before { background: rgb(var(--ink) / 0.14); }
 .mb-glyph svg { width: calc(1.7 * var(--u)); height: calc(1.48 * var(--u)); }
 .mb-dot {
   position: absolute;
@@ -417,6 +429,14 @@
   background: var(--window-bg);
   box-shadow: var(--window-ring), var(--window-shadow);
   transition: box-shadow 0.28s ease;
+  /* A compositing layer of its own for every window. Without one the windows
+     share the page's backing store, and WebKit's repaint of a window behind,
+     whose content is still being written by liveWriting and dimmed through
+     the filter below, lands inside the window in front for a few frames: the
+     Notes document showing through the Spotify window under the waveform
+     once the scenes had been switched by hand and the loop then changed app
+     on its own. Safari and WKWebView only; Chrome never showed it. */
+  will-change: transform;
   /* A window is a drawing of a window, not a button, and tapping one on a phone
      flashed a grey box over the whole thing. The tap does something, so the
      highlight is not wrong exactly, but it lands on a 300px rectangle rather
@@ -482,9 +502,9 @@
   bottom: clamp(5.24904cqw, 4.2862cqw + 8.47301px, 5.65281cqw);   /* 10.5% ->  9.75% */
   left:   clamp(9cqw, 23.4185cqw - 89.3945px, 13.26cqw);    /*  9%   -> 13.26% */
   /* Narrower than the insets alone give, taken evenly from both sides so it
-     keeps its centre: five per cent off, then five per cent off that (1.85cqw
-     a side, then 3.6), so about a tenth all told at the fan's width. */
-  margin-inline: 3.6cqw;
+     keeps its centre: five per cent off, three times over (1.85cqw a side,
+     then 3.6, then 5.47), so about a seventh all told at the fan's width. */
+  margin-inline: 5.47cqw;
 }
 .win-notes {
   --z: 1;
@@ -496,7 +516,7 @@
 .win-player {
   --z: 2;
   top:    clamp(2.69182cqw, 18.6356cqw - 98.8517px, 7.40249cqw);  /*  5%   -> 13.75% */
-  right:  clamp(15cqw, 46.3077cqw - 194.108px, 24.25cqw);   /* 15%   -> 24.25% */
+  right:  clamp(20.74cqw, 49.6192cqw - 179.051px, 29.2725cqw); /* 20.74% -> 29.27%: 7% narrower than 15% -> 24.25%, taken off the right edge */
   bottom: clamp(5.65281cqw, 13.397cqw - 48.0137px, 7.94086cqw);   /* 10.5% -> 14.75% */
   left:   clamp(3cqw, 6.38462cqw - 20.9846px, 4cqw);        /*  3%   ->  4%    */
 }
@@ -614,9 +634,10 @@
    shaped like a desktop music app: library rail, now-playing pane, transport
    bar. Still no images anywhere: the artwork is a gradient and the waveform is
    44 divs with a height each. */
+.win-player { --bar-h: calc(5.85 * var(--u)); }
 .pod {
   position: absolute;
-  inset: 0 0 calc(4.77 * var(--u));
+  inset: 0 0 var(--bar-h);
   display: flex;
   min-height: 0;
 }
@@ -624,13 +645,13 @@
 /* library rail */
 .pod-side {
   flex: none;
-  width: calc(8.41 * var(--u));
+  width: calc(10.09 * var(--u));
   display: flex;
   flex-direction: column;
   gap: calc(1.14 * var(--u));
   padding: calc(2.05 * var(--u)) calc(1.48 * var(--u));
   background: var(--recess-deep);
-  border-right: 1px solid rgb(var(--ink) / 0.06);
+  border-right: 1px solid rgb(var(--ink) / calc(0.06 * var(--sep)));
 }
 .pod-nav,
 .pod-item {
@@ -870,12 +891,14 @@
   bottom: 0;
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  height: var(--bar-h);
   gap: calc(1.36 * var(--u));
-  padding: calc(1.02 * var(--u)) calc(1.82 * var(--u));
+  padding: 0 calc(1.82 * var(--u));
   /* A solid bar rather than a gradient fade: the transport is its own strip of
      chrome across the bottom, the way a desktop player's is. */
   background: var(--controls-bg);
-  border-top: 1px solid rgb(var(--ink) / 0.08);
+  border-top: 1px solid rgb(var(--ink) / calc(0.08 * var(--sep)));
   color: rgb(var(--ink) / 0.72);
   font-size: calc(1.25 * var(--u));
   font-variant-numeric: tabular-nums;
@@ -1051,7 +1074,7 @@
   flex-direction: column;
   gap: calc(1.02 * var(--u));
   background: rgb(var(--ink) / 0.035);
-  border-right: 1px solid rgb(var(--ink) / 0.07);
+  border-right: 1px solid rgb(var(--ink) / calc(0.07 * var(--sep)));
 }
 .notes-side i {
   display: block;
@@ -1207,31 +1230,36 @@
      space between the box's own left edge and the screen's right one, so
      carrying it towards an edge squeezed that space and the caption re-wrapped
      under the cursor. max-content asks the text how wide it wants to be instead,
-     and the cap is the same 80% of the screen expressed in --u, which is one
-     hundredth of it and does not care where the box sits. */
+     and the cap is a share of the screen in cqw, which does not care where the
+     box sits: 80.3cqw, or 704px on the widest screens, which is the 73cqw and
+     640px it had plus a tenth. The history pills below cap the same way. */
   width: max-content;
   min-width: 4.67em;
-  max-width: min(73cqw, 640px);
+  max-width: min(80.3cqw, 704px);
   padding: 0.47em 0.73em;
   border-radius: 0.533em;
-  background: rgba(0, 0, 0, 0.72);
+  /* The app's defaultBackgroundOpacity and Pill.backdropBlur, as the seed
+     sets them (seedDemo in script.js): the stack and the search pill below
+     follow the same two, the stack's background receded from this one. */
+  background: rgb(0 0 0 / var(--box-alpha, 0.72));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--box-blur, 6px));
+  -webkit-backdrop-filter: blur(var(--box-blur, 6px));
   color: #fff;
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   /* Off the screen rather than off --u, which is the one thing in here that does
      not scale with the chrome: this is what anybody actually reads, and when the
      unit came down to fit the fanned windows the caption had no reason to follow
-     it. 2.61cqw is the size it was at the unit's old value, kept. */
-  font-size: clamp(14px, 2.61cqw, 23px);
+     it. 2.61cqw is the size it was at the unit's old value, kept. The factor
+     is the menu's Text Size, 1 at the app's 30pt default. */
+  font-size: calc(clamp(14px, 2.61cqw, 23px) * var(--text-scale, 1));
   line-height: 1.34;
   font-weight: 600;
   /* From the script's leading edge, as the app sets it since 1.7.0: the left,
      or the right on the Arabic pages, where dir="rtl" turns start round. The
      box fills a word at a time, and a line that grows from a fixed edge is
      easier to follow than one re-centred on every word. */
-  text-align: start;
+  text-align: var(--text-align, start);
   opacity: 0;
   transition: opacity 0.4s ease;
   /* Clicks go through it, which is the app's own behaviour and what lets a click
@@ -1267,6 +1295,9 @@
   pointer-events: none;
 }
 .demo-overlay.is-movable .ov-ring { display: block; }
+/* Under the tab the mask would cut this ring away; the tab's own ring, a
+   sibling of the box, takes over (see .ov-trace). */
+.demo-overlay.is-tabbed .ov-ring { display: none; }
 .ov-ring rect {
   x: 0.5px;
   y: 0.5px;
@@ -1314,24 +1345,31 @@
 
    Off-screen by default, and left there for touch and for ⇧: the falloff means
    distance alone turns it off, exactly as it does when you move the mouse away
-   from the box on a real screen. */
+   from the box on a real screen.
+
+   The three numbers are the seed's (seedDemo in script.js), with the app's
+   defaults as the fallbacks: the radii in em of the box at 30pt, divided
+   back out of the text scale, since the app's hole is in points and does not
+   grow with the text; and the strength, which the four inner stops are
+   written from. At 0.95 they are the 0.05, 0.198, 0.525 and 0.852 the demo
+   always drew. */
 .demo-overlay {
   --hole-x: -999px;
   --hole-y: -999px;
-  -webkit-mask-image: radial-gradient(ellipse 13.33em 6.67em at var(--hole-x) var(--hole-y),
-    rgba(0, 0, 0, 0.05) 0%,
-    rgba(0, 0, 0, 0.05) 70%,
-    rgba(0, 0, 0, 0.198) 77.5%,
-    rgba(0, 0, 0, 0.525) 85%,
-    rgba(0, 0, 0, 0.852) 92.5%,
-    rgba(0, 0, 0, 1) 100%);
-  mask-image: radial-gradient(ellipse 13.33em 6.67em at var(--hole-x) var(--hole-y),
-    rgba(0, 0, 0, 0.05) 0%,
-    rgba(0, 0, 0, 0.05) 70%,
-    rgba(0, 0, 0, 0.198) 77.5%,
-    rgba(0, 0, 0, 0.525) 85%,
-    rgba(0, 0, 0, 0.852) 92.5%,
-    rgba(0, 0, 0, 1) 100%);
+  /* The gradient once, in a property, so the name tab can intersect its
+     silhouette with it below without restating it. */
+  --hole-mask: radial-gradient(ellipse
+      calc(var(--hole-w, 13.33em) / var(--text-scale, 1))
+      calc(var(--hole-h, 6.67em) / var(--text-scale, 1))
+      at var(--hole-x) var(--hole-y),
+    rgb(0 0 0 / calc(1 - var(--hole-strength, 0.95))) 0%,
+    rgb(0 0 0 / calc(1 - var(--hole-strength, 0.95))) 70%,
+    rgb(0 0 0 / calc(1 - var(--hole-strength, 0.95) * 0.84375)) 77.5%,
+    rgb(0 0 0 / calc(1 - var(--hole-strength, 0.95) * 0.5)) 85%,
+    rgb(0 0 0 / calc(1 - var(--hole-strength, 0.95) * 0.15625)) 92.5%,
+    rgb(0 0 0 / 1) 100%);
+  -webkit-mask-image: var(--hole-mask);
+  mask-image: var(--hole-mask);
 }
 
 /* The ⌥ stack: the last few closed boxes, above the live one.
@@ -1350,8 +1388,15 @@
   flex-direction: column;
   align-items: center;
   gap: 0.2em;
+  /* A pixel of the scroller past the boxes at either end, given back by the
+     margin so nothing moves: the box at the end sits on a fraction of a pixel
+     as often as not, and the scroller's clip, which falls on the same
+     fraction, took the hairline row on that edge with it in Chrome. The
+     script adds the two pixels to the stack's height. */
+  padding-block: 1px;
+  margin-block: -1px;
   transform: translateX(-50%);
-  font-size: clamp(14px, 2.61cqw, 23px);
+  font-size: calc(clamp(14px, 2.61cqw, 23px) * var(--text-scale, 1));
   overflow-y: auto;
   overscroll-behavior: contain;
   /* The browser must not correct the scroll on its own here.
@@ -1428,18 +1473,18 @@
      gives a history pill the app's 140pt minimum too, so a three-word line is a
      pill rather than a chip. */
   min-width: 4.67em;
-  max-width: min(73cqw, 640px);
+  max-width: min(80.3cqw, 704px);
   padding: 0.47em 0.73em;
   border-radius: 0.533em;
-  background: rgba(0, 0, 0, 0.66);
+  background: rgb(0 0 0 / calc(var(--box-alpha, 0.72) * 0.92));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  color: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(var(--box-blur, 6px));
+  -webkit-backdrop-filter: blur(var(--box-blur, 6px));
+  color: rgb(255 255 255 / var(--hist-text-alpha, 0.65));
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   line-height: 1.34;
   font-weight: 600;
-  text-align: start;
+  text-align: var(--text-align, start);
   will-change: transform;
 }
 
@@ -1456,30 +1501,50 @@
 /* On each box, not on the stack, see placeFade in script.js: a mask on the
    stack would take the boxes' backdrop away. The gradient is the stack's, the
    far band at the far edge and the near band at the near one, shifted up by
-   the box's own position in the view so the boxes together draw one fade. */
+   the box's own position in the view so the boxes together draw one fade.
+   Which band is at the top follows the side the stack took, so the two rules
+   only name them; the gradient below is written once, from the box's own view
+   of the stack: its top at -y, its bottom at h - y.
+
+   Each band is a smoothstep rather than a straight ramp. A straight ramp has a
+   crease where it starts and another where it lands, and the eye reads both
+   as edges, one line where the fade begins and one where the box is suddenly
+   whole; 3t² - 2t³ arrives and leaves flat, so neither line is there. Eight
+   stops follow it closely enough at 2.2em, and the pointer hole's edge is the
+   same curve. A zero-length band stacks its stops on one spot, which is a hard
+   stop at the very end of the gradient, the same as no ramp. */
 .demo-history.is-clipped .hist-line {
-  -webkit-mask-image: linear-gradient(to bottom,
-      transparent calc(0px - var(--y, 0px)),
-      #000 calc(var(--fade, 2.2em) - var(--y, 0px)),
-      #000 calc(var(--h, 100%) - var(--near-fade, 0px) - var(--y, 0px)),
-      transparent calc(var(--h, 100%) - var(--y, 0px)));
-  mask-image: linear-gradient(to bottom,
-      transparent calc(0px - var(--y, 0px)),
-      #000 calc(var(--fade, 2.2em) - var(--y, 0px)),
-      #000 calc(var(--h, 100%) - var(--near-fade, 0px) - var(--y, 0px)),
-      transparent calc(var(--h, 100%) - var(--y, 0px)));
+  --band-top: var(--fade, 2.2em);
+  --band-bottom: var(--near-fade, 0px);
 }
 .demo-history.is-below.is-clipped .hist-line {
-  -webkit-mask-image: linear-gradient(to bottom,
-      transparent calc(0px - var(--y, 0px)),
-      #000 calc(var(--near-fade, 0px) - var(--y, 0px)),
-      #000 calc(var(--h, 100%) - var(--fade, 2.2em) - var(--y, 0px)),
-      transparent calc(var(--h, 100%) - var(--y, 0px)));
-  mask-image: linear-gradient(to bottom,
-      transparent calc(0px - var(--y, 0px)),
-      #000 calc(var(--near-fade, 0px) - var(--y, 0px)),
-      #000 calc(var(--h, 100%) - var(--fade, 2.2em) - var(--y, 0px)),
-      transparent calc(var(--h, 100%) - var(--y, 0px)));
+  --band-top: var(--near-fade, 0px);
+  --band-bottom: var(--fade, 2.2em);
+}
+.demo-history.is-clipped .hist-line {
+  --view-top: calc(0px - var(--y, 0px));
+  --view-bottom: calc(var(--h, 100%) - var(--y, 0px));
+  --stack-mask: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0)     var(--view-top),
+      rgba(0, 0, 0, 0.043) calc(var(--view-top) + var(--band-top) * 0.125),
+      rgba(0, 0, 0, 0.156) calc(var(--view-top) + var(--band-top) * 0.25),
+      rgba(0, 0, 0, 0.316) calc(var(--view-top) + var(--band-top) * 0.375),
+      rgba(0, 0, 0, 0.5)   calc(var(--view-top) + var(--band-top) * 0.5),
+      rgba(0, 0, 0, 0.684) calc(var(--view-top) + var(--band-top) * 0.625),
+      rgba(0, 0, 0, 0.844) calc(var(--view-top) + var(--band-top) * 0.75),
+      rgba(0, 0, 0, 0.957) calc(var(--view-top) + var(--band-top) * 0.875),
+      #000                 calc(var(--view-top) + var(--band-top)),
+      #000                 calc(var(--view-bottom) - var(--band-bottom)),
+      rgba(0, 0, 0, 0.957) calc(var(--view-bottom) - var(--band-bottom) * 0.875),
+      rgba(0, 0, 0, 0.844) calc(var(--view-bottom) - var(--band-bottom) * 0.75),
+      rgba(0, 0, 0, 0.684) calc(var(--view-bottom) - var(--band-bottom) * 0.625),
+      rgba(0, 0, 0, 0.5)   calc(var(--view-bottom) - var(--band-bottom) * 0.5),
+      rgba(0, 0, 0, 0.316) calc(var(--view-bottom) - var(--band-bottom) * 0.375),
+      rgba(0, 0, 0, 0.156) calc(var(--view-bottom) - var(--band-bottom) * 0.25),
+      rgba(0, 0, 0, 0.043) calc(var(--view-bottom) - var(--band-bottom) * 0.125),
+      rgba(0, 0, 0, 0)     var(--view-bottom));
+  -webkit-mask-image: var(--stack-mask);
+  mask-image: var(--stack-mask);
 }
 
 /* No room left on the chosen side. It stays built, so the next page shrinking
@@ -1522,11 +1587,11 @@
   padding: calc(var(--e) * 0.233) calc(var(--e) * 0.467);
   border-radius: calc(var(--e) * 0.533);
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.66);
+  background: rgb(0 0 0 / calc(var(--box-alpha, 0.72) * 0.92));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  color: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(var(--box-blur, 6px));
+  -webkit-backdrop-filter: blur(var(--box-blur, 6px));
+  color: rgb(255 255 255 / var(--hist-text-alpha, 0.65));
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   font-size: max(13px, var(--e) * 0.5);
   line-height: 1.34;
@@ -1637,6 +1702,26 @@
 /* The in-flight word, before the recogniser commits it. */
 .demo-overlay .tentative { color: rgba(255, 255, 255, 0.55); }
 
+/* A shortcut said inside a box is drawn as a keycap on the box's own ink:
+   white on the black, sized to the caption so it follows the text size the
+   menu sets, and no taller than the line so the box keeps its shape.
+   script.js draws these from the text as it types (appendKeys), so no
+   translated line carries markup for it. */
+.demo-overlay kbd,
+.demo-history kbd {
+  font: inherit;
+  font-size: 0.82em;
+  line-height: 1;
+  padding: 0.14em 0.36em 0.18em;
+  min-width: 1.5em;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom-width: 2px;
+  border-radius: 0.3em;
+  vertical-align: 0.04em;
+}
+
 /* The source app's row: the icon and name of the app whose audio the box
    holds, above the caption, the way Live Captions heads its box and the way
    the app draws it by default since 1.7.0 (Show Source App Name, Header Row).
@@ -1674,6 +1759,113 @@
   text-overflow: ellipsis;
 }
 .ov-text { display: block; }
+
+/* Show Source App Name → Name Tab, from the demo's menu or the seed (nameTab in
+   script.js; ?iconStyle=nameTab on the URL, see SETTINGS there). The row
+   becomes a tab on the pill's top edge, flush with the
+   leading side and squaring the corner under it, as Pill.tabPath draws it. The
+   box grows upward by the tab's height, Pill.tabHeight: the icon at 0.5 of the
+   size, 10pt above it and 5pt below, so 1em, the name at 13pt centred on the
+   icon, and the tab's ends at the text's own inset, so the icon lines up with
+   the caption under it. The script keeps the silhouette of pill and tab as an
+   SVG mask element on the body and names it in --ov-shape, and the box is
+   masked to it, which is what keeps the fill, the blur and the box's own
+   hairline to the shape. A
+   mask, not a clip-path: Chrome puts only one of the two on the blur behind a
+   box, and which one depends on the screen's own rounded overflow clip round
+   it — under it the hole mask took the blur and the clip-path shaped the fill
+   alone, and without it the clip-path took the blur and the hole was lost. One
+   mask carries both, the hole's gradient intersected with the silhouette, and
+   the stack's fade the same way. A mask element referenced by id, not an image:
+   a data URL is decoded asynchronously in Safari, and a box whose mask is
+   still loading is masked to nothing, which blinked at every word; and two of
+   them per box, taking turns, since Safari paints nothing for a box whose
+   mask changed under it. The
+   hairline round the tab's inner corner is drawn in .ov-rim, where the box's
+   own rounded rect has no edge; the ⇧ ring traces the silhouette from outside
+   the box in .ov-trace, a sibling, because the mask would cut a child off. The tab
+   is never wider than the pill leaves room for, its corner and its foot
+   (Pill.tabRect): a long name is cut short instead. */
+.is-tabbed,
+.demo-history .hist-line.is-tabbed {
+  will-change: transform;
+  -webkit-mask-image: var(--ov-shape, none);
+  mask-image: var(--ov-shape, none);
+}
+.demo-overlay.is-tabbed {
+  -webkit-mask-image: var(--hole-mask), var(--ov-shape);
+  mask-image: var(--hole-mask), var(--ov-shape);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+/* Where the box goes solid, and on the landing pages, the shape alone. */
+.demo-overlay.is-tabbed.is-movable,
+.demo-overlay.is-tabbed.is-solid,
+.demo-lite .lite-box.is-tabbed:not(.has-reveal) {
+  -webkit-mask-image: var(--ov-shape);
+  mask-image: var(--ov-shape);
+}
+.demo-history.is-clipped .hist-line.is-tabbed {
+  -webkit-mask-image: var(--stack-mask), var(--ov-shape);
+  mask-image: var(--stack-mask), var(--ov-shape);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.is-tabbed.has-tab { padding-top: calc(1em + 0.47em); }
+.is-tabbed.has-tab .ov-app {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  box-sizing: border-box;
+  height: 1em;
+  max-width: calc(100% - 0.8em);
+  margin: 0;
+  padding: 0.333em 0.733em 0.167em;
+  gap: 0.233em;
+}
+.is-tabbed.has-tab .ov-app img { width: 0.5em; height: 0.5em; }
+.is-tabbed.has-tab .ov-name { font-size: 0.433em; }
+/* The hairline's inner corner, over the fill and under the text: the box keeps
+   the stylesheet's inset hairline, which the mask cuts to the silhouette and
+   which every engine paints on whole pixels; what that cannot draw, the tab's
+   inner side, the foot, the pill's top edge beside the tab and the corners
+   there, is the ring between the silhouette and the silhouette a pixel in,
+   clipped from this box of the line's colour, which the script places over
+   that corner alone. Never past the box: a child reaching past a box in the
+   stack reaches past the stack, which scrolls to show it. */
+.ov-rim {
+  position: absolute;
+  z-index: -1;
+  background: var(--pill-line);
+  pointer-events: none;
+}
+/* The ⇧ ring round a tabbed box, see .ov-ring: the same two tones, dashed and
+   phased, 3.5px outside the silhouette, placed and sized by the script. It
+   fades as the box does, on the box's own timing, since it is not inside the
+   box to fade with it: the script gives it the box's is-visible. */
+.ov-trace {
+  position: absolute;
+  z-index: 11;
+  display: none;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.ov-trace.is-on { display: block; }
+.ov-trace.is-visible { opacity: 1; }
+.ov-trace path {
+  fill: none;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.ov-trace .ring-white { stroke: rgb(255 255 255 / 0.75); }
+.ov-trace .ring-black { stroke: rgb(0 0 0 / 0.75); stroke-dashoffset: 3; }
+/* Placed by the script from the stack's edge, on whole pixels, rather than
+   centred by the column: see settle in script.js. */
+.demo-history .hist-line.is-tabbed { align-self: flex-start; }
+/* The boxes' mask elements, out of the flow and out of every box. */
+.ov-defs { position: absolute; width: 0; height: 0; }
 
 /* One device pixel, the width the app draws its hairline at. */
 .demo { --hairline: 1px; }
@@ -1736,6 +1928,16 @@
   text-align: center;
   transition: color 0.2s ease;
 }
+/* The segment's shortcut as a keycap, in the label's own colour so it dims and
+   brightens with the rest of the label. */
+.scene-label kbd {
+  font-size: 11px;
+  line-height: 1;
+  padding: 0.2em 0.36em 0.24em;
+  min-width: 1.6em;
+  vertical-align: 1px;
+  color: inherit;
+}
 /* Hover moves the label and nothing else: brightening the track as well put it
    within a shade of the fill, and the two stopped reading as track and
    progress. */
@@ -1747,12 +1949,39 @@
   font-size: 14px;
   color: var(--text-faint);
   text-align: center;
+  /* Help text, not chrome: it can be selected and copied like any prose. */
+  -webkit-user-select: text;
+  user-select: text;
 }
 .demo-caption kbd { font-size: 12px; padding: 0.24em 0.42em; }
 /* The lines under the demo are one block of help text, so they sit closer to
    each other than the block does to the screen above it. */
 .demo-caption + .demo-caption { margin-top: 6px; }
 
+/* The app's menu bar glyph, in a line of text: the same shape the demo's bar
+   carries, in the text's own colour, a hair below the baseline as the bar's
+   sits below its cap height. */
+.mb-inline {
+  display: inline-block;
+  width: 1.1em;
+  height: 0.96em;
+  vertical-align: -0.16em;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 14'%3E%3Cpath d='M8 0C12.4183 3.45921e-08 16 2.76601 16 6.17773C15.9998 9.58934 12.4182 12.3545 8 12.3545C7.95891 12.3545 7.91789 12.3549 7.87695 12.3545C7.2354 12.3471 6.62608 12.6326 6.12207 13.0293C5.08323 13.847 3.98202 14.2713 2.6416 13.8018C2.18877 13.6432 2.26424 13.0289 2.6416 12.8965C3.14721 12.719 3.16134 12.5345 3.35254 11.9893C3.49999 11.5685 3.22962 11.1513 2.85547 10.9082C1.10992 9.77516 9.73494e-05 8.07645 0 6.17773C0 2.76601 3.58172 0 8 0ZM3.53027 7.03613C3.19866 7.03637 2.9298 7.30507 2.92969 7.63672C2.92969 7.96846 3.19858 8.23805 3.53027 8.23828H8.21289C8.54478 8.23828 8.81445 7.96861 8.81445 7.63672C8.81434 7.30493 8.54471 7.03613 8.21289 7.03613H3.53027ZM10.416 7.03613C10.0843 7.03626 9.81554 7.305 9.81543 7.63672C9.81543 7.96853 10.0842 8.23816 10.416 8.23828H11.9189C12.2507 8.23809 12.5195 7.96849 12.5195 7.63672C12.5194 7.30504 12.2506 7.03632 11.9189 7.03613H10.416ZM3.53027 4.65723C3.19868 4.65742 2.9299 4.92622 2.92969 5.25781C2.92969 5.58958 3.19855 5.85918 3.53027 5.85938H6.18457C6.51646 5.85938 6.78613 5.5897 6.78613 5.25781C6.78592 4.92611 6.51633 4.65723 6.18457 4.65723H3.53027ZM8.36328 4.65723C8.03152 4.65723 7.76291 4.92611 7.7627 5.25781C7.7627 5.5897 8.03139 5.85938 8.36328 5.85938H13.0703C13.4022 5.85938 13.6719 5.5897 13.6719 5.25781C13.6717 4.92611 13.4021 4.65723 13.0703 4.65723H8.36328Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 14'%3E%3Cpath d='M8 0C12.4183 3.45921e-08 16 2.76601 16 6.17773C15.9998 9.58934 12.4182 12.3545 8 12.3545C7.95891 12.3545 7.91789 12.3549 7.87695 12.3545C7.2354 12.3471 6.62608 12.6326 6.12207 13.0293C5.08323 13.847 3.98202 14.2713 2.6416 13.8018C2.18877 13.6432 2.26424 13.0289 2.6416 12.8965C3.14721 12.719 3.16134 12.5345 3.35254 11.9893C3.49999 11.5685 3.22962 11.1513 2.85547 10.9082C1.10992 9.77516 9.73494e-05 8.07645 0 6.17773C0 2.76601 3.58172 0 8 0ZM3.53027 7.03613C3.19866 7.03637 2.9298 7.30507 2.92969 7.63672C2.92969 7.96846 3.19858 8.23805 3.53027 8.23828H8.21289C8.54478 8.23828 8.81445 7.96861 8.81445 7.63672C8.81434 7.30493 8.54471 7.03613 8.21289 7.03613H3.53027ZM10.416 7.03613C10.0843 7.03626 9.81554 7.305 9.81543 7.63672C9.81543 7.96853 10.0842 8.23816 10.416 8.23828H11.9189C12.2507 8.23809 12.5195 7.96849 12.5195 7.63672C12.5194 7.30504 12.2506 7.03632 11.9189 7.03613H10.416ZM3.53027 4.65723C3.19868 4.65742 2.9299 4.92622 2.92969 5.25781C2.92969 5.58958 3.19855 5.85918 3.53027 5.85938H6.18457C6.51646 5.85938 6.78613 5.5897 6.78613 5.25781C6.78592 4.92611 6.51633 4.65723 6.18457 4.65723H3.53027ZM8.36328 4.65723C8.03152 4.65723 7.76291 4.92611 7.7627 5.25781C7.7627 5.5897 8.03139 5.85938 8.36328 5.85938H13.0703C13.4022 5.85938 13.6719 5.5897 13.6719 5.25781C13.6717 4.92611 13.4021 4.65723 13.0703 4.65723H8.36328Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* The menu's Try badge, in a line of text: the same box, one size down,
+   tinted from the text's own colour. */
+.try-inline {
+  display: inline-block;
+  padding: 0.08em 0.5em;
+  border-radius: 0.65em;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.35;
+  vertical-align: 0.08em;
+}
 /* Only says anything to a pointer and a keyboard, so it is only shown to one. */
 .demo-caption-try { display: none; }
 @media (hover: hover) and (pointer: fine) {
@@ -1765,15 +1994,14 @@
 .mn-root { --u: clamp(4px, 0.8182cqw, 7.2px); }
 .mn-panel {
   position: absolute;
-  z-index: 9;
+  /* Above the captions, the stack and the ⇧ ring: a menu is over everything. */
+  z-index: 20;
   top: calc(3.25 * var(--u));
   right: calc(1.36 * var(--u));
   min-width: calc(31 * var(--u));
-  padding: calc(0.5 * var(--u));
+  --mn-pad: calc(0.5 * var(--u));
+  padding: var(--mn-pad);
   border-radius: calc(1 * var(--u));
-  background: var(--menu-bg);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
   box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25), 0 10px 30px -6px rgb(0 0 0 / 0.35);
   font-size: calc(1.25 * var(--u));
   color: rgb(var(--ink) / 0.92);
@@ -1782,8 +2010,67 @@
   display: none;
   pointer-events: none;
 }
+/* The material is a layer under the rows, not a filter on the panel itself:
+   an element that filters its backdrop walls its descendants off from the
+   screen, they see only what it paints, and a submenu is a descendant of the
+   menu it hangs off. With the filter on the panel, the submenu blurred the
+   menu's tint and showed the windows behind it sharp. On a layer of its own,
+   each panel's glass sees the screen. */
+.mn-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--menu-bg);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
 .mn-panel.is-open { display: block; }
 .mn-sub { top: 0; right: calc(100% - 0.3 * var(--u)); min-width: calc(19 * var(--u)); }
+/* A submenu's own submenu goes the other way, over the menu, as macOS sends
+   it once the level above had to open towards the screen's edge. */
+.mn-sub .mn-sub { right: auto; left: calc(100% - 0.3 * var(--u)); }
+.mn-sub .mn-sub.is-left { left: auto; right: calc(100% - 0.3 * var(--u)); }
+/* A panel the screen leaves no room for scrolls inside itself, as a macOS
+   menu taller than the screen does. The script puts the rows in a holder
+   and caps it; the holder takes over the panel's padding, so a row shaking
+   its head has the room it had, and no scrollbar shows. The holder ends
+   where a chevron's band begins, so the band is the bare panel, glass and
+   rim, with the chevron on it; it shows only while there is more that way,
+   and scrolls the rows under the pointer. A submenu sits beside the holder,
+   not in it, so the holder never clips it. */
+.mn-scroll {
+  margin: calc(-1 * var(--mn-pad));
+  padding: var(--mn-pad);
+}
+/* A scroll container only while the panel is short of room, so a menu that
+   fits cannot be rubber-banded; and no bounce at the ends even then, as a
+   macOS menu has none. */
+.mn-panel.is-capped > .mn-scroll {
+  overflow: hidden auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+}
+.mn-scroll::-webkit-scrollbar { display: none; }
+.mn-arrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  /* A row's height past the panel's padding, the chevron centred in the row's part. */
+  height: calc(2.5 * var(--u) + var(--mn-pad));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--ink) / 0.6);
+  visibility: hidden;
+}
+.mn-arrow.is-shown { visibility: visible; }
+.mn-arrow.is-up { top: 0; padding-top: var(--mn-pad); }
+.mn-arrow.is-down { bottom: 0; padding-bottom: var(--mn-pad); }
+.mn-arrow svg { width: calc(1 * var(--u)); height: calc(0.6 * var(--u)); display: block; }
+.mn-arrow.is-up svg { transform: rotate(180deg); }
 .mn-row {
   position: relative;
   display: flex;
@@ -1798,11 +2085,56 @@
 .mn-label { flex: 1; }
 .mn-key, .mn-more { margin-inline-start: calc(2 * var(--u)); color: rgb(var(--ink) / 0.5); }
 .mn-more svg { width: calc(0.6 * var(--u)); height: calc(1 * var(--u)); display: block; }
+/* A row with a note under its name, as the app draws its models and its
+   translation timings: two lines in the one colour, the check on the first,
+   the row as tall as they need. */
+.mn-note { display: block; }
+.mn-row:has(.mn-note) {
+  height: auto;
+  align-items: flex-start;
+  padding-block: calc(0.45 * var(--u));
+  line-height: calc(1.55 * var(--u));
+}
 .mn-row.is-dim { color: rgb(var(--ink) / 0.38); }
 .mn-row.is-dim .mn-key, .mn-row.is-dim .mn-more { color: rgb(var(--ink) / 0.3); }
 .mn-row.is-hot { background: var(--menu-accent); color: #fff; }
 .mn-row.is-hot .mn-key, .mn-row.is-hot .mn-more { color: rgb(255 255 255 / 0.85); }
 .mn-sep { height: 1px; margin: calc(0.45 * var(--u)) calc(0.6 * var(--u)); background: rgb(var(--ink) / 0.12); }
+/* The Try badge on the rows the demo can act on: at the end of the row,
+   before the key or the chevron, one size down and boxed, so it reads as a
+   tag on the item and not as part of its name. */
+.mn-demo {
+  margin-inline-start: calc(1.5 * var(--u));
+  padding: calc(0.1 * var(--u)) calc(0.5 * var(--u));
+  border-radius: calc(0.6 * var(--u));
+  background: rgb(var(--ink) / 0.1);
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--ink) / 0.62);
+}
+.mn-demo + .mn-key, .mn-demo + .mn-more { margin-inline-start: calc(0.45 * var(--u)); }
+.mn-row.is-hot .mn-demo { background: rgb(255 255 255 / 0.24); color: #fff; }
+/* Opened by hand, the menu takes the pointer: rows light under it, and a
+   click lands. Scripted, it stays out of the pointer's way as before. */
+.mn-panel { -webkit-user-select: none; user-select: none; }
+.mn-root.is-manual, .mn-root.is-manual .mn-panel { pointer-events: auto; }
+.mn-root.is-manual .mn-row { cursor: default; }
+/* A row that does nothing here shakes its head at the click, small, quick
+   and damped, as the changelog's pills refuse one: refusing silently is
+   indistinguishable from being broken. */
+@keyframes mn-refuse {
+  0%, 100% { transform: translateX(0); }
+  16%      { transform: translateX(-4px); }
+  42%      { transform: translateX(3px); }
+  68%      { transform: translateX(-2px); }
+  88%      { transform: translateX(1px); }
+}
+.mn-row.is-refused { animation: mn-refuse 0.36s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  /* No shake, but the refusal still has to be visible: the row blinks. */
+  .mn-row.is-refused { animation: none; background: rgb(var(--ink) / 0.12); }
+}
 
 /* The demo in its frame. The screen inside keeps every rule it had; only the
    box around it changed, and the og card, which draws its own composition
@@ -1815,6 +2147,7 @@
    the help lines sit under it in the open, as they always did. */
 .demo-frame .demo-screen { max-width: none; }
 
+/* ── Notes ───────────────────────────────────────────────────
    Apple's, drawn as it is: the toolbar in the title bar, then three
    columns — the folders, the list, the note — in the demo's tokens, so it
    follows the page the way the real one follows the Mac. */
@@ -1856,7 +2189,7 @@
   flex-direction: column;
   gap: calc(0.25 * var(--u));
   background: rgb(var(--ink) / 0.04);
-  border-right: 1px solid rgb(var(--ink) / 0.08);
+  border-right: 1px solid rgb(var(--ink) / calc(0.08 * var(--sep)));
   color: rgb(var(--ink) / 0.85);
   min-width: 0;
 }
@@ -1888,7 +2221,7 @@
   display: flex;
   flex-direction: column;
   gap: calc(0.3 * var(--u));
-  border-right: 1px solid rgb(var(--ink) / 0.08);
+  border-right: 1px solid rgb(var(--ink) / calc(0.08 * var(--sep)));
   min-width: 0;
 }
 .nt-item {
@@ -1896,7 +2229,7 @@
   gap: calc(0.35 * var(--u));
   padding: calc(0.7 * var(--u)) calc(0.8 * var(--u));
   border-radius: calc(0.6 * var(--u));
-  border-bottom: 1px solid rgb(var(--ink) / 0.06);
+  border-bottom: 1px solid rgb(var(--ink) / calc(0.06 * var(--sep)));
 }
 .nt-item.is-on { background: rgb(var(--ink) / 0.1); border-bottom-color: transparent; }
 .nt-item b { font-size: calc(1.05 * var(--u)); color: rgb(var(--ink) / 0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1921,6 +2254,8 @@
 @container (max-width: 620px) {
   .nt-side { display: none; }
   .nt-list { width: 36%; }
+  /* With the pane gone the lights move to the main bar, as under is-narrow. */
+  .nt-lights-narrow { display: inline-flex; }
 }
 @container (max-width: 430px) {
   .nt-list { display: none; }
@@ -1934,3 +2269,249 @@
 .app-notes.is-cramped .nt-list { display: none; }
 .app-notes.is-cramped .nt-tools .nt-aa,
 .app-notes.is-cramped .nt-tools .g:nth-of-type(n + 5) { display: none; }
+
+/* ─────────────────────────── Tahoe ─────────────────────────────────────────
+   The windows drawn the way macOS 26 draws them. Rounder frames with a fine
+   light rim inside the edge and a softer, deeper shadow; a title bar that is
+   part of the window rather than a lid on it; sidebars as panes floating
+   inside the window, inset from its edges, on glass; capsule controls; a
+   menu and the app switcher rounder, on the same glass; the menu bar as it
+   was. All of it in the demo's own tokens:
+   nothing here names an app's own colours, and every size follows --u. */
+.demo {
+  /* A sidebar pane: a shade darker than the window it sits in, translucent
+     over a blur, a white-ish hairline around it and a soft shadow under. */
+  /* The sidebar region is glass: the desktop and whatever is behind the
+     window come through it blurred, under a light tint, and the pane sits
+     on that with a tint of its own, a shade darker. An inactive window loses
+     the glass and goes flat, as macOS's do. */
+  --vibrant-bg: rgb(255 255 255 / 0.55);
+  --vibrant-clear: rgb(255 255 255 / 0.12);
+  --pane-bg: rgb(0 0 0 / 0.05);
+  --pane-line: rgb(255 255 255 / 0.75);
+  --pane-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05), 0 10px 24px -8px rgb(0 0 0 / 0.16);
+  /* Toolbar controls on glass: a shade of the window, a light hairline
+     inside, a faint edge outside, a soft shadow. */
+  /* Toolbar controls: the bar's own colour, lifted off it by a soft shadow;
+     in dark, a shade lighter than the bar so they read at all. */
+  --glass-bg: var(--notes-bg);
+  --glass-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.08), 0 2px 6px rgb(0 0 0 / 0.06);
+  --nt-line: rgb(0 0 0 / 0.065);
+  --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.14), inset 0 0 0 0.5px rgb(255 255 255 / 0.65);
+  --window-shadow: 0 2px 6px rgb(0 0 0 / 0.06), 0 22px 44px -18px rgb(0 0 0 / 0.28);
+  --menu-bg: rgb(244 244 248 / 0.78);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .demo {
+    --vibrant-bg: rgb(30 30 33 / 0.5);
+    --vibrant-clear: rgb(30 30 33 / 0.12);
+    --pod-pane-line: rgb(255 255 255 / 0.1);
+    --toolbar-line: rgb(var(--ink) / 0.08);
+    --sep: 1;
+    --pane-bg: rgb(0 0 0 / 0.2);
+    --pane-line: rgb(255 255 255 / 0.1);
+    --pane-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.25), 0 10px 24px -8px rgb(0 0 0 / 0.5);
+    --glass-bg: rgb(255 255 255 / 0.08);
+    --glass-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px rgb(0 0 0 / 0.25);
+    --nt-line: rgb(255 255 255 / 0.1);
+    --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.7), inset 0 0 0 0.5px rgb(255 255 255 / 0.13);
+    --window-shadow: 0 2px 8px rgb(0 0 0 / 0.36), 0 26px 52px -18px rgb(0 0 0 / 0.65);
+    --menu-bg: rgb(40 40 46 / 0.78);
+  }
+}
+:root[data-theme="dark"] .demo {
+  --vibrant-bg: rgb(30 30 33 / 0.5);
+  --vibrant-clear: rgb(30 30 33 / 0.12);
+  --pod-pane-line: rgb(255 255 255 / 0.1);
+  --toolbar-line: rgb(var(--ink) / 0.08);
+  --sep: 1;
+  --pane-bg: rgb(0 0 0 / 0.2);
+  --pane-line: rgb(255 255 255 / 0.1);
+  --pane-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.25), 0 10px 24px -8px rgb(0 0 0 / 0.5);
+  --glass-bg: rgb(255 255 255 / 0.08);
+  --glass-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px rgb(0 0 0 / 0.25);
+  --nt-line: rgb(255 255 255 / 0.1);
+  --window-ring: 0 0 0 0.5px rgb(0 0 0 / 0.7), inset 0 0 0 0.5px rgb(255 255 255 / 0.13);
+  --window-shadow: 0 2px 8px rgb(0 0 0 / 0.36), 0 26px 52px -18px rgb(0 0 0 / 0.65);
+  --menu-bg: rgb(40 40 46 / 0.78);
+}
+
+/* The frame. */
+.demo-window { border-radius: calc(2.4 * var(--u)); }
+
+/* The title bar is the window's own surface, its content's colour, with one
+   separator under it; a window whose content has a tint carries the tint up
+   into the bar. */
+.win-titlebar { background: transparent; }
+.win-meeting .win-titlebar { background: var(--meeting-bg); }
+.lights { gap: calc(0.75 * var(--u)); }
+
+/* Sidebars are full-height panes inset from the window's edges, on glass,
+   and the traffic lights sit in the pane's own header, as Tahoe draws a
+   sidebar window; the main column carries its own bar beside it. When a
+   window is pulled narrow enough to lose its sidebar, a second set of lights
+   in the main bar takes over. */
+.nt-side,
+.notes-side,
+.pod-side {
+  margin: calc(0.55 * var(--u)) 0 calc(0.55 * var(--u)) calc(0.55 * var(--u));
+  border: 1px solid var(--pane-line);
+  /* The window's radius less the inset, so the two curves are concentric. */
+  border-radius: calc(1.85 * var(--u));
+  background: var(--pane-bg);
+  box-shadow: var(--pane-shadow);
+}
+.nt-side, .pod-side { padding-top: 0; position: relative; z-index: 1; }
+.pod-side { margin-bottom: calc(0.55 * var(--u)); }
+
+/* See-through. The Notes and podcast windows paint no background of their
+   own: the main column is opaque, and the sidebar's column is a glass region
+   (a pseudo-element under the pane) that blurs the desktop and the windows
+   behind. Behind the front window the content is dimmed with a filter, which
+   walls a backdrop filter off from the desktop, so those go flat instead. */
+.win-notes .win-content, .nt { background: var(--notes-bg); }
+.nt { position: relative; }
+.nt::before, .pod::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  /* A backdrop filter gets a compositing layer of its own, and that layer
+     does not take the window's rounded clip: a square of blurred desktop
+     showed past the corner. The region rounds its own outer corners to the
+     window's radius instead. */
+  border-radius: calc(2.4 * var(--u)) 0 0 calc(2.4 * var(--u));
+  width: calc(21.12% + 0.55 * var(--u));
+  background: var(--vibrant-bg);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+.pod::before { width: calc(10.64 * var(--u)); background: var(--vibrant-clear); }
+/* Over the podcast's gradient the hairline reads at half strength. */
+.pod-side { border-color: var(--pod-pane-line, var(--pane-line)); }
+.demo { --pod-pane-line: rgb(255 255 255 / 0.35); }
+.nt-main, .pod-main-col { position: relative; z-index: 1; }
+
+/* The Notes sidebar, at 88% of the width it had. */
+.nt-side { width: 21.12%; }
+/* The podcast's scene runs under the whole window, so its sidebar's glass
+   tints to the window's own gradient rather than to the desktop; the scene
+   is inside the window, so the blur keeps seeing it behind the front one. */
+.app-notes.is-narrow .nt::before, .win-player.is-narrow .pod::before { display: none; }
+.demo-window:not(.is-front) .nt::before { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* The landing pages' sidebars, the same way: Slack's and Discord's channel
+   lists, Discord's server rail, and the generic notes sidebar. Each window
+   already paints its background under the whole frame; the sidebar becomes
+   the pane over it, and its own flat fill goes. The rail stays flat: it is
+   a strip of icons, not a pane, and Discord draws it that way. */
+.lw-sidebar,
+.notes-side {
+  margin: calc(0.55 * var(--u)) 0 calc(0.55 * var(--u)) calc(0.55 * var(--u));
+  border: 1px solid var(--pane-line);
+  border-radius: calc(1.85 * var(--u));
+  background: var(--pane-bg);
+  box-shadow: var(--pane-shadow);
+  position: relative;
+  z-index: 1;
+}
+.lw-sidebar { border-right: 1px solid var(--pane-line); }
+.notes-side { border-right: 1px solid var(--pane-line); }
+.lw-slack, .lw-discord, .notes-body { position: relative; }
+.lw-slack::before, .lw-discord::before, .notes-body::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 0 0 0 calc(2.4 * var(--u));
+  background: var(--vibrant-bg);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+.lw-slack::before { width: calc(32% - 8.2 * var(--u)); }
+.lw-discord::before { left: calc(5 * var(--u)); width: calc(30% + 0.55 * var(--u)); }
+.notes-body::before { width: calc(22% + 0.55 * var(--u)); }
+.lw-rail { position: relative; z-index: 1; }
+.demo-window:not(.is-front) .lw-slack::before,
+.demo-window:not(.is-front) .lw-discord::before,
+.demo-window:not(.is-front) .notes-body::before { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.nt-side-bar, .pod-side-bar {
+  flex: none;
+  justify-content: space-between;
+  border-bottom: 0;
+  padding-inline: calc(0.3 * var(--u));
+  margin-bottom: calc(0.2 * var(--u));
+}
+/* The pane's two icons hug its right edge, as Notes sets them. */
+.nt-side-tools { margin-inline-start: auto; }
+
+.pod-side-bar { padding-inline: 0; margin-bottom: 0; }
+.nt-side-tools { display: inline-flex; align-items: center; gap: calc(0.9 * var(--u)); color: rgb(var(--ink) / 0.55); }
+.nt-main, .pod-main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nt-topbar, .pod-topbar { flex: none; }
+.nt-body { flex: 1; min-height: 0; display: flex; }
+.nt-lights-narrow, .pod-lights-narrow { display: none; }
+.app-notes.is-narrow .nt-lights-narrow, .win-player.is-narrow .pod-lights-narrow { display: inline-flex; }
+/* The toolbar's controls sit on glass: compose and share as circles, the
+   format controls together in a capsule, the search as one. */
+.nt-group,
+.nt-search,
+.nt-tools > .g {
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+}
+.nt-group {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1.1 * var(--u));
+  padding: calc(0.3 * var(--u)) calc(0.9 * var(--u));
+  border-radius: 999px;
+}
+.nt-tools > .g {
+  box-sizing: border-box;
+  width: calc(2.2 * var(--u));
+  height: calc(2.2 * var(--u));
+  padding: calc(0.42 * var(--u));
+  border-radius: 50%;
+}
+/* The compose glyph's pen leans to the top right and leaves the bottom left
+   empty, so centring the box does not centre the mark; a tenth to the right
+   does. */
+.nt-tools > .g:first-child svg { transform: translateX(10%); }
+.nt-topbar { border-bottom-color: var(--nt-line); }
+.nt-topbar .nt-tools, .nt-topbar .nt-tools > * { align-self: center; }
+.nt-topbar {
+  align-items: center;
+  box-sizing: content-box;
+  height: auto;
+  padding-block: calc(0.94 * var(--u));
+}
+.nt-list { border-right-color: var(--nt-line); }
+.nt-row.is-on, .nt-row.is-on u { color: #f2b300; }
+.app-notes.is-narrow .nt-tools > .g:nth-of-type(2) { display: none; }
+.app-notes.is-cramped .nt-group { display: none; }
+.nt-search { border-radius: 999px; }
+
+/* The call's controls float as a capsule over the tiles, and the tiles take
+   the frame's rounding. */
+.meet-bar {
+  align-self: center;
+  width: max-content;
+  margin-bottom: calc(0.9 * var(--u));
+  padding: calc(0.55 * var(--u)) calc(0.9 * var(--u));
+  border-radius: 999px;
+  border: 1px solid var(--pane-line);
+  background: var(--pane-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+.tile { border-radius: calc(1.3 * var(--u)); }
+
+/* Menus and the switcher, rounder, with the rim the windows have. The rim is
+   inside the box, so it sits on the glass layer, over the blur. */
+.mn-panel {
+  --mn-pad: calc(0.7 * var(--u));
+  border-radius: calc(1.6 * var(--u));
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.22), 0 12px 34px -8px rgb(0 0 0 / 0.35);
+}
+.mn-panel::before { box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.35); }
+.mn-row { height: calc(2.5 * var(--u)); border-radius: calc(0.9 * var(--u)); }
+.demo-switcher { border-radius: calc(2.7 * var(--u)); }

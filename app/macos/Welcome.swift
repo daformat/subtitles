@@ -38,6 +38,10 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// One sentence about the trial, or nil for a copy that has none to
     /// mention — licensed, or from before there were keys (License.swift).
     var trialLine: () -> String? = { nil }
+    /// The overlay's settings, for the demo to draw its box to. Read when the
+    /// window is built, which is every time it is opened: closing tears it
+    /// down (`windowWillClose`), so the demo is never older than the window.
+    var settings: () -> PreviewStyle = { PreviewStyle() }
 
     private var window: NSWindow?
     private var webView: WKWebView?
@@ -434,8 +438,32 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         }
     }
 
+    /// The demo seeded with the app's settings, so the box it draws is the box
+    /// the app is drawing — the header row or the name tab, the size, the
+    /// lines a box fills before it pages, how many boxes ⌥ keeps.
+    ///
+    /// The site's script reads `window.SUBTITLES_SETTINGS` before it runs
+    /// (SETTINGS in demo.js), under the names of `PreviewStyle`'s own fields:
+    /// that struct encodes straight into it, `revealSize` as the `[width,
+    /// height]` a CGSize encodes to and `historyDepth` at `Int.max` for every
+    /// box. The script drops a key it does not know and a value that is not
+    /// one, so nothing here can leave the demo in a state its menu cannot
+    /// show; a seed that fails to encode leaves it on the site's own defaults.
+    /// Injected at document start, well ahead of the script at the end of the
+    /// page, the way the site's own recording flag is set.
+    private static func seed(_ style: PreviewStyle) -> WKUserScript? {
+        guard let json = try? JSONEncoder().encode(style),
+              let text = String(data: json, encoding: .utf8) else { return nil }
+        return WKUserScript(source: "window.SUBTITLES_SETTINGS = \(text);",
+                            injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    }
+
     private func buildDemo() -> NSView {
-        let web = DemoWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        if let seed = Self.seed(settings()) {
+            configuration.userContentController.addUserScript(seed)
+        }
+        let web = DemoWebView(frame: .zero, configuration: configuration)
         web.windowWantsWheel = { [weak self] in
             guard let scroll = self?.pageScroll else { return false }
             // Never while ⌥ is down. That is the gesture that raises the demo's

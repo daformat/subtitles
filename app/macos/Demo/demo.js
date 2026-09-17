@@ -20,6 +20,64 @@ const I18N = (() => {
 // every turn from nothing, so the turn recorded is the one a visitor sees first.
 const CAPTURE = window.SUBTITLES_CAPTURE === true;
 
+// The demos seeded with the app's settings, so the box a demo draws is the
+// box the reader has. The app embeds the home demo in its windows and hands
+// it the settings the overlay is running on; the keys are the app's own
+// (PreviewStyle in SettingsPreview.swift), so that struct encodes straight
+// into the seed. Read from window.SUBTITLES_SETTINGS, set before this script
+// runs as SUBTITLES_CAPTURE is, and from the page's query string, which wins
+// key by key: /demo/?fontSize=40&iconStyle=nameTab&revealEnabled=0. A key
+// left out keeps the demo's own value, which each demo decides for itself
+// (the landing pages start with the reveal off), so nothing is filled in
+// here; a key that is not a setting, or a value that is not one, is dropped.
+//
+//   fontSize            points: the menu's 22 / 30 / 40 / 52, or any other
+//   textAlignment       start | center
+//   iconStyle           off | nameTab | header
+//   maxLines            lines a box fills before it pages, 1 and up
+//   boxOpacity          0…1, how solid the box is behind the text
+//   blur                points, 0 for none
+//   revealEnabled       Fade Away Under Pointer
+//   revealOpacity       0…1, how much of the box the pointer takes
+//   revealWidth         points, the hole's full extent; or revealSize as
+//   revealHeight        {width, height} or [width, height], as CGSize encodes
+//   historyEnabled      Recent Boxes On ⌥
+//   historyDepth        boxes kept: 0 for none, anything past 2000 for all
+//   historyTextOpacity  0…1, the stack's text against the live box's white
+//   historyExpires      whether a silence forgets the stack
+//   historyExpiry       seconds of silence that does
+const SETTINGS = (() => {
+  const NUMBER = {
+    fontSize: [1, 400], maxLines: [1, 50], boxOpacity: [0, 1], blur: [0, 200],
+    revealOpacity: [0, 1], revealWidth: [1, 1e5], revealHeight: [1, 1e5],
+    historyDepth: [0, Infinity], historyTextOpacity: [0, 1], historyExpiry: [0, 1e7],
+  };
+  const WHOLE = ['maxLines', 'historyDepth'];
+  const FLAG = ['revealEnabled', 'historyEnabled', 'historyExpires'];
+  const WORD = { textAlignment: ['start', 'center'], iconStyle: ['off', 'nameTab', 'header'] };
+  const out = {};
+  const take = (key, value) => {
+    if (key === 'revealSize') {
+      if (!value || typeof value !== 'object') return;
+      take('revealWidth', Array.isArray(value) ? value[0] : value.width);
+      take('revealHeight', Array.isArray(value) ? value[1] : value.height);
+    } else if (key in NUMBER) {
+      let n = typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (Number.isNaN(n) || n < NUMBER[key][0] || n > NUMBER[key][1]) return;
+      if (WHOLE.includes(key) && Number.isFinite(n)) n = Math.round(n);
+      out[key] = n;
+    } else if (FLAG.includes(key)) {
+      out[key] = typeof value === 'string' ? !/^(0|false|off|no)$/i.test(value.trim()) : !!value;
+    } else if (key in WORD) {
+      if (WORD[key].includes(value)) out[key] = value;
+    }
+  };
+  const given = window.SUBTITLES_SETTINGS;
+  if (given && typeof given === 'object') Object.keys(given).forEach((k) => take(k, given[k]));
+  try { new URLSearchParams(location.search).forEach((v, k) => take(k, v)); } catch (e) { /* no location */ }
+  return out;
+})();
+
 (function waveFit() {
   const wave = document.getElementById('pod-wave');
   if (!wave || !('ResizeObserver' in window)) return;
@@ -69,6 +127,7 @@ const placeFade = (history) => {
   const ys = lines.map((line) => line.offsetTop - top);
   history.style.setProperty('--h', history.clientHeight + 'px');
   lines.forEach((line, i) => line.style.setProperty('--y', ys[i].toFixed(1) + 'px'));
+  if (nameTab) nameTab.refresh(history);
 };
 
 // The source app's row on a box, see .ov-app in styles.css: the icon of the
@@ -79,13 +138,15 @@ const placeFade = (history) => {
 const wearApp = (box, app) => {
   const row = box.querySelector('.ov-app');
   if (!row) return;
-  row.hidden = !app;
-  if (!app) return;
-  const img = row.querySelector('img');
-  const src = 'assets/apps/dock/' + app.icon + '.png';
-  if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
-  const name = row.querySelector('.ov-name');
-  if (name && name.textContent !== app.name) name.textContent = app.name;
+  box.dataset.named = app ? '1' : '0';
+  if (app) {
+    const img = row.querySelector('img');
+    const src = 'assets/apps/dock/' + app.icon + '.png';
+    if (img && img.getAttribute('src') !== src) img.setAttribute('src', src);
+    const name = row.querySelector('.ov-name');
+    if (name && name.textContent !== app.name) name.textContent = app.name;
+  }
+  dressBox(box, !!app);
 };
 
 // A box for the ⌥ stack, wearing `app`: the row, and under it the text,
@@ -108,12 +169,56 @@ const newBox = (app) => {
 };
 const textOf = (el) => el.querySelector('.ov-text') || el;
 
+// A keyboard shortcut said inside a demo is drawn as a keycap: a run of
+// modifier glyphs, with the key letter it may carry (⌥F), becomes a <kbd>,
+// and whatever the sentence glues to it stays text: the comma in "pulsa ⌥,",
+// the particle in "⌥를", the "-Stapel" in German, the sentence a Japanese
+// line runs straight into. Drawn from the text as the engines type it and as
+// the stack's boxes are written, and once over the scene labels, so no
+// translated string carries markup for it.
+const KEYCAP = /[⌥⇧⌃⌘]+[A-Z0-9]?/g;
+const appendKeys = (el, text) => {
+  let at = 0;
+  for (const m of text.matchAll(KEYCAP)) {
+    if (m.index > at) el.append(text.slice(at, m.index));
+    const key = document.createElement('kbd');
+    key.textContent = m[0];
+    el.append(key);
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) el.append(text.slice(at));
+};
+const setKeys = (el, text) => { el.textContent = ''; appendKeys(el, text); };
+(function keycapLabels() {
+  document.querySelectorAll('.scene-label').forEach((el) => {
+    if (!el.querySelector('kbd') && /[⌥⇧⌃⌘]/.test(el.textContent)) setKeys(el, el.textContent);
+  });
+})();
+
+// A box's layer rebuilt once its entrance has played. Chrome on the GPU
+// paints a box that has just run a transform animation a fraction of a pixel
+// down from where it sits, on its top and bottom edges only, for as long as
+// that layer lives: the hairline there sits across two rows. Nothing about
+// where the box is changes it, and neither does repainting it; the layer
+// has to go. Without will-change for a frame it does, and comes back whole.
+// Blink only: Safari and Firefox draw the box whole where it lands.
+const relayer = (el) => {
+  if (!navigator.userAgentData) return;
+  el.style.willChange = 'auto';
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.willChange = ''; }));
+};
+
 // The ⇧ ring on a live box, see .ov-ring in styles.css: one rounded rect
 // stroked twice, white dashes and black dashes a dash apart, so one tone or
 // the other shows against whatever the box sits over. Built here rather than
 // in the markup, since only script can hold ⇧.
 const ringFor = (box) => {
-  if (!box || box.querySelector('.ov-ring')) return;
+  if (!box) return;
+  // The tab's ring as well, a sibling outside the mask, whenever the box
+  // wears the tab; the ring below stays, hidden by the stylesheet meanwhile,
+  // for when the box goes back to the header row.
+  if (nameTab && nameTab.on) nameTab.ring(box);
+  if (box.querySelector('.ov-ring')) return;
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ov-ring');
@@ -124,6 +229,1076 @@ const ringFor = (box) => {
     svg.append(rect);
   });
   box.append(svg);
+};
+
+// Show Source App Name → Name Tab, from the menu: the row sits on the pill's
+// top edge as a tab, flush with the leading side, as Pill.tabPath draws it,
+// and the box is masked to the silhouette of pill and tab. The mask is on the
+// box itself, because the box is what blurs the picture behind it: a mask
+// shapes an element's backdrop-filter along with it, where a blurred child of
+// a masked box would have nothing to blur — a mask makes its element the
+// backdrop root for everything in it, see placeFade. And a mask rather than a
+// clip-path, which Chrome would not put on the blur alongside the hole's mask;
+// styles.css intersects the two. The mask is an SVG mask element kept on the
+// body, redrawn as the box changes: an image would be loaded afresh each
+// time, asynchronously in Safari, and a box whose mask has not loaded is
+// masked to nothing. Two of them per box, taking turns, since Safari also
+// paints nothing for a box whose mask changed in place. What the mask costs is anything hanging
+// outside the box, which is why the ⇧ ring is a sibling here, placed after
+// the box whenever the box moves, changes class or changes size, and fading
+// as the box fades, which inside the box it would do on its own. The hairline
+// is the ring between the silhouette and the silhouette a device pixel in,
+// cut from a box under the text; mask and ring are snapped to the device's
+// pixels together, from where each engine puts the box's frame on them, so
+// each takes whole pixels the way a CSS box's own edge and inset shadow do.
+// styles.css lays the row out in the tab. The numbers are the app's
+// at 30pt of text, in em of the box: 16pt corners on the pill and on the tab,
+// and an 8pt foot, the concave curve where the tab's inner side flares into
+// the pill's top.
+const nameTab = (() => {
+  if (typeof ResizeObserver !== 'function') return null;
+  // On from the menu's Show Source App Name → Name Tab; off, the boxes
+  // wear the header row and none of this runs.
+  let on = false;
+  const NS = 'http://www.w3.org/2000/svg';
+  const CORNER = 0.533;
+  const FOOT = 0.267;
+  // The ⇧ ring's distance from the shape, and a margin past it for its line.
+  const GROW = 3.5;
+  const MARGIN = GROW + 1.5;
+
+  // Which engine, for where a box's pixels fall. Each draws a mask, and a
+  // clip-path, in the box's own frame, and each sits that frame differently
+  // on the device's pixels: Blink keeps the box's fractional position and
+  // wants the transform that centres it whole in device pixels; Gecko snaps
+  // the frame to device pixels on its own; WebKit does too, and sits best
+  // with the transform whole in CSS pixels. Measured one edge at a time in
+  // all three, and only the engine tells them apart.
+  const ENGINE = navigator.userAgentData ? 'blink'
+    : (window.CSS && CSS.supports('-moz-appearance', 'none')) ? 'gecko' : 'webkit';
+
+  // The element's own transform made whole in the pixels its engine wants:
+  // whole device pixels for Blink, whole CSS pixels for WebKit, and nothing
+  // for Gecko, which snaps on its own. Measured one edge at a time in all
+  // three. The demos position a box by whole pixels and centre it with
+  // translateX(-50%), half of whatever width the text gave it, so the
+  // transform is the only fraction in where it lands. Written through the
+  // translate property, which the demos never touch. (Correcting the whole
+  // of where it lands, layout included, from its rect, put the stack's
+  // boxes in Safari on a fraction instead, and changed nothing in Chrome.)
+  const align = (el) => {
+    if (ENGINE === 'gecko') return;
+    const m = getComputedStyle(el).transform;
+    let want = '';
+    if (m && m !== 'none') {
+      const t = new DOMMatrixReadOnly(m);
+      const dpr = window.devicePixelRatio || 1;
+      const fix = (v) => Math.round((ENGINE === 'blink'
+        ? (Math.round(v * dpr) - v * dpr) / dpr : Math.round(v) - v) * 1000) / 1000;
+      want = fix(t.e) + 'px ' + fix(t.f) + 'px';
+    }
+    // Compared as the engine gives it back: a trailing zero is dropped.
+    const have = el.style.translate || '';
+    if (have === want || have === want.replace(/ 0px$/, '') || !mayWrite(el)) return;
+    el.style.translate = want;
+  };
+
+  // A write that changes how tall the stack's content is — a box's height
+  // made whole, the gap made whole — after the demo has parked the stack at
+  // its end: a scroller keeps its scrollTop through that, so the stack
+  // drifts from its end by the change, and the last box's bottom edge goes
+  // under the clip. Its distance from the end is kept instead. A stack
+  // below the live box has its near end at the top, where scrollTop
+  // already keeps it.
+  const keepEnd = (stack, write) => {
+    if (!stack || stack.classList.contains('is-below')) { write(); return; }
+    const near = stack.scrollHeight - stack.clientHeight - stack.scrollTop;
+    write();
+    const top = stack.scrollHeight - stack.clientHeight - near;
+    if (Math.abs(stack.scrollTop - top) > 0.01) stack.scrollTop = top;
+  };
+
+  // A box in the stack is centred by the stack's column, which puts it half
+  // a pixel off whenever the stack is an odd number of pixels wider: it is
+  // placed instead by a margin of whole pixels, from the stack's own edge,
+  // which every engine paints where layout says. The gap between boxes is
+  // made whole the same way, so each box's top is whole as well.
+  const settle = (history) => {
+    const dpr = window.devicePixelRatio || 1;
+    const em = parseFloat(getComputedStyle(history).fontSize) || 16;
+    const gap = Math.round(0.2 * em * dpr) / dpr + 'px';
+    if (history.style.gap !== gap && mayWrite(history)) keepEnd(history, () => { history.style.gap = gap; });
+    const inner = history.clientWidth;
+    for (const el of history.children) {
+      const st = boxes.get(el);
+      if (!st) continue;
+      const m = Math.floor((inner - el.offsetWidth) * dpr / 2) / dpr + 'px';
+      if (el.style.marginInlineStart !== m && mayWrite(el)) el.style.marginInlineStart = m;
+    }
+  };
+
+  // A budget on writes to an element's style: the live box is redrawn on
+  // every change to its style, and a redraw that always finds something to
+  // write is a loop that never yields. A box being typed into wants two or
+  // three writes a word, several words a second; a loop wants thousands, and
+  // hits the budget at once. A write the budget refused is tried again once
+  // the budget has passed, so nothing is left where it was.
+  const writes = new WeakMap();
+  const retries = new WeakSet();
+  const mayWrite = (el) => {
+    const now = performance.now();
+    const recent = (writes.get(el) || []).filter((t) => now - t < 500);
+    writes.set(el, recent);
+    if (recent.length >= 40) {
+      if (!retries.has(el)) {
+        retries.add(el);
+        setTimeout(() => { retries.delete(el); if (boxes.has(el)) draw(el); else align(el); }, 600);
+      }
+      return false;
+    }
+    recent.push(now);
+    return true;
+  };
+
+  // The silhouette, as Pill.silhouette and Pill.tabPath trace it, in the box's
+  // own pixels with y running down. W×H is the box, T the tab's height — the
+  // pill's top edge — and X the tab's width, or nothing for a box with no tab;
+  // R the corner and F the foot. `o` moves the path inward: a hairline for
+  // the rim's inner edge, whose convex corners tighten and whose foot widens
+  // by it, and negative for the ring outside. Traced with the tab on the
+  // left, and mirrored for a right-to-left box, where every arc turns the
+  // other way. `snap` puts every point on the device's pixels, and `shift`
+  // moves the whole path up and left by that much, into the frame of a box
+  // that starts there.
+  const silhouette = (W, H, T, X, R, F, o, rtl, snap, shift) => {
+    const r = Math.max(R - o, 0);
+    const f = Math.max(F + o, 0);
+    const x = rtl ? (v) => W - v : (v) => v;
+    const cw = rtl ? 0 : 1;
+    const ccw = 1 - cw;
+    const n = (v) => Math.round(v * 100) / 100;
+    const sx = snap ? snap.x : (v) => v;
+    const sy = snap ? snap.y : (v) => v;
+    const dx = shift ? shift[0] : 0;
+    const dy = shift ? shift[1] : 0;
+    const to = (px, py) => n(sx(x(px)) - dx) + ' ' + n(sy(py) - dy);
+    const arc = (rad, sweep, px, py) => 'A' + n(rad) + ' ' + n(rad) + ' 0 0 ' + sweep + ' ' + to(px, py);
+    const d = T > 0 && X > 0
+      // From where the foot lands on the pill's top: up the foot, up the
+      // tab's inner side, over its top and down its outer side into the
+      // pill's, whose corner under the tab is square.
+      ? ['M' + to(X + F, T + o), arc(f, cw, X - o, T - F), 'L' + to(X - o, R),
+         arc(r, ccw, X - R, o), 'L' + to(R, o), arc(r, ccw, o, R)]
+      : ['M' + to(R, o), arc(r, ccw, o, R)];
+    // Down the pill's leading side, along its bottom, up its far side and
+    // back along its top to where the tab's foot lands.
+    d.push('L' + to(o, H - R), arc(r, ccw, R, H - o), 'L' + to(W - R, H - o),
+           arc(r, ccw, W - o, H - R), 'L' + to(W - o, T + R), arc(r, ccw, W - R, T + o), 'Z');
+    return d.join(' ');
+  };
+
+  // The mask's path: the silhouette, grown by `g` along the four outer sides
+  // and round the three corners the box itself rounds, so that the box's own
+  // edge, on whole pixels, is what cuts the fill, the blur and the box's
+  // inset hairline there; and exact through the tab's inner corner — its
+  // corner above, its inner side, the foot, the pill's top edge and the
+  // corner at its end — which the box has no edge for. Grown and exact meet
+  // in a step outside the box, where nothing is drawn.
+  const maskPath = (W, H, T, X, R, F, g, rtl, snap) => {
+    const x = rtl ? (v) => W - v : (v) => v;
+    const cw = rtl ? 0 : 1;
+    const ccw = 1 - cw;
+    const n = (v) => Math.round(v * 100) / 100;
+    const to = (px, py) => n(snap.x(x(px))) + ' ' + n(snap.y(py));
+    const arc = (rad, sweep, px, py) => 'A' + n(rad) + ' ' + n(rad) + ' 0 0 ' + sweep + ' ' + to(px, py);
+    const d = T > 0 && X > 0
+      ? ['M' + to(X + F, T), arc(F, cw, X, T - F), 'L' + to(X, R), arc(R, ccw, X - R, 0),
+         'L' + to(X - R, -g), 'L' + to(R - g, -g), arc(R, ccw, -g, R - g)]
+      : ['M' + to(R - g, -g), arc(R, ccw, -g, R - g)];
+    d.push('L' + to(-g, H - R + g), arc(R, ccw, R - g, H + g), 'L' + to(W - R + g, H + g),
+           arc(R, ccw, W + g, H - R + g));
+    if (T > 0 && X > 0) {
+      d.push('L' + to(W + g, T + R), 'L' + to(W, T + R), arc(R, ccw, W - R, T), 'Z');
+    } else {
+      d.push('L' + to(W + g, R - g), arc(R, ccw, W - R + g, -g), 'Z');
+    }
+    return d.join(' ');
+  };
+
+  // The rim's path: the part of the hairline ring the box's own inset
+  // hairline does not draw, and none of the part it does. The box's hairline
+  // is a band `hair` wide inside its edges, cut by the mask along the tab's
+  // corner and the pill's; the rim is the rest of the ring, which begins
+  // where the tab's corner leaves that band and ends where the pill's
+  // corner enters it, with straight cuts along the band's inner side, on a
+  // pixel's edge, so the two meet without a pixel drawn twice. Out along
+  // the outer edge, back along the inner.
+  const rimPath = (W, H, T, X, R, F, hair, rtl, snap, shift) => {
+    const r = Math.max(R - hair, 0);
+    const f = F + hair;
+    const x = rtl ? (v) => W - v : (v) => v;
+    const cw = rtl ? 0 : 1;
+    const ccw = 1 - cw;
+    const n = (v) => Math.round(v * 100) / 100;
+    const to = (px, py) => n(snap.x(x(px)) - shift[0]) + ' ' + n(snap.y(py) - shift[1]);
+    const arc = (rad, sweep, px, py) => 'A' + n(rad) + ' ' + n(rad) + ' 0 0 ' + sweep + ' ' + to(px, py);
+    // How far along the box's edge a corner's outer arc runs before it is
+    // a hairline in from the edge.
+    const run = Math.sqrt(Math.max(R * R - r * r, 0));
+    return ['M' + to(X - R, hair), 'L' + to(X - R + run, hair), arc(R, cw, X, R),
+            'L' + to(X, T - F), arc(F, ccw, X + F, T), 'L' + to(W - R, T), arc(R, cw, W - hair, T + R - run),
+            'L' + to(W - hair, T + R), arc(r, ccw, W - R, T + hair), 'L' + to(X + F, T + hair),
+            arc(f, cw, X - hair, T - F), 'L' + to(X - hair, R), arc(r, ccw, X - R, hair), 'Z'].join(' ');
+  };
+
+  const boxes = new Map();
+
+  // Every box's mask element, in one SVG on the body: a mask inside the box
+  // it masks is a reference to itself, and the box is drawn as nothing.
+  let defs = null;
+  const maskFor = (id) => {
+    if (!defs) {
+      defs = document.createElementNS(NS, 'svg');
+      defs.setAttribute('class', 'ov-defs');
+      defs.setAttribute('width', '0');
+      defs.setAttribute('height', '0');
+      defs.setAttribute('aria-hidden', 'true');
+      document.body.append(defs);
+    }
+    const mask = document.createElementNS(NS, 'mask');
+    mask.setAttribute('id', id);
+    mask.setAttribute('maskUnits', 'userSpaceOnUse');
+    mask.setAttribute('x', '0');
+    mask.setAttribute('y', '0');
+    defs.append(mask);
+    return mask;
+  };
+
+  // The ring, on the box's containing block, where the box's own position is.
+  const holder = (el) => {
+    let p = el.parentElement;
+    while (p && p !== document.body && getComputedStyle(p).position === 'static') p = p.parentElement;
+    return p || document.body;
+  };
+  const place = (box) => {
+    const st = boxes.get(box);
+    if (!st || !st.trace) return;
+    const on = box.classList.contains('is-movable');
+    st.trace.classList.toggle('is-on', on);
+    // Fading with the box, out as a line ends and back in with the next.
+    st.trace.classList.toggle('is-visible', box.classList.contains('is-visible'));
+    if (!on) return;
+    const b = box.getBoundingClientRect();
+    const h = holder(st.trace);
+    const p = h.getBoundingClientRect();
+    st.trace.style.left = (b.left - p.left - h.clientLeft - MARGIN) + 'px';
+    st.trace.style.top = (b.top - p.top - h.clientTop - MARGIN) + 'px';
+  };
+
+  // A box whose size is a fraction of a device pixel has its far edges
+  // drawn short of the silhouette drawn to its true size: Blink paints it
+  // as if the fraction were not there, so the fill stops a pixel early on
+  // the right and the mask with it, taking the ring and the tab's inner
+  // side; WebKit and Gecko stretch it to whole pixels, and the ring on the
+  // right lands across two. So a box is padded out to whole device pixels
+  // on the right and at the bottom, the two sides its size runs to, by
+  // less than a pixel, which no text notices. Written only when it changes:
+  // the live box is redrawn on every change to its style, and a write on
+  // every redraw is a loop.
+  const whole = (box, st) => {
+    if (st.raf) return;
+    // The pixel a box's size is made whole in: the device's, except in
+    // Blink, which draws a box's inset hairline two device pixels wide when
+    // the box's far edge lands on half a CSS pixel.
+    const dpr = ENGINE === 'blink' ? 1 : (window.devicePixelRatio || 1);
+    const rect = box.getBoundingClientRect();
+    const size = [rect.width, rect.height];
+    if (!size[0] || !size[1]) return;
+    const cs = getComputedStyle(box);
+    // The floor under a short line, 4.67em, made whole first: padding cannot
+    // widen a box that is already held at its floor. From the em, not the
+    // computed floor, which once lifted is whole and would drop its lift.
+    const floor = 4.67 * (parseFloat(cs.fontSize) || 16);
+    const ff = ((floor * dpr) % 1 + 1) % 1;
+    const lift = ff < 0.03 || ff > 0.97 ? 0 : Math.round((1 - ff) / dpr * 64) / 64;
+    const want = { lift: lift ? 'calc(4.67em + ' + lift + 'px)' : '', pad: st.pad.slice() };
+    // A box at its widest cannot be widened: padding it narrows its text
+    // instead, the text wraps, the height changes, and the padding is
+    // worked out again from the new size, every frame, for ever. Layout
+    // keeps sixty-fourths of a pixel, so the padding is one of those, and
+    // the box grows by exactly it; anything within a few hundredths of a
+    // whole pixel is whole.
+    const widest = size[0] >= (parseFloat(cs.maxWidth) || Infinity) - 0.05;
+    for (let i = 0; i < 2; i++) {
+      const natural = size[i] - st.pad[i];
+      const f = ((natural * dpr) % 1 + 1) % 1;
+      want.pad[i] = (i === 0 && widest) || f < 0.03 || f > 0.97 ? 0 : Math.round((1 - f) / dpr * 64) / 64;
+    }
+    const same = want.lift === st.lift && Math.abs(want.pad[0] - st.pad[0]) < 0.001
+      && Math.abs(want.pad[1] - st.pad[1]) < 0.001;
+    if (same || !mayWrite(box)) return;
+    // On the next frame, not now: most redraws come from the resize observer,
+    // and a size changed under it is a loop it reports on the console.
+    st.raf = requestAnimationFrame(() => {
+      st.raf = 0;
+      st.lift = want.lift;
+      st.pad = want.pad;
+      keepEnd(box.closest('.demo-history'), () => {
+        box.style.minWidth = want.lift;
+        box.style.paddingRight = want.pad[0] ? 'calc(0.73em + ' + want.pad[0] + 'px)' : '';
+        box.style.paddingBottom = want.pad[1] ? 'calc(0.47em + ' + want.pad[1] + 'px)' : '';
+      });
+    });
+  };
+
+  const draw = (box) => {
+    const st = boxes.get(box);
+    if (!st || !on || !box.classList.contains('is-tabbed')) return;
+    // The live box carries the transform that centres it; a box in the
+    // stack is placed by settle, from the stack's edge.
+    if (st.trace) align(box);
+    whole(box, st);
+    const rect = box.getBoundingClientRect();
+    const W = rect.width;
+    const H = rect.height;
+    if (!W || !H) return;
+    const cs = getComputedStyle(box);
+    const em = parseFloat(cs.fontSize) || 16;
+    const tab = st.row && !st.row.hidden ? st.row.getBoundingClientRect() : null;
+    const T = tab ? tab.height : 0;
+    const X = tab ? tab.width : 0;
+    const R = CORNER * em;
+    const F = FOOT * em;
+    const rtl = cs.direction === 'rtl';
+    const hair = parseFloat(cs.getPropertyValue('--hairline')) || 1;
+    // Onto the device's pixels, so the fill's edge and the hairline inside
+    // it each take one whole pixel, the way the header row's inset shadow
+    // does: from where the box's frame sits on them, which is its position
+    // in Blink and a whole pixel in the others, see ENGINE.
+    const dpr = window.devicePixelRatio || 1;
+    const frac = (v) => ((v % 1) + 1) % 1;
+    const fx = 0 * frac(rect.left * dpr);
+    const fy = 0 * frac(rect.top * dpr);
+    const snap = {
+      x: (v) => (Math.round(fx + v * dpr) - fx) / dpr,
+      y: (v) => (Math.round(fy + v * dpr) - fy) / dpr,
+    };
+    // Nothing to redraw for a box that only moved by whole pixels.
+    const key = [W, H, T, X, fx, fy, rtl, hair, dpr].join(' ');
+    if (st.key === key) {
+      if (st.trace) place(box);
+      return;
+    }
+    st.key = key;
+    // Into whichever mask the box is not wearing, then the box is pointed
+    // at it: Safari paints a box whose mask changes under it as nothing, and
+    // paints one whose mask is exchanged for another every time.
+    const next = st.masks[st.turn = 1 - st.turn];
+    // The mask's region a pixel past the box all round: snapping can put an
+    // edge half a pixel outside the box, and the region cuts what it holds.
+    next.mask.setAttribute('x', '-1');
+    next.mask.setAttribute('y', '-1');
+    next.mask.setAttribute('width', W + 2);
+    next.mask.setAttribute('height', H + 2);
+    // Half a pixel proud of the box where the box has an edge of its own,
+    // so that the edge, rounded corners and all, is what cuts the fill, the
+    // blur and the stylesheet's inset hairline there, on whole pixels, as it
+    // does the header row's box: a mask's far edges fall a fraction of a
+    // pixel short of the box's, in every engine, and took the hairline with
+    // them. Exact through the tab's inner corner, which the box has no edge
+    // for and which was always drawn true.
+    next.fill.setAttribute('d', maskPath(W, H, T, X, R, F, 0.5, rtl, snap));
+    box.style.setProperty('--ov-shape', 'url(#' + next.mask.id + ')');
+    // The rim. The box keeps the stylesheet's rounded corners and inset
+    // hairline, as the header row has them, and the mask cuts that hairline
+    // to the silhouette: it is the box's own edge, and every engine paints
+    // that on whole pixels. What it cannot draw is the tab's inner corner —
+    // the tab's inner side and its corner above, the foot, the pill's top
+    // edge beside the tab and the corner at its end — and that much is the
+    // ring between the silhouette and the silhouette a hairline in, cut
+    // from a box of the line's colour that covers only that corner.
+    if (T > 0 && X > 0) {
+      // A box round the tab's inner corner, on whole pixels, where Safari
+      // and Firefox put a box's frame; the path inside it is what draws.
+      const x0 = rtl ? 0 : Math.max(Math.floor(X - R - 2), 0);
+      const x1 = rtl ? Math.min(Math.ceil(W - X + R + 2), W) : W;
+      const y1 = Math.min(Math.ceil(T + R + 2), H);
+      st.rim.style.display = '';
+      st.rim.style.left = x0 + 'px';
+      st.rim.style.top = '0px';
+      st.rim.style.width = (x1 - x0) + 'px';
+      st.rim.style.height = y1 + 'px';
+      st.rim.style.clipPath = 'path("' + rimPath(W, H, T, X, R, F, hair, rtl, snap, [x0, 0]) + '")';
+    } else {
+      st.rim.style.display = 'none';
+    }
+    if (!st.trace) return;
+    const w = W + MARGIN * 2;
+    const h = H + MARGIN * 2;
+    st.trace.setAttribute('viewBox', -MARGIN + ' ' + -MARGIN + ' ' + w + ' ' + h);
+    st.trace.style.width = w + 'px';
+    st.trace.style.height = h + 'px';
+    const d = silhouette(W, H, T, X, R, F, -GROW, rtl);
+    st.trace.querySelectorAll('path').forEach((path) => path.setAttribute('d', d));
+    place(box);
+  };
+
+  // Once per box per frame, whether the box or its row changed size.
+  const sizes = new ResizeObserver((entries) => {
+    const seen = new Set();
+    entries.forEach((entry) => {
+      const box = entry.target.closest('.is-tabbed');
+      if (box && !seen.has(box)) { seen.add(box); draw(box); }
+    });
+  });
+  // A move is a redraw, since where the box sits decides the snapping; a
+  // move by whole pixels costs a key comparison.
+  const moves = new MutationObserver((records) => records.forEach((r) => draw(r.target)));
+  window.addEventListener('resize', () => boxes.forEach((st, box) => { if (box.isConnected) draw(box); }));
+
+  const dress = (box) => {
+    let st = boxes.get(box);
+    if (st) return st;
+    box.classList.add('is-tabbed');
+    const rim = document.createElement('span');
+    rim.className = 'ov-rim';
+    rim.setAttribute('aria-hidden', 'true');
+    box.prepend(rim);
+    // The masks, two to take turns: white where the box is, in the box's
+    // own pixels — an SVG mask is luminance by default — and the box names
+    // one by its bare fragment, which Safari takes from a stylesheet's rule
+    // as a reference into this document where it takes the page's own
+    // absolute URL with the fragment as nothing at all.
+    const masks = ['a', 'b'].map((side) => {
+      const mask = maskFor('ov-shape-' + (boxes.size + 1) + side);
+      const fill = document.createElementNS(NS, 'path');
+      fill.setAttribute('fill', '#fff');
+      mask.append(fill);
+      return { mask: mask, fill: fill };
+    });
+    st = { row: box.querySelector('.ov-app'), rim: rim, masks: masks, turn: 0, trace: null, key: '',
+           pad: [0, 0], lift: '', raf: 0 };
+    boxes.set(box, st);
+    sizes.observe(box);
+    if (st.row) sizes.observe(st.row);
+    return st;
+  };
+
+  // A box back to a plain pill, or a header row: its classes off, its rim
+  // and its ring hidden. Its masks stay, unreferenced, for the next time.
+  const undress = (box) => {
+    const st = boxes.get(box);
+    box.classList.remove('is-tabbed', 'has-tab');
+    if (!st) return;
+    st.rim.style.display = 'none';
+    if (st.trace) st.trace.classList.remove('is-on', 'is-visible');
+  };
+
+  return {
+    get on() { return on; },
+    enable: (flag) => {
+      on = !!flag;
+      if (!on) boxes.forEach((st, box) => undress(box));
+    },
+    // The stack's boxes, after the stack has been laid out: the stack's
+    // centring transform made whole, and every box redrawn where it sits.
+    refresh: (history) => {
+      if (!on) return;
+      align(history);
+      settle(history);
+      if (!history.dataset.ovRise) {
+        // A box rises into the stack on a transform of its own; once it
+        // has landed, it is placed again from where it landed.
+        history.dataset.ovRise = '1';
+        history.addEventListener('animationend', (e) => { if (boxes.has(e.target)) draw(e.target); });
+      }
+      for (const el of history.children) if (boxes.has(el)) draw(el);
+    },
+    // `tab` is whether the box has an app to name; without one it is a plain
+    // pill, clipped all the same.
+    wear: (box, tab) => {
+      if (!on) { undress(box); return; }
+      dress(box);
+      box.classList.toggle('has-tab', tab);
+      draw(box);
+    },
+    ring: (box) => {
+      const st = dress(box);
+      if (st.trace) return;
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('class', 'ov-trace');
+      svg.setAttribute('aria-hidden', 'true');
+      ['ring-white', 'ring-black'].forEach((tone) => {
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('class', tone);
+        svg.append(path);
+      });
+      box.after(svg);
+      st.trace = svg;
+      moves.observe(box, { attributes: true, attributeFilter: ['style', 'class'] });
+      draw(box);
+    },
+  };
+})();
+
+// Show Source App Name, as the menu has it: the header row, the site's
+// default; the tab, see nameTab; or off.
+// `dressBox` puts a box in the current style, from whether it has an app to
+// name; `setIconStyle` puts every box on the page in a new one.
+let ICON_STYLE = 'header';
+const dressBox = (box, named) => {
+  const row = box.querySelector('.ov-app');
+  if (row) row.hidden = !named || ICON_STYLE === 'off';
+  if (nameTab) nameTab.wear(box, named && ICON_STYLE === 'nameTab');
+  // A box that rings under ⇧ rings in the new style too.
+  if (nameTab && nameTab.on && box.querySelector('.ov-ring')) nameTab.ring(box);
+};
+const setIconStyle = (style) => {
+  if (ICON_STYLE === style) return;
+  ICON_STYLE = style;
+  if (nameTab) nameTab.enable(style === 'nameTab');
+  document.querySelectorAll('.demo-overlay, .hist-line').forEach((box) => dressBox(box, box.dataset.named === '1'));
+  if (nameTab && nameTab.on) document.querySelectorAll('.demo-history').forEach((h) => nameTab.refresh(h));
+};
+
+// What a demo runs on before it is seeded, see SETTINGS: the app's defaults
+// where the demo already drew them, and the demo's own where it differs. The
+// stack keeps fifteen boxes, not the app's every box, since a loop that
+// repeats seven lines would stack hundreds of them; it never forgets them,
+// since the loop never falls silent; and a box holds its whole sentence,
+// however many lines, rather than paging at the app's two. A demo passes
+// what is its own on top (the landing pages start with the reveal off).
+const DEMO_DEFAULTS = {
+  fontSize: 30, textAlignment: 'start', iconStyle: 'header', maxLines: Infinity,
+  boxOpacity: 0.72, blur: 6,
+  revealEnabled: true, revealOpacity: 0.95, revealWidth: 800, revealHeight: 400,
+  historyEnabled: true, historyDepth: 15, historyTextOpacity: 0.65,
+  historyExpires: false, historyExpiry: 30,
+};
+// A demo's settings, its own under the page's seed, and its boxes dressed to
+// them. What is the box's rather than the loop's goes onto the screen as
+// custom properties, which every box on it wears, the stack's and the search
+// pill with the live one; the loop reads the rest off what comes back.
+const seedDemo = (screen, own) => {
+  const S = Object.assign({}, DEMO_DEFAULTS, own, SETTINGS);
+  if (screen) {
+    const set = (name, value) => screen.style.setProperty(name, String(value));
+    set('--text-scale', S.fontSize / 30);
+    set('--text-align', S.textAlignment);
+    set('--box-alpha', S.boxOpacity);
+    set('--box-blur', S.blur + 'px');
+    set('--hole-strength', S.revealOpacity);
+    // The hole's radii, in em of the box at the app's 30pt: its 800 × 400
+    // are 13.33 × 6.67em.
+    set('--hole-w', (S.revealWidth / 60).toFixed(3) + 'em');
+    set('--hole-h', (S.revealHeight / 60).toFixed(3) + 'em');
+    set('--hist-text-alpha', S.historyTextOpacity);
+  }
+  setIconStyle(S.iconStyle);
+  return S;
+};
+// The menu's checks for a demo's settings: the size row within half a point
+// of the size, as the app's menu checks it, and none for any other size.
+const menuChecks = (S) => {
+  const size = [22, 30, 40, 52].find((pt) => Math.abs(pt - S.fontSize) < 0.5);
+  const on = (id, flag) => (flag ? id : null);
+  return {
+    checked: ['size-' + (size || 'none'), 'align-' + S.textAlignment,
+      { off: 'icon-off', nameTab: 'icon-tab', header: 'icon-header' }[S.iconStyle],
+      on('reveal', S.revealEnabled), on('history', S.historyEnabled)].filter(Boolean),
+    unchecked: [on('reveal', !S.revealEnabled), on('history', !S.historyEnabled)].filter(Boolean),
+  };
+};
+// How many lines a box's text takes, for the app's maxLines: the text block's
+// height in its own line-height, read once the words are in the page.
+const linesOf = (box) => {
+  const text = textOf(box);
+  const cs = getComputedStyle(text);
+  const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.34;
+  return Math.round(text.getBoundingClientRect().height / line);
+};
+// The words of `text` from `from` up to `to`, counted in a line `of` words
+// long: a page of the line itself, or the same stretch of its source, which
+// is not the same length and is taken as a fraction of it, as the demos
+// draw the source under ⌃.
+const pageOf = (text, from, to, of) => {
+  const words = text.split(' ');
+  const at = (k) => (of === words.length ? k : Math.round((k / of) * words.length));
+  const start = Math.min(at(from), words.length - 1);
+  return words.slice(start, Math.max(start + 1, at(to))).join(' ');
+};
+
+// The pointer reveal: where the pointer is over the screen, kept in the
+// page's coordinates rather than as the hole's offset, because the box moves
+// under a still pointer far more than the pointer moves over a still box:
+// it re-centres and re-sizes on every word, and the app recomputes the
+// centre on exactly the same events for the same reason. One paint a frame
+// at most: the box resizes on every word and the pointer reports faster
+// than that, so both feed the same queue, and `onFrame` runs with it, for
+// whatever else follows the box. `solid` says when the box stays whole:
+// under ⇧, since you are about to pick it up, and under ⌥, since the stack
+// is what is being read then. `on` is the menu's Fade Away Under Pointer.
+const pointerReveal = (box, screen, opts) => {
+  let on = opts.on !== false;
+  let pointer = null;
+  let queued = false;
+  const paint = () => {
+    if (!on || !pointer || opts.solid()) {
+      box.style.setProperty('--hole-x', '-999px');
+      box.style.setProperty('--hole-y', '-999px');
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    box.style.setProperty('--hole-x', (pointer.x - rect.left) + 'px');
+    box.style.setProperty('--hole-y', (pointer.y - rect.top) + 'px');
+  };
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      paint();
+      opts.onFrame();
+    });
+  };
+  if (screen) {
+    screen.addEventListener('pointermove', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      pointer = { x: event.clientX, y: event.clientY };
+      queue();
+    });
+    // Nothing to turn off: the falloff means distance alone ends the reveal,
+    // on this screen as on a real one. This is only for the pointer that
+    // leaves in one jump, or out of the window entirely.
+    screen.addEventListener('pointerleave', () => { pointer = null; queue(); });
+  }
+  // The box changes width on almost every word, which moves its left edge
+  // by most of the box. Without this the hole lands off the pointer until
+  // the pointer next moves, and reads as the reveal blinking out.
+  if (typeof ResizeObserver === 'function') new ResizeObserver(queue).observe(box);
+  box.classList.toggle('has-reveal', on);
+  return {
+    queue: queue,
+    enable: (flag) => { on = !!flag; box.classList.toggle('has-reveal', on); queue(); },
+  };
+};
+
+// The app's status menu, opened by hand: a click on the glyph drops it, and
+// it works as a menu does — rows light under the pointer, a row with a
+// submenu opens it, submenus nest (Language / Models has English inside it),
+// a click outside or on the glyph takes it down, Escape too. The rows the
+// demo can act on wear a Try badge and do what they say; the rest shake
+// their heads, small and quick, the way the changelog's pills refuse a
+// click, and the menu stays up. Listen To is filled each time it opens from
+// the demo's windows, the way the app reads Core Audio each time. The demos
+// also walk the menu themselves to switch translation on: that walk opens
+// the menu if it is down and takes it down after, but a menu the visitor
+// has up stays up.
+const statusMenu = {
+  attach: (opts) => {
+    const root = opts.root;
+    const glyph = opts.glyph;
+    if (!root) return null;
+    const subFor = (row) => (row.dataset.id ? root.querySelector('.mn-sub[data-for="' + row.dataset.id + '"]') : null);
+    const enabled = (row) => !!row.querySelector(':scope > .mn-demo');
+    // A panel's rows live in a scrolling holder, its first child, see below.
+    const holder = (panel) => panel.firstElementChild;
+    const panelOf = (el) => el.parentElement.closest('.mn-panel');
+    const rows = (panel) => [...holder(panel).children].filter((el) => el.classList.contains('mn-row'));
+    const rowFor = (id) => root.querySelector('.mn-row[data-id="' + id + '"]');
+    root.querySelectorAll('.mn-demo').forEach((b) => { b.textContent = opts.badge; });
+    // The checks, from the demo's state: a toggle on or off, a choice among
+    // its group, which shares its prefix.
+    const check = (id, on) => { const row = rowFor(id); if (row) row.classList.toggle('is-on', on); };
+    // A choice with no row, a size off the menu's four, clears its group, as
+    // the app's menu shows nothing checked for a size typed on the command line.
+    const pick = (id) => {
+      const group = id.slice(0, id.indexOf('-') + 1);
+      root.querySelectorAll('.mn-row[data-id^="' + group + '"]').forEach((r) => {
+        r.classList.toggle('is-on', r.dataset.id === id);
+      });
+    };
+    (opts.checked || []).forEach((id) => (id.includes('-') ? pick(id) : check(id, true)));
+    (opts.unchecked || []).forEach((id) => check(id, false));
+
+    let manual = false;
+    let walking = null;
+    const track = [];
+    const subs = [...root.querySelectorAll('.mn-sub')];
+    const panels = [root, ...subs];
+    // A panel the screen leaves no room for scrolls inside itself, as a
+    // macOS menu taller than the screen does: its rows go into a holder
+    // capped to the room there is, and a chevron at either end, on the
+    // panel's own glass, scrolls them under the pointer until that end
+    // shows. The holder ends where a chevron's band begins, so the rows are
+    // clipped there and the band is nothing but the panel, rim and all. A
+    // submenu stays a child of the panel, beside the holder, positioned off
+    // the panel as before, so the holder never clips it.
+    const CHEVRON = '<svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    panels.forEach((panel) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'mn-scroll';
+      [...panel.children].forEach((el) => { if (!el.classList.contains('mn-sub')) wrap.appendChild(el); });
+      panel.insertBefore(wrap, panel.firstChild);
+      ['up', 'down'].forEach((dir) => {
+        const band = document.createElement('div');
+        band.className = 'mn-arrow is-' + dir;
+        band.innerHTML = CHEVRON;
+        panel.appendChild(band);
+      });
+    });
+    const screen = root.closest('.demo-screen') || root.offsetParent;
+    // How close to the screen's edge a panel may come: a padding and a half.
+    const margin = () => 1.5 * parseFloat(getComputedStyle(root).paddingTop);
+    // The room each panel has, in px, once `fit` has found it short of it.
+    const rooms = new Map();
+    const bandOf = (panel, dir) => panel.querySelector(':scope > .is-' + dir);
+    // The holder's box and the chevrons, from the room there is and how far
+    // the rows have gone up: a chevron takes its band off the holder's end
+    // while there is more to see that way. The top band coming and going
+    // moves the holder's top edge, and the scroll position moves with it,
+    // so the rows themselves stay put.
+    const layout = (panel) => {
+      const wrap = holder(panel);
+      const room = rooms.get(panel);
+      const up = bandOf(panel, 'up');
+      const down = bandOf(panel, 'down');
+      // A holder scrolls only while its panel is short of room: otherwise
+      // it is not a scroll container at all, so a trackpad cannot rubber-band
+      // a menu that fits.
+      panel.classList.toggle('is-capped', !!room);
+      if (!room) {
+        panel.style.height = '';
+        wrap.style.maxHeight = '';
+        wrap.style.marginTop = '';
+        up.classList.remove('is-shown');
+        down.classList.remove('is-shown');
+        return;
+      }
+      const band = up.offsetHeight;
+      const pad = parseFloat(getComputedStyle(panel).paddingTop);
+      const gone = wrap.scrollTop - (up.classList.contains('is-shown') ? band : 0);
+      const showUp = gone > 0;
+      const showDown = gone + room < wrap.scrollHeight - 1;
+      // The panel holds its full room, so the holder ends a band short of
+      // its bottom edge rather than the panel ending with the holder.
+      panel.style.height = room + 'px';
+      wrap.style.maxHeight = (room - (showUp ? band : 0) - (showDown ? band : 0)) + 'px';
+      wrap.style.marginTop = showUp ? (band - pad) + 'px' : '';
+      const want = Math.max(0, gone) + (showUp ? band : 0);
+      if (Math.abs(wrap.scrollTop - want) > 0.5) wrap.scrollTop = want;
+      up.classList.toggle('is-shown', showUp);
+      down.classList.toggle('is-shown', showDown);
+    };
+    // The panel kept inside the screen. One that may move (a submenu) goes
+    // up first, as far as the top; what still does not fit scrolls.
+    const fit = (panel, movable) => {
+      const wrap = holder(panel);
+      panel.style.height = '';
+      wrap.style.maxHeight = '';
+      wrap.style.marginTop = '';
+      rooms.set(panel, 0);
+      if (!screen) { layout(panel); return; }
+      const s = screen.getBoundingClientRect();
+      const m = margin();
+      let r = panel.getBoundingClientRect();
+      if (movable && r.bottom > s.bottom - m) {
+        // No higher than the menu's own top: under the menu bar, as macOS keeps it.
+        const up = Math.min(r.bottom - (s.bottom - m), r.top - root.getBoundingClientRect().top);
+        if (up > 0) {
+          panel.style.top = (parseFloat(panel.style.top) - up) + 'px';
+          r = panel.getBoundingClientRect();
+        }
+      }
+      const room = s.bottom - m - r.top;
+      if (r.height > room) rooms.set(panel, room);
+      layout(panel);
+    };
+    // The holder scrolled so the row shows whole.
+    const reveal = (row) => {
+      const panel = panelOf(row);
+      const wrap = holder(panel);
+      if (!rooms.get(panel)) return;
+      const w = wrap.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      if (r.top < w.top) wrap.scrollTop -= w.top - r.top;
+      else if (r.bottom > w.bottom) wrap.scrollTop += r.bottom - w.bottom;
+      layout(panel);
+    };
+    // The submenus under `panel` close, but for `keep` and the ones on the
+    // way down to it. A submenu closing takes its lights with it and goes
+    // back to its top, so it opens dark and whole next time.
+    const closeSubs = (keep, panel = root) => subs.forEach((s) => {
+      if (s === panel || !panel.contains(s) || s === keep || (keep && s.contains(keep))) return;
+      s.classList.remove('is-open');
+      holder(s).scrollTop = 0;
+      s.querySelectorAll('.mn-row.is-hot').forEach((r) => r.classList.remove('is-hot'));
+    });
+    const cool = () => root.querySelectorAll('.mn-row.is-hot').forEach((r) => r.classList.remove('is-hot'));
+    // Listen To, as the app builds it on each opening: the source, then what
+    // is playing now with a dot, then the other apps that could be. The
+    // demo says which from its windows, see `audio` in the callers.
+    const listen = (sub) => {
+      if (!opts.audio) return;
+      sub.querySelectorAll('.is-live').forEach((el) => el.remove());
+      const apps = opts.audio();
+      const add = (cls, text) => {
+        const el = document.createElement('div');
+        el.className = cls + ' is-live';
+        if (text !== undefined) {
+          el.innerHTML = '<span class="mn-check">✓</span><span class="mn-label"></span>';
+          el.lastChild.textContent = text;
+        }
+        holder(sub).appendChild(el);
+      };
+      const group = (title, list, mark) => {
+        if (!list.length) return;
+        add('mn-sep');
+        add('mn-row is-dim', title);
+        list.forEach((a) => add('mn-row', a.name + mark));
+      };
+      group('Playing now', apps.filter((a) => a.playing), ' ●');
+      group('Other audio apps', apps.filter((a) => !a.playing), '');
+    };
+    // And it follows the demo while it is up: a window fronted or the sound
+    // handed over shows in the windows' classes, and the rows redraw.
+    if (opts.watch) {
+      const live = new MutationObserver(() => {
+        const sub = root.querySelector('.mn-sub[data-for="listen"].is-open');
+        if (sub) { listen(sub); place(sub, rowFor('listen')); }
+      });
+      opts.watch.forEach((w) => live.observe(w, { attributes: true, attributeFilter: ['class'] }));
+    }
+    // The submenu hangs off its row, its first item level with it, and is
+    // then kept on the screen, see `fit`. A submenu's submenu opens to the
+    // right, over the menu, and to the left instead when the screen's edge
+    // leaves it no room there, as macOS places it; one with no room either
+    // side slides back inside, over what it must.
+    const place = (sub, row) => {
+      const panel = panelOf(row);
+      sub.style.top = (row.getBoundingClientRect().top - panel.getBoundingClientRect().top
+        - parseFloat(getComputedStyle(sub).paddingTop)) + 'px';
+      sub.style.translate = '';
+      sub.classList.remove('is-left');
+      fit(sub, true);
+      if (!screen) return;
+      const s = screen.getBoundingClientRect();
+      const m = margin();
+      if (panel !== root && sub.getBoundingClientRect().right > s.right - m) sub.classList.add('is-left');
+      const r = sub.getBoundingClientRect();
+      const shift = r.left < s.left + m ? s.left + m - r.left : r.right > s.right - m ? s.right - m - r.right : 0;
+      if (shift) sub.style.translate = shift + 'px 0';
+    };
+    const openSub = (row) => {
+      const sub = subFor(row);
+      if (!sub) return null;
+      closeSubs(sub);
+      rows(panelOf(row)).forEach((r) => { if (r !== row) r.classList.remove('is-hot'); });
+      row.classList.add('is-hot');
+      if (sub.dataset.for === 'listen') listen(sub);
+      if (!sub.classList.contains('is-open')) track.length = 0;
+      sub.classList.add('is-open');
+      place(sub, row);
+      return sub;
+    };
+    const open = (byHand) => {
+      root.classList.add('is-open');
+      fit(root, false);
+      if (!byHand) return;
+      manual = true;
+      root.classList.add('is-manual');
+      if (glyph) glyph.classList.add('is-menu');
+    };
+    const close = () => {
+      manual = false;
+      clearTimeout(aim);
+      aim = 0;
+      track.length = 0;
+      root.classList.remove('is-open', 'is-manual');
+      holder(root).scrollTop = 0;
+      if (glyph) glyph.classList.remove('is-menu');
+      closeSubs(null);
+      cool();
+    };
+    // Taken down by the visitor while a walk is on: the walk finishes its
+    // business without the menu.
+    const dismiss = () => { if (walking) walking.cancelled = true; close(); };
+    const refuse = (row) => {
+      row.classList.remove('is-refused');
+      void row.offsetWidth;
+      row.classList.add('is-refused');
+      setTimeout(() => row.classList.remove('is-refused'), 500);
+    };
+    const act = (row) => {
+      const id = row.dataset.id || '';
+      const a = opts.actions || {};
+      if (id.startsWith('size-')) { pick(id); if (a.size) a.size(Number(id.slice(5))); }
+      else if (id.startsWith('align-')) { pick(id); if (a.align) a.align(id.slice(6)); }
+      else if (id.startsWith('icon-')) { pick(id); if (a.icon) a.icon(id.slice(5)); }
+      else if (id === 'reveal' || id === 'history') {
+        const on = !row.classList.contains('is-on');
+        row.classList.toggle('is-on', on);
+        if (a[id]) a[id](on);
+      } else if (id === 'reset' && a.reset) a.reset();
+    };
+    const settle = (row) => {
+      const panel = panelOf(row);
+      rows(panel).forEach((r) => { if (r !== row) r.classList.remove('is-hot'); });
+      if (row.classList.contains('is-dim')) { closeSubs(null, panel); return; }
+      row.classList.add('is-hot');
+      if (subFor(row)) openSub(row);
+      else closeSubs(null, panel);
+    };
+    // The pointer on its way to an open submenu crosses the rows between,
+    // and macOS gives it the benefit of the doubt: while it is moving
+    // towards the submenu — inside the triangle from where it was a moment
+    // ago to the submenu's near edge — the row it is crossing is not taken
+    // as the one it wants. Once it stops, or turns away, the row is.
+    // Where the pointer has been this last third of a second, and where it
+    // set off from (`track`, above).
+    let hovered = null;
+    let aim = 0;
+    const sample = (e) => {
+      const now = performance.now();
+      track.push({ x: e.clientX, y: e.clientY, t: now });
+      // The first sample kept is the last one from before this last third
+      // of a second: where the pointer was when it set off, however long it
+      // rested there.
+      while (track.length > 2 && now - track[1].t > 320) track.shift();
+    };
+    root.addEventListener('pointermove', (e) => { if (manual) sample(e); });
+    const toward = (sub) => {
+      if (track.length < 2) return false;
+      const now = track[track.length - 1];
+      const from = track[0];
+      if (Math.abs(now.x - from.x) < 2 && Math.abs(now.y - from.y) < 2) return false;
+      const r = sub.getBoundingClientRect();
+      if (now.x >= r.left && now.x <= r.right && now.y >= r.top && now.y <= r.bottom) return true;
+      // The near edge is the one that faces the row the submenu hangs off.
+      const near = Math.abs(from.x - r.right) < Math.abs(from.x - r.left) ? r.right : r.left;
+      const b = { x: near, y: r.top - 6 };
+      const c = { x: near, y: r.bottom + 6 };
+      const side = (p, q, s) => (q.x - p.x) * (s.y - p.y) - (q.y - p.y) * (s.x - p.x);
+      const d1 = side(from, b, now);
+      const d2 = side(b, c, now);
+      const d3 = side(c, from, now);
+      return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+    };
+    root.addEventListener('pointerover', (e) => {
+      if (!manual) return;
+      const row = e.target.closest('.mn-row');
+      if (!row || !root.contains(row)) return;
+      sample(e);
+      hovered = row;
+      clearTimeout(aim);
+      aim = 0;
+      // The open submenu of the panel this row is in, if it has one.
+      const panel = panelOf(row);
+      const sub = subs.find((s) => panelOf(s) === panel && s.classList.contains('is-open'));
+      if (sub && subFor(row) !== sub && toward(sub)) {
+        const later = () => {
+          aim = 0;
+          if (hovered !== row) return;
+          const still = performance.now() - track[track.length - 1].t < 250 && toward(sub);
+          if (still) aim = setTimeout(later, 150);
+          else settle(row);
+        };
+        aim = setTimeout(later, 300);
+        return;
+      }
+      settle(row);
+    });
+    // The pointer resting on a band scrolls the rows past it, a few a
+    // second, until that end shows and the band goes. The wheel scrolls
+    // them too, and either way the row's submenu, if one was up, goes down.
+    let rolling = 0;
+    const stopRoll = () => { cancelAnimationFrame(rolling); rolling = 0; };
+    const roll = (panel, band) => {
+      const wrap = holder(panel);
+      const dir = band.classList.contains('is-up') ? -1 : 1;
+      const pace = 6 * 2 * parseFloat(getComputedStyle(root).fontSize) / 1000;  // six rows a second
+      stopRoll();
+      closeSubs(null, panel);
+      rows(panel).forEach((r) => r.classList.remove('is-hot'));
+      let last = performance.now();
+      const step = (now) => {
+        wrap.scrollTop += dir * (now - last) * pace;
+        last = now;
+        layout(panel);
+        if (band.classList.contains('is-shown')) rolling = requestAnimationFrame(step);
+        else rolling = 0;
+      };
+      rolling = requestAnimationFrame(step);
+    };
+    panels.forEach((panel) => {
+      holder(panel).addEventListener('scroll', () => layout(panel));
+      holder(panel).addEventListener('wheel', () => { if (manual) closeSubs(null, panel); }, { passive: true });
+      panel.querySelectorAll(':scope > .mn-arrow').forEach((band) => {
+        band.addEventListener('pointerenter', () => { if (manual) roll(panel, band); });
+        band.addEventListener('pointerleave', stopRoll);
+      });
+    });
+    window.addEventListener('resize', () => {
+      if (!root.classList.contains('is-open')) return;
+      fit(root, false);
+      subs.forEach((sub) => {
+        const row = sub.classList.contains('is-open') && rowFor(sub.dataset.for);
+        if (row) place(sub, row);
+      });
+    });
+    root.addEventListener('pointerleave', () => {
+      if (!manual) return;
+      // The row whose submenu is open keeps its light, as macOS keeps it.
+      root.querySelectorAll('.mn-row.is-hot').forEach((r) => {
+        const sub = subFor(r);
+        if (!(sub && sub.classList.contains('is-open'))) r.classList.remove('is-hot');
+      });
+    });
+    root.addEventListener('click', (e) => {
+      if (!manual) return;
+      const row = e.target.closest('.mn-row');
+      if (!row || !root.contains(row) || row.classList.contains('is-dim')) return;
+      if (subFor(row)) { openSub(row); return; }
+      if (!enabled(row)) { refuse(row); return; }
+      act(row);
+      close();
+    });
+    if (glyph) glyph.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (root.classList.contains('is-open')) dismiss();
+      else open(true);
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!manual) return;
+      if (root.contains(e.target) || (glyph && glyph.contains(e.target))) return;
+      dismiss();
+    }, true);
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && manual) dismiss(); });
+
+    return {
+      // A walk by the demo: the menu opened if it is down, and taken down
+      // after — unless the visitor had it up, when it stays, its submenu
+      // closed and its rows cooled. `cancelled` once the visitor takes it
+      // down mid-walk: the walk then does its business without the menu.
+      walk: () => {
+        const w = { cancelled: false };
+        if (!root.classList.contains('is-open')) open(false);
+        walking = w;
+        w.hot = (row) => { reveal(row); row.classList.add('is-hot'); };
+        w.cool = (row) => row.classList.remove('is-hot');
+        w.sub = (row) => openSub(row);
+        w.end = () => {
+          if (walking === w) walking = null;
+          if (w.cancelled) return;
+          if (manual) { closeSubs(null); cool(); } else close();
+        };
+        return w;
+      },
+      // The demos' own take-down, on a scene change: a menu the visitor has
+      // up is theirs to take down.
+      closeScripted: () => { if (!manual) close(); },
+    };
+  },
 };
 
 const stackSearch = (() => {
@@ -171,14 +1346,14 @@ const stackSearch = (() => {
     el.textContent = '';
     let at = 0;
     ranges(query, text).forEach((hit) => {
-      if (hit[0] > at) el.append(text.slice(at, hit[0]));
+      if (hit[0] > at) appendKeys(el, text.slice(at, hit[0]));
       const lit = document.createElement('span');
       lit.className = 'hist-hit';
-      lit.textContent = text.slice(hit[0], hit[1]);
+      appendKeys(lit, text.slice(hit[0], hit[1]));
       el.append(lit);
       at = hit[1];
     });
-    if (at < text.length) el.append(text.slice(at));
+    if (at < text.length) appendKeys(el, text.slice(at));
   };
 
   // The app's SpringValue: one number on a spring, ticked once a frame with
@@ -857,6 +2032,9 @@ const windowResize = (() => {
   const windows = document.querySelectorAll('.demo-window');
   if (!box || !out) return;
   const demoEl = box.closest('.demo');
+  const screen = document.querySelector('.demo-screen');
+  // The settings, see SETTINGS: the app's defaults, under the page's seed.
+  const S = seedDemo(screen, {});
   ringFor(box);
 
   // Named as the Mac names them in its menu bar: Zoom's process is zoom.us.
@@ -1106,14 +2284,14 @@ const windowResize = (() => {
     // No loop to unwind — the scene is just what is on screen, so the bar places
     // it directly. The buttons are still worth having: they are the only way
     // through the three scenes when nothing is animating.
-    out.textContent = SCENES[0].lines[0];
+    setKeys(out, SCENES[0].lines[0]);
     box.classList.add('is-visible');
     [...document.querySelectorAll('.demo-scenes .scene-button')].forEach(
       (button, index) =>
         button.addEventListener('click', () => {
           front(SCENES[index].app);
           wearApp(box, playing());
-          out.textContent = SCENES[index].lines[0];
+          setKeys(out, SCENES[index].lines[0]);
           document
             .querySelectorAll('.demo-scenes .scene-button')
             .forEach((b, i) =>
@@ -1127,6 +2305,7 @@ const windowResize = (() => {
   const WORD_MS = 130;   // roughly conversational pace
   const JITTER = 80;
   const GAP_MS = 500;    // blank between boxes
+  const FADE_MS = 400;   // .demo-overlay's opacity transition, in styles.css
   // A finished box holds long enough to actually be read: a base beat plus
   // time per word, so a long caption is not gone before you reach the end.
   const holdFor = (words) => Math.min(1500 + words * 130, 4200);
@@ -1188,19 +2367,40 @@ const windowResize = (() => {
   const drawLive = () => {
     if (!cur) return;
     const text = (ctrlKey || ctrlBeat) && cur.source ? cur.source : cur.line;
-    if (cur.i < 0) { out.textContent = text; live.textContent = ''; return; }
     const words = text.split(' ');
+    // The page's first word and the word reached: the line's own, or the
+    // source's, taken as fractions of the line, see above.
+    let from = cur.from;
     let i = cur.i;
     if (text !== cur.line) {
       const of = cur.line.split(' ').length;
-      i = Math.min(Math.round((cur.i / of) * words.length), words.length - 1);
+      const at = (k) => Math.min(Math.round((k / of) * words.length), words.length - 1);
+      from = at(from);
+      if (i >= 0) i = Math.max(at(i), from);
     }
-    out.textContent = i ? words.slice(0, i).join(' ') + ' ' : '';
-    live.textContent = words[i];
+    if (i < 0) { setKeys(out, words.slice(from).join(' ')); live.textContent = ''; return; }
+    setKeys(out, i > from ? words.slice(from, i).join(' ') + ' ' : '');
+    setKeys(live, words[i]);
   };
-  window.addEventListener('keydown', (e) => { if (e.key === 'Control') { ctrlKey = true; drawLive(); } });
-  window.addEventListener('keyup', (e) => { if (e.key === 'Control') { ctrlKey = false; drawLive(); } });
-  window.addEventListener('blur', () => { ctrlKey = false; drawLive(); });
+  // ⌃ swaps the stack's boxes too, in place, as the app's isSwappingLanguage
+  // does: each box keeps both languages from when it closed, and the search
+  // reads whichever is showing. A box that closed with nothing said in
+  // another language has only the one.
+  const lineText = (page) => ((ctrlKey || ctrlBeat) && page.source ? page.source : page.text);
+  const retextHistory = () => {
+    if (!history) return;
+    [...history.children].forEach((el) => {
+      const page = past.find((p) => String(p.id) === el.dataset.pid);
+      if (!page) return;
+      const text = lineText(page);
+      search.write(textOf(el), text);
+      el.classList.toggle('is-hidden', !search.matches(text));
+    });
+  };
+  const redraw = () => { drawLive(); retextHistory(); };
+  window.addEventListener('keydown', (e) => { if (e.key === 'Control') { ctrlKey = true; redraw(); } });
+  window.addEventListener('keyup', (e) => { if (e.key === 'Control') { ctrlKey = false; redraw(); } });
+  window.addEventListener('blur', () => { ctrlKey = false; redraw(); });
 
   // `wears` is the app the line belongs to, when the scene knows better than
   // the stack: the podcast's first line starts while its ⌘-tab is still
@@ -1215,7 +2415,10 @@ const windowResize = (() => {
     // The box wears the app its words arrive under, and keeps it when it
     // closes into the stack, whatever is playing by then.
     const app = wears || playing();
-    cur = { line: line, source: source || null, i: 0 };
+    // The first word of the page on screen: the line's, until the pager
+    // below turns the page.
+    let page = 0;
+    cur = { line: line, source: source || null, i: 0, from: 0 };
     wearApp(box, app);
     drawLive();
     box.classList.add('is-visible');
@@ -1226,6 +2429,19 @@ const windowResize = (() => {
         if (jump) throw JUMPED;
         cur.i = i;
         drawLive();
+        // The app's pager, under a seeded maxLines: a word that takes the
+        // box past its lines closes the page before it into the stack and
+        // starts the next from that word. Measured with the word in the
+        // page and before the frame is painted, so nothing is seen to
+        // overflow; the box holds its whole sentence otherwise.
+        if (i > page && PAGED && linesOf(box) > S.maxLines) {
+          closePage(pageOf(line, page, i, words.length), app,
+            source && pageOf(source, page, i, words.length));
+          page = i;
+          cur.from = i;
+          drawLive();
+        }
+        spoke();
         // A comma or full stop gets a beat, the way speech does.
         const punctuated = /[,.;:—]$/.test(words[i]);
         await step(WORD_MS + Math.random() * JITTER + (punctuated ? 180 : 0));
@@ -1239,10 +2455,10 @@ const windowResize = (() => {
       if (source && CAPTURE) {
         await step(hold * 0.45);
         ctrlBeat = true;
-        drawLive();
+        redraw();
         await step(1400);
         ctrlBeat = false;
-        drawLive();
+        redraw();
         await step(hold * 0.55);
       } else {
         await step(hold);
@@ -1254,7 +2470,8 @@ const windowResize = (() => {
     box.classList.remove('is-visible');
     // The page has closed. The app records it here too, at the fade, because
     // fading is precisely when somebody looked away and will want it back.
-    closePage(line, app);
+    closePage(page ? pageOf(line, page, words.length, words.length) : line, app,
+      page && source ? pageOf(source, page, words.length, words.length) : source);
     await step(GAP_MS);
   }
 
@@ -1304,13 +2521,34 @@ const windowResize = (() => {
   // blinks the item it is about to act on, and takes the check. No pointer
   // is drawn; the highlight moving is the hand.
   const menu = demoEl && demoEl.querySelector('.mn-root');
-  const submenu = menu && menu.querySelector('.mn-sub');
-  const closeMenu = () => {
-    if (!menu) return;
-    menu.classList.remove('is-open');
-    submenu.classList.remove('is-open');
-    menu.querySelectorAll('.is-hot').forEach((r) => r.classList.remove('is-hot'));
-  };
+  const submenu = menu && menu.querySelector('.mn-sub[data-for="translate"]');
+  // By hand too, see statusMenu: the rows with a Try badge act on this
+  // demo's box and stack.
+  const menuUI = menu && statusMenu.attach({
+    root: menu,
+    glyph: glyph,
+    badge: I18N('menu.demo', 'Try'),
+    ...menuChecks(S),
+    // Listen To: the call and the player, whichever is playing marked so.
+    audio: () => [...windows].filter((w) => w.dataset.audio).map((w) =>
+      ({ name: I18N('app.' + w.dataset.app, APP_NAMES[w.dataset.app]), playing: w.dataset.app === playingApp() })),
+    watch: [...windows],
+    actions: {
+      size: (pt) => { if (screen) screen.style.setProperty('--text-scale', String(pt / 30)); queueHole(); },
+      align: (how) => { if (screen) screen.style.setProperty('--text-align', how); },
+      icon: (style) => { setIconStyle({ tab: 'nameTab', off: 'off' }[style] || 'header'); queueHole(); },
+      reveal: (on) => hole.enable(on),
+      history: (on) => { historyOn = on; showHistory(); },
+      reset: () => {
+        box.style.left = '';
+        box.style.top = '';
+        box.style.bottom = '';
+        box.style.transform = '';
+        queueHole();
+      },
+    },
+  });
+  const closeMenu = () => { if (menuUI) menuUI.closeScripted(); };
   const setTranslation = (target) => {
     if (!submenu) return;
     submenu.querySelectorAll('.mn-row').forEach((r) => r.classList.toggle('is-on', r.dataset.id === target));
@@ -1320,23 +2558,27 @@ const windowResize = (() => {
   async function pickTranslation(target) {
     const entry = menu && menu.querySelector('[data-id="translate"]');
     const row = submenu && submenu.querySelector('[data-id="' + target + '"]');
-    if (!entry || !row) return;
-    menu.classList.add('is-open');
-    entry.classList.add('is-hot');
+    if (!entry || !row || !menuUI) return;
+    const walk = menuUI.walk();
+    // The visitor took the menu down mid-walk: the switch still happens.
+    const cut = () => { setTranslation(target); walk.end(); };
+    walk.hot(entry);
     await step(500);
-    submenu.style.top = (entry.offsetTop - parseFloat(getComputedStyle(submenu).paddingTop)) + 'px';
-    submenu.classList.add('is-open');
+    if (walk.cancelled) return cut();
+    walk.sub(entry);
     await step(450);
-    row.classList.add('is-hot');
+    if (walk.cancelled) return cut();
+    walk.hot(row);
     await step(650);
+    if (walk.cancelled) return cut();
     for (let k = 0; k < 2; k++) {
-      row.classList.remove('is-hot');
+      walk.cool(row);
       await step(70);
-      row.classList.add('is-hot');
+      walk.hot(row);
       await step(70);
     }
     setTranslation(target);
-    closeMenu();
+    walk.end();
     await step(350);
   }
   // Resolves once `text` has been typed into the live box, tentative word
@@ -1382,6 +2624,9 @@ const windowResize = (() => {
     // Set by a jump, cleared by the scene that answers it: the switch that gets
     // there runs on its own rather than under the first caption.
     let picked = false;
+    // Set by a jump that found a caption up: that caption fades out whole
+    // before the next turn does anything, rather than being wiped mid-fade.
+    let fading = false;
 
     for (;;) {
       const scene = SCENES[index];
@@ -1399,6 +2644,10 @@ const windowResize = (() => {
       progress(0, 0);
 
       try {
+        if (fading) {
+          fading = false;
+          await step(FADE_MS);
+        }
         // Against what is actually in front, not against what the last switch
         // meant to leave there: an interrupted one may have fronted its window
         // already, and this scene's may be it.
@@ -1451,14 +2700,15 @@ const windowResize = (() => {
         // next turn of the loop get there, which is also what makes a second
         // click during a switch work: it lands here again. A window click has
         // already fronted its window, so the next turn finds nothing to switch
-        // and goes straight to the captions.
+        // and goes straight to the captions. The caption that was up keeps
+        // its words while the box fades: the next line's own drawLive
+        // replaces them, under a box that is only shown again once it has.
         index = jump.index;
         picked = !jump.direct;
+        fading = jump.fade;
         jump = null;
         switcher.classList.remove('is-visible');
         box.classList.remove('is-visible');
-        out.textContent = '';
-        live.textContent = '';
         progress(0, 0);
       }
     }
@@ -1502,7 +2752,7 @@ const windowResize = (() => {
   // `direct` skips the ⌘-tab: clicking a window is reaching for that window.
   const jumpTo = (index, direct) => {
     if (index === sceneIndex || !SCENES[index]) return;
-    jump = { index: index, direct: !!direct };
+    jump = { index: index, direct: !!direct, fade: box.classList.contains('is-visible') };
     paintScene(index);
     box.classList.remove('is-visible');
     progress(0, 0);
@@ -1546,10 +2796,9 @@ const windowResize = (() => {
     windowGrab = null;
   };
 
-  windows.forEach((win) => {
-    const handle = win.querySelector('.win-titlebar');
-    if (!handle || !stage) return;
-
+  // Every title bar in the window is a handle: a sidebar drawn the Tahoe way
+  // carries its own, with the traffic lights, beside the main column's.
+  if (stage) windows.forEach((win) => win.querySelectorAll('.win-titlebar').forEach((handle) => {
     handle.addEventListener('pointerdown', (event) => {
       if (event.pointerType !== 'mouse') return;
       event.preventDefault();
@@ -1581,7 +2830,7 @@ const windowResize = (() => {
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
       handle.addEventListener(type, endWindowDrag)
     );
-  });
+  }));
 
   // ── resizing the windows ──────────────────────────────────────────────────
   // By any edge or corner, see windowResize. Front to back is the stack's
@@ -1680,7 +2929,6 @@ const windowResize = (() => {
   // constants; what is here is where the hole is and what is in the stack.
 
   const history = document.getElementById('caption-history');
-  const screen = document.querySelector('.demo-screen');
 
   // The search pill at the stack's edge, as on the landing pages: pinned, the
   // stack stays up with ⌥ released; each keystroke repaints it narrowed and
@@ -1701,6 +2949,8 @@ const windowResize = (() => {
   const follow = history && stackSearch.follow(history, search);
   let altKey = false;
   let shiftKey = false;
+  // The menu's Recent Boxes On ⌥.
+  let historyOn = S.historyEnabled;
 
   // Closed pages, oldest first, at what was the app's `defaultHistoryDepth`
   // until 1.4.0, where the default became every box. The demo keeps the cap:
@@ -1716,8 +2966,35 @@ const windowResize = (() => {
   // The demo speaks seven distinct lines, so a full buffer repeats them. The
   // app would do the same with a speaker who repeats themselves: closePage only
   // refuses a line identical to the one before it.
-  const PAST_MAX = 15;
+  //
+  // Or the seed's depth, within the app's own historyDepthCap.
+  const PAST_MAX = Math.min(S.historyDepth, 2000);
   const past = [];
+  // Whether a box pages at the seed's maxLines, see `say`.
+  const PAGED = Number.isFinite(S.maxLines);
+
+  // The app's expiry for the stack, under a seeded historyExpires: forgotten
+  // once no word has arrived for historyExpiry seconds, and not while it is
+  // up, since someone holding ⌥ is reading it. Off on the site, see
+  // DEMO_DEFAULTS: the loop never falls silent, though one parked out of
+  // view does, as the app's overlay does over a paused call. Counted from
+  // the last word, as the app counts it, at the close as well as at the
+  // word: a page that closes once the silence has begun goes with the rest,
+  // rather than standing until the next word, which a parked loop never says.
+  let lastTextAt = -Infinity;
+  let forgetting = 0;
+  const forgotten = () => {
+    if (history && history.classList.contains('is-visible')) { forgetting = setTimeout(forgotten, 1000); return; }
+    if (!past.length) return;
+    past.length = 0;
+    showHistory();
+  };
+  const forget = () => {
+    clearTimeout(forgetting);
+    if (!S.historyExpires) return;
+    forgetting = setTimeout(forgotten, Math.max(0, lastTextAt + S.historyExpiry * 1000 - performance.now()));
+  };
+  const spoke = () => { lastTextAt = performance.now(); forget(); };
 
   // Pages carry an id rather than being matched on their text. The demo speaks
   // seven lines into fifteen slots, so the same sentence is in the stack more
@@ -1729,14 +3006,16 @@ const windowResize = (() => {
   // Deduplicated against the last entry, as the app's own closePage is: a page
   // can close twice in a beat, and two identical boxes read as a stutter rather
   // than as history.
-  const closePage = (line, app) => {
+  const closePage = (line, app, source) => {
     const trimmed = line.trim();
     const last = past[past.length - 1];
     if (!trimmed || (last && trimmed === last.text)) return;
     // Each box wears the app its words arrived under, as the app's pager tags
-    // it, not the app of whatever is playing when it closes.
-    past.push({ id: ++pageId, text: trimmed, app: app || playing() });
+    // it, not the app of whatever is playing when it closes, and carries
+    // what was actually said, for ⌃.
+    past.push({ id: ++pageId, text: trimmed, source: source ? source.trim() : null, app: app || playing() });
     if (past.length > PAST_MAX) past.splice(0, past.length - PAST_MAX);
+    forget();
     // A stack already up takes the box in. One that is not may be wanted
     // anyway: ⌥ pressed before anything had closed, and still held, which the
     // app's poll answers the moment a first page does.
@@ -1818,6 +3097,12 @@ const windowResize = (() => {
   //
   // scrollHeight is exact and fractional. It is only wrong while a transform is
   // in flight, and `rising` is what keeps this from being read then.
+  // The stack's padding, a pixel past the boxes at either end (see
+  // .demo-history), which its height has to carry on top of the room.
+  const slack = () => {
+    const cs = getComputedStyle(history);
+    return (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  };
   const maxScroll = () => Math.max(0, history.scrollHeight - history.clientHeight);
 
   // Distance between the edge nearest the live box and the end of the content
@@ -1931,7 +3216,7 @@ const windowResize = (() => {
     // fractions of a pixel as a caption is typed. Left as a float it crossed the
     // half-pixel test below on its own every few frames, and every crossing was
     // a scroll correction the reader had not asked for.
-    history.style.maxHeight = Math.max(0, Math.round(room - block)) + 'px';
+    history.style.maxHeight = (Math.max(0, Math.round(room - block)) + slack()) + 'px';
 
     // Nowhere left to put it. Hidden rather than emptied, because the live box
     // shrinks again on the next page and the stack should still be there. A
@@ -2020,13 +3305,13 @@ const windowResize = (() => {
     history.style.minWidth = '';
     kids.forEach((el) => {
       const page = pageOf(el);
-      if (page) search.write(textOf(el), page.text);
+      if (page) search.write(textOf(el), lineText(page));
       el.classList.remove('is-hidden');
     });
     history.style.minWidth = history.offsetWidth + 'px';
     kids.forEach((el) => {
       const page = pageOf(el);
-      if (page) el.classList.toggle('is-hidden', !search.matches(page.text));
+      if (page) el.classList.toggle('is-hidden', !search.matches(lineText(page)));
     });
 
     placeHistory();
@@ -2050,7 +3335,7 @@ const windowResize = (() => {
       const i = kids.indexOf(el);
       el.style.setProperty('--rise', (placedAbove ? kids.length - 1 - i : i) + (fresh ? 1 : 0));
       rising++;
-      el.addEventListener('animationend', () => { rising = Math.max(0, rising - 1); },
+      el.addEventListener('animationend', () => { rising = Math.max(0, rising - 1); relayer(el); },
                           { once: true });
       el.classList.add('is-rising');
     });
@@ -2061,7 +3346,7 @@ const windowResize = (() => {
   // keys are doing.
   const showHistory = () => {
     if (!history || !stage) return;
-    const want = ((altKey && !shiftKey) || search.pinned) && past.length > 0;
+    const want = historyOn && ((altKey && !shiftKey) || search.pinned) && past.length > 0;
 
     if (want) {
       // A fresh press builds the stack from nothing, so every box rises. Only
@@ -2098,55 +3383,14 @@ const windowResize = (() => {
     queueHole();
   };
 
-  // Where the pointer is, in the page's coordinates. Kept rather than the hole's
-  // offset because the box moves under a still pointer far more than the pointer
-  // moves over a still box: it re-centres and re-sizes on every word, and the
-  // app recomputes the centre on exactly the same events for the same reason.
-  let pointer = null;
-  let holeQueued = false;
-
-  const paintHole = () => {
-    // ⇧ keeps the box solid, the way it does in the app: you are about to pick
-    // it up, and a hole under the hand you are picking it up with is no help.
-    // ⌥ does too, because the stack is what is being read then.
-    if (!pointer || box.classList.contains('is-movable') || box.classList.contains('is-solid')) {
-      box.style.setProperty('--hole-x', '-999px');
-      box.style.setProperty('--hole-y', '-999px');
-      return;
-    }
-    const rect = box.getBoundingClientRect();
-    box.style.setProperty('--hole-x', (pointer.x - rect.left) + 'px');
-    box.style.setProperty('--hole-y', (pointer.y - rect.top) + 'px');
-  };
-
-  // One paint a frame at most. The box resizes on every word and the pointer
-  // reports faster than that, so both feed the same queue.
-  const queueHole = () => {
-    if (holeQueued) return;
-    holeQueued = true;
-    requestAnimationFrame(() => {
-      holeQueued = false;
-      paintHole();
-      if (history && history.classList.contains('is-visible')) placeHistory();
-    });
-  };
-
-  if (screen) {
-    screen.addEventListener('pointermove', (event) => {
-      if (event.pointerType !== 'mouse') return;
-      pointer = { x: event.clientX, y: event.clientY };
-      queueHole();
-    });
-    // Nothing to turn off: the falloff means distance alone ends the reveal, on
-    // this screen as on a real one. This is only for the pointer that leaves in
-    // one jump, or out of the window entirely.
-    screen.addEventListener('pointerleave', () => { pointer = null; queueHole(); });
-  }
-
-  // The box changes width on almost every word, which moves its left edge by
-  // most of the box. Without this the hole lands off the pointer until the
-  // pointer next moves, and reads as the reveal blinking out.
-  if (typeof ResizeObserver === 'function') new ResizeObserver(queueHole).observe(box);
+  // The hole under the pointer, see pointerReveal, and the stack placed again
+  // with every paint: it is pinned to the box.
+  const hole = pointerReveal(box, screen, {
+    on: S.revealEnabled,
+    solid: () => box.classList.contains('is-movable') || box.classList.contains('is-solid'),
+    onFrame: () => { if (history && history.classList.contains('is-visible')) placeHistory(); },
+  });
+  const queueHole = hole.queue;
 
   // Tabbing away with either key down would otherwise leave it armed forever,
   // the same reason armBox watches blur.

@@ -1027,8 +1027,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Everything the preview draws, read back from the same getters the rows
     /// read. Assembled fresh on every edit rather than tracked: the menu can
     /// change half of these while this window is open, and a copy kept here
-    /// would be the stale one.
-    private func currentStyle() -> PreviewStyle {
+    /// would be the stale one. The welcome window's demo is seeded from the
+    /// same call, so the box it draws is this one too.
+    func currentStyle() -> PreviewStyle {
         PreviewStyle(
             fontSize: fontSize(),
             maxLines: maxLines(),

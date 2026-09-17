@@ -35,6 +35,7 @@ SLICES = [
     ("CSS_MENU", "styles.css", "demo.css", "landing pages"),
     ("CSS_FRAME", "styles.css", "demo.css", "works with"),
     ("CSS_NOTES", "styles.css", "demo.css", "Visual Studio Code"),
+    ("CSS_TAHOE", "styles.css", "demo.css", None),
     ("JS_I18N", "script.js", "demo.js", None),
     ("JS_CAPTURE", "script.js", "demo.js", "function theme"),
     ("JS_WAVE", "script.js", "demo.js", None),
