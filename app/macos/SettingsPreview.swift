@@ -38,6 +38,16 @@ import AppKit
 /// script reads these fields under these names (SETTINGS in demo.js), so a
 /// field renamed here is a setting the demo stops following.
 struct PreviewStyle: Equatable, Encodable {
+    /// The fields by name — spelled out so a change can name the one it was
+    /// to (`Field`), in the name the demo reads it under.
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case fontSize, maxLines, boxOpacity, blur
+        case revealOpacity, revealSize, revealEnabled
+        case historyEnabled, historyDepth, historyTextOpacity, historyExpiry, historyExpires
+        case iconStyle, textAlignment
+    }
+    typealias Field = CodingKeys
+
     var fontSize: CGFloat = 30
     var maxLines = SubtitleView.defaultMaxLines
     var boxOpacity = SubtitleView.defaultBackgroundOpacity

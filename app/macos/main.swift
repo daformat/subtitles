@@ -1220,20 +1220,20 @@ if useOverlay {
     menu.onToggleReveal = {
         revealEnabled.toggle()
         controller.isRevealEnabled = revealEnabled
-        settings.refreshPreview()
+        settings.refreshPreview(changed: [.revealEnabled])
         UserDefaults.standard.set(revealEnabled, forKey: Defaults.reveal)
     }
     menu.historyEnabled = { historyEnabled }
     menu.onToggleHistory = {
         historyEnabled.toggle()
         controller.isHistoryEnabled = historyEnabled
-        settings.refreshPreview()
+        settings.refreshPreview(changed: [.historyEnabled])
         UserDefaults.standard.set(historyEnabled, forKey: Defaults.history)
     }
     menu.onFontSize = { size in
         fontSize = size
         controller.setFontSize(size)
-        settings.refreshPreview()
+        settings.refreshPreview(changed: [.fontSize])
         UserDefaults.standard.set(Double(size), forKey: Defaults.fontSize)
     }
     menu.onSelectSource = { source in
@@ -1243,7 +1243,7 @@ if useOverlay {
     menu.onSelectTextAlignment = { choice in
         textAlignment = choice
         controller.textAlignment = choice
-        settings.refreshPreview()
+        settings.refreshPreview(changed: [.textAlignment])
         UserDefaults.standard.set(choice.rawValue, forKey: Defaults.textAlignment)
         err("text alignment: \(choice.title)")
     }
@@ -1251,7 +1251,7 @@ if useOverlay {
     menu.onSelectIconStyle = { style in
         iconStyle = style
         controller.iconStyle = style
-        settings.refreshPreview()
+        settings.refreshPreview(changed: [.iconStyle])
         UserDefaults.standard.set(style.rawValue, forKey: Defaults.iconStyle)
         err("app icon on boxes: \(style.title)")
     }
@@ -1323,7 +1323,7 @@ if useOverlay {
     // getters are the one place all of these are already gathered, and its
     // preview the one place every change to them already reports.
     WelcomeWindow.shared.settings = { SettingsWindow.shared.currentStyle() }
-    SettingsWindow.shared.onStyleChange = { WelcomeWindow.shared.follow($0) }
+    SettingsWindow.shared.onStyleChange = { WelcomeWindow.shared.follow($0, changed: $1) }
     // [main-edition]
     WelcomeWindow.shared.trialLine = {
         guard case .trial = license.entitlement else { return nil }

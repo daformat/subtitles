@@ -709,7 +709,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             format: { "\(Int(($0 * 100).rounded()))%" },
             apply: { [weak self] in
                 self?.onRevealOpacity?(CGFloat($0))
-                self?.syncPreview(.reveal)
+                self?.syncPreview(.reveal, changed: [.revealOpacity])
             })
 
         let width = SliderRow(
@@ -718,7 +718,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: $0.rounded(), height: self.revealSize().height))
-                self.syncPreview(.reveal)
+                self.syncPreview(.reveal, changed: [.revealSize])
             })
 
         let height = SliderRow(
@@ -727,7 +727,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: self.revealSize().width, height: $0.rounded()))
-                self.syncPreview(.reveal)
+                self.syncPreview(.reveal, changed: [.revealSize])
             })
 
         let lines = SliderRow(
@@ -735,7 +735,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             format: { $0 < 1.5 ? "1 line" : "\(Int($0.rounded())) lines" },
             apply: { [weak self] in
                 self?.onMaxLines?(Int($0.rounded()))
-                self?.syncPreview(.lines)
+                self?.syncPreview(.lines, changed: [.maxLines])
             })
 
         let background = SliderRow(
@@ -743,7 +743,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             format: { "\(Int(($0 * 100).rounded()))%" },
             apply: { [weak self] in
                 self?.onBoxOpacity?(CGFloat($0))
-                self?.syncPreview(.background)
+                self?.syncPreview(.background, changed: [.boxOpacity])
             })
 
         // Whole points: the difference between 6 and 6.4 is not one anyone can
@@ -754,7 +754,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             format: { $0 < 0.5 ? "Off" : "\(Int($0.rounded())) pt" },
             apply: { [weak self] in
                 self?.onBackdropBlur?(CGFloat($0.rounded()))
-                self?.syncPreview(.blur)
+                self?.syncPreview(.blur, changed: [.blur])
             })
 
         // The track runs one stop past the last number, and that stop is
@@ -779,7 +779,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 let stop = Int($0.rounded())
                 self?.onHistoryDepth?(stop == Int(unlimitedStop)
                                       ? OverlayController.unlimitedHistoryDepth : stop)
-                self?.syncPreview(.keep)
+                self?.syncPreview(.keep, changed: [.historyDepth])
             })
 
         let dimness = SliderRow(
@@ -788,7 +788,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             format: { "\(Int(($0 * 100).rounded()))%" },
             apply: { [weak self] in
                 self?.onHistoryTextOpacity?(CGFloat($0))
-                self?.syncPreview(.dimness)
+                self?.syncPreview(.dimness, changed: [.historyTextOpacity])
             })
 
         rows = [lines, background, blur, opacity, width, height, depth, dimness]
@@ -804,7 +804,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             screen.widthAnchor.constraint(equalToConstant: Self.contentWidth),
             screen.heightAnchor.constraint(equalToConstant: SettingsPreview.displayHeight),
         ])
-        applyStyle()
+        screen.apply(currentStyle())
 
         section("Subtitle Box",
                 "How many lines a box fills before it clears and starts a new one, "
@@ -828,7 +828,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let expiry = SecondsRow(seconds: historyExpiry()) { [weak self] in
             self?.onHistoryExpiry?($0)
-            self?.syncPreview(.expiry)
+            self?.syncPreview(.expiry, changed: [.historyExpiry])
         }
         let expires = ToggleRow(
             "Forget it when idle",
@@ -836,7 +836,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             value: historyExpires(), width: Self.contentWidth) { [weak self] on in
                 self?.onHistoryExpires?(on)
                 self?.syncHistoryEnabled()
-                self?.syncPreview(.expiry)
+                self?.syncPreview(.expiry, changed: [.historyExpires])
             }
         expiryRow = expiry
         expiryToggle = expires
@@ -922,6 +922,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             // Rebuild rather than nudge each control: the rows read their values
             // at construction, so new values need new rows.
             self.install(into: window)
+            // A change to every field, for whatever follows them.
+            self.applyStyle(changed: Set(PreviewStyle.Field.allCases))
         }
     }
 
@@ -1009,23 +1011,25 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func toggleReveal(_ sender: NSSwitch) {
         onToggleReveal?(sender.state == .on)
         syncRevealEnabled()
-        syncPreview(.reveal)
+        syncPreview(.reveal, changed: [.revealEnabled])
     }
 
     @objc private func toggleHistory(_ sender: NSSwitch) {
         onToggleHistory?(sender.state == .on)
         syncHistoryEnabled()
-        syncPreview(.keep)
+        syncPreview(.keep, changed: [.historyEnabled])
     }
 
     // MARK: - The preview
 
-    /// Called with the style whenever the preview is drawn to it: a control
-    /// touched here, the menu changing something, a reset. The welcome
-    /// window's demo follows the overlay through it (main.swift), the way the
-    /// preview does — this window is where every change to the box's look
-    /// already reports, whether or not it is open.
-    var onStyleChange: ((PreviewStyle) -> Void)?
+    /// Called with the style whenever the preview is drawn to it, and the
+    /// fields the change was to — a control touched here, the menu changing
+    /// something, every field for a reset, none for a redraw that changed
+    /// nothing, such as the window becoming key. The welcome window's demo
+    /// follows the overlay through it (main.swift), the way the preview does:
+    /// this window is where every change to the box's look already reports,
+    /// whether or not it is open.
+    var onStyleChange: ((PreviewStyle, Set<PreviewStyle.Field>) -> Void)?
 
     /// Everything the preview draws, read back from the same getters the rows
     /// read. Assembled fresh on every edit rather than tracked: the menu can
@@ -1050,28 +1054,30 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             textAlignment: textAlignment())
     }
 
-    /// Something the menu changed: re-read the two switches it can flip, and
-    /// redraw the preview from the getters. Whether or not the window is
-    /// open — what follows the style through `onStyleChange` is not in it.
-    func refreshPreview() {
+    /// Something the menu changed, or may have: re-read the two switches it
+    /// can flip, and redraw the preview from the getters. Whether or not the
+    /// window is open — what follows the style through `onStyleChange` is
+    /// not in it. `changed` names the field the menu changed, if one did.
+    func refreshPreview(changed: Set<PreviewStyle.Field> = []) {
         revealSwitch.state = revealEnabled() ? .on : .off
         syncRevealEnabled()
         historySwitch.state = historyEnabled() ? .on : .off
         syncHistoryEnabled()
-        applyStyle()
+        applyStyle(changed: changed)
     }
 
     /// A control was touched: show what it did, and say what it does.
-    private func syncPreview(_ topic: PreviewTopic) {
-        applyStyle()
+    private func syncPreview(_ topic: PreviewTopic, changed: Set<PreviewStyle.Field>) {
+        applyStyle(changed: changed)
         preview?.explain(topic)
     }
 
-    /// The preview drawn from the getters, and whatever else follows them told.
-    private func applyStyle() {
+    /// The preview drawn from the getters, and whatever else follows them told
+    /// which fields were changed.
+    private func applyStyle(changed: Set<PreviewStyle.Field>) {
         let style = currentStyle()
         preview?.apply(style)
-        onStyleChange?(style)
+        onStyleChange?(style, changed)
     }
 
     /// Dim each section's dials when the feature itself is switched off.
