@@ -4,6 +4,32 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.7.2 · 2026-09-17
+
+- The welcome window's demo draws the box you have. It opens seeded with the
+  overlay's settings — the text size and alignment, the header row or the
+  name tab, how many lines a box fills before it pages, how solid it is and
+  how far the picture under it is softened, the pointer reveal, how many
+  boxes ⌥ keeps and when it forgets them — and follows a setting as it is
+  changed, in place, from the menu or from Settings. The demo's own menu
+  still works on it, and the last change wins whichever side made it: a size
+  picked in the demo survives the app's blur changing, and a size picked in
+  the app takes over one picked in the demo.
+- The welcome window is 150 points wider, and its demo with it.
+- The demo's windows are drawn the way macOS 26 draws them, as they are on
+  the site: rounder frames with a fine rim, sidebars as glass panes with the
+  traffic lights in them, a call's controls in a capsule over the tiles, the
+  app's menu on the same glass. The call in the Settings preview follows the
+  same drawing, and the keycaps the demo types into its boxes are outlined,
+  as the welcome window's own are.
+- The Settings preview follows a change made from the menu while the window
+  is open — the text size, the pointer reveal, the ⌥ stack — and its switches
+  with it. It used to catch up when the window next became key.
+- The ⌥ stack's fades at its clipped edges ease in and out rather than
+  ramping straight, on the overlay and in the Settings preview alike.
+- The licence window says Buy a Key without naming a price: the price is
+  set on Gumroad, and a number in the app went stale the moment it changed.
+
 ## 1.7.1 · 2026-09-14
 
 - A notification sound no longer puts its app's name on the box. Core Audio
