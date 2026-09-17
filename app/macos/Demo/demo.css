@@ -1703,22 +1703,25 @@
 .demo-overlay .tentative { color: rgba(255, 255, 255, 0.55); }
 
 /* A shortcut said inside a box is drawn as a keycap on the box's own ink:
-   white on the black, sized to the caption so it follows the text size the
-   menu sets, and no taller than the line so the box keeps its shape.
-   script.js draws these from the text as it types (appendKeys), so no
-   translated line carries markup for it. */
+   the same outline as everywhere, white on the black, sized to the caption
+   so it follows the text size the menu sets, and no taller than the line so
+   the box keeps its shape. script.js draws these from the text as it types
+   (appendKeys), so no translated line carries markup for it. Whole rather
+   than resting on the kbd rule above: the app vendors the demo's styles
+   without the page's, so what is not said here is not in its copy. */
 .demo-overlay kbd,
 .demo-history kbd {
+  display: inline-block;
   font: inherit;
   font-size: 0.82em;
   line-height: 1;
-  padding: 0.14em 0.36em 0.18em;
+  padding: 0.16em 0.4em;
   min-width: 1.5em;
+  text-align: center;
   color: inherit;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-bottom-width: 2px;
-  border-radius: 0.3em;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 0.41em;
   vertical-align: 0.04em;
 }
 
@@ -1933,7 +1936,7 @@
 .scene-label kbd {
   font-size: 11px;
   line-height: 1;
-  padding: 0.2em 0.36em 0.24em;
+  padding: 0.22em 0.5em;
   min-width: 1.6em;
   vertical-align: 1px;
   color: inherit;
@@ -1953,7 +1956,7 @@
   -webkit-user-select: text;
   user-select: text;
 }
-.demo-caption kbd { font-size: 12px; padding: 0.24em 0.42em; }
+.demo-caption kbd { font-size: 12px; }
 /* The lines under the demo are one block of help text, so they sit closer to
    each other than the block does to the screen above it. */
 .demo-caption + .demo-caption { margin-top: 6px; }

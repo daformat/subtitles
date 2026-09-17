@@ -143,8 +143,10 @@ def main() -> None:
         def shift(m):
             lo, hi = int(m.group(1)), int(m.group(2))
             return f"$(extract {file} {lo - b + d} {hi - b + d})"
-        # Every guard that looked at lines just past the old end.
-        script = re.sub(rf"\$\(extract {re.escape(file)} ({b + 1}|{b}) (\d+)\)", shift, script)
+        # Every guard that looked at lines just past the old end. Guards are
+        # the quoted form, `"$(extract …)"`; a slice's own line is not, and a
+        # slice whose new start is the old end must not be shifted again.
+        script = re.sub(rf'(?<=")\$\(extract {re.escape(file)} ({b + 1}|{b}) (\d+)\)', shift, script)
     SCRIPT.write_text(script)
     print(f"rewrote {SCRIPT.relative_to(ROOT)}")
 
