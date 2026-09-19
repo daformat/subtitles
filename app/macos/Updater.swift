@@ -109,6 +109,38 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
         }
     }
 
+    /// Sparkle's own key for the answer, in the app's defaults: absent until
+    /// the question has been answered, from either side.
+    private static let automaticChecksKey = "SUEnableAutomaticChecks"
+
+    /// Whether the question has never been put — Sparkle's key is unset. Sparkle
+    /// reads the same key to decide whether to ask at the second launch, so
+    /// asking here and answering into it is the one question asked once.
+    var automaticChecksUndecided: Bool {
+        started && UserDefaults.standard.object(forKey: Self.automaticChecksKey) == nil
+    }
+
+    /// Put the question now rather than at the second launch. Sparkle asks it
+    /// only then — the first launch just records that it has launched — so a
+    /// first-time user closed the welcome window and heard nothing about
+    /// updates until the next day's relaunch. Asked as the welcome closes
+    /// instead, in the same window, with the answer written where Sparkle
+    /// reads it; nothing if it has been answered already, or the updater
+    /// never started.
+    func askAboutAutomaticChecks() {
+        guard automaticChecksUndecided else { return }
+        generation += 1
+        window.show(.permission(
+            allow: { [weak self] in
+                self?.automaticChecks = true
+                self?.window.close()
+            },
+            decline: { [weak self] in
+                self?.automaticChecks = false
+                self?.window.close()
+            }))
+    }
+
     /// The explicit check, from the menu. Also the way a held update is
     /// brought into the window: Sparkle sees the session still open and asks
     /// for it in focus.

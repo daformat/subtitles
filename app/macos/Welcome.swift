@@ -91,6 +91,10 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// while this one is up.
     var isVisible: Bool { window?.isVisible ?? false }
 
+    /// Called as the window closes, whichever way. What follows the welcome
+    /// goes here — the updater's one question, on a first launch.
+    var onDismiss: (() -> Void)?
+
     func show(markAsSeen: Bool = false) {
         NSApp.activate(ignoringOtherApps: true)
         if markAsSeen { UserDefaults.standard.set(true, forKey: Self.shownKey) }
@@ -133,6 +137,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// for the same reason: the demo is an animation in a web process, and a
     /// closed window is not a reason to keep painting it.
     func windowWillClose(_ notification: Notification) {
+        onDismiss?()
         poll?.invalidate()
         poll = nil
         readyTimer?.invalidate()

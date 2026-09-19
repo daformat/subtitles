@@ -1353,6 +1353,9 @@ if useOverlay {
     updater.quietFor = { isPaused ? .infinity : TimeInterval(renderer.silentSeconds) }
     updater.mayInterrupt = { !WelcomeWindow.shared.isVisible }
     updater.start()
+    // The one question, as the welcome window closes rather than at the next
+    // launch — see `askAboutAutomaticChecks`. A no-op once it has been answered.
+    WelcomeWindow.shared.onDismiss = { updater.askAboutAutomaticChecks() }
     if updater.started {
         menu.itemsUnderPause = { updater.menuItems() }
         updater.onPendingChange = { menu.updateHealthIndicator() }
