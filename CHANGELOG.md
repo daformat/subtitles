@@ -4,6 +4,54 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.8.0 · 2026-09-19
+
+- **Listen To** has the microphone: whichever input Sound settings has,
+  followed when that changes, named in the menu as Sound settings names it.
+  The boxes wear a white mic on a red tile as their source, and the choice
+  is remembered across launches. macOS asks for the microphone the first
+  time it is chosen and not before, never at launch, and a refusal opens
+  System Settings at the microphone list. A microphone is mono and not
+  always 48 kHz, where the taps are 48 kHz stereo, so the audio core is
+  rebuilt for whatever format the input has, on the way in and on the way
+  back. Sentences on it end after a second without speech rather than
+  waiting for the room to fall silent, which a microphone never hears.
+  Choosing the microphone row again puts it away: capture goes back to the
+  source it replaced, or to all system audio.
+- **Show Both Languages**, under Off in Translate To. With it on the box
+  carries two paragraphs: the Translate To language on top as the caption,
+  the other language under it in a smaller, dimmer run. When the target
+  language itself is spoken the pair reverses, the speech as the caption
+  and the translation under it, with its unsettled tail dimmed as the
+  caption's is and following Translation Timing the same way. The same
+  language never appears twice: the lower paragraph is only ever the words
+  the translation was made from, never the live transcript, and a sentence
+  the translator returned unchanged is left out. A page turns when either
+  paragraph fills, and is held long enough to read the slower of the two.
+  Each box in the ⌥ stack keeps both texts as it showed them. ⌃ does
+  nothing while both are shown: there is no original left to peek at.
+- A box in the ⌥ stack is as tall as what it holds. The live box is capped
+  at Lines per box and the stack's boxes used to be cut at the same height,
+  which lost the end of an original shown under ⌃ (the page was cut on the
+  translation, not on it) and of a page closed at a smaller text size.
+- Translation works in turns. The recogniser keeps one transcript across a
+  conversation, and finishing a sentence used to rewind and re-translate all
+  of it; now a pause or an endpoint closes a turn, words arriving while it
+  settles wait for the next, and changing the target re-translates only the
+  current turn. A tail dimmed as unsettled no longer stays dimmed for good,
+  and a request the translator leaves unanswered for ten seconds is sent
+  again.
+- The welcome window's demo listens where the app does and shows both
+  languages when the app does, from the moment it opens and as either is
+  changed, with the menu bar's orange microphone pill up while it listens.
+  Its boxes sit at the app's line height, as the site's now do.
+<!-- [main-edition] -->
+- The question about checking for updates automatically is asked as the
+  welcome window closes, in that window, rather than at the second launch. A
+  first-time user closed the welcome and heard nothing about updates until
+  the next day's relaunch. It is still the one question, asked once.
+<!-- [/main-edition] -->
+
 ## 1.7.2 · 2026-09-17
 
 - The welcome window's demo draws the box you have. It opens seeded with the
