@@ -149,7 +149,6 @@ final class HistoryScrollView: NSScrollView {
 /// rather than as a growing parameter list on every call.
 struct HistoryStyle: Equatable {
     var fontSize: CGFloat
-    var maxLines: Int
     /// Pill background, already stepped back from the live box's.
     var fill: CGFloat
     var textOpacity: CGFloat
@@ -377,18 +376,25 @@ final class HistoryPillView: NSView {
                         alignment: style.textAlignment)
     }
 
+    /// A box in the stack is as tall as what it holds, where the live box is
+    /// capped at Lines per box. A closed page fit that cap in the language it
+    /// was paged in; the other language over the same span never was paged,
+    /// and under ⌃ it is the caption, at full size — cut to the cap, its last
+    /// words were simply gone, and came back with Show Both Languages, where
+    /// the same words sit in the smaller run. A page paged at one size and
+    /// shown at a larger one is the same case.
+    private static let uncapped = Int.max
+
     /// The block the other language adds under the text: its height, gap
-    /// included and capped at `maxLines` of its own size, and the width it
-    /// hugs. `SubtitleView.secondaryBlock`, without the ring margin.
+    /// included, and the width it hugs. `SubtitleView.secondaryBlock`, without
+    /// the ring margin or the cap.
     private static func underBlock(_ entry: HistoryEntry, style: HistoryStyle,
                                    maxWidth: CGFloat) -> (height: CGFloat, width: CGFloat)? {
         guard !entry.under.isEmpty else { return nil }
         let m = Pill.metrics(attributedUnder(entry, style: style, measuring: true),
                              textWidth: maxWidth - Pill.inset.width * 2)
         guard m.lines > 0 else { return nil }
-        let size = style.fontSize * SubtitleView.secondaryScale
-        let capped = min(m.used.height, Pill.lineHeight(ofSize: size) * CGFloat(style.maxLines) + 4)
-        return (SubtitleView.secondaryGap(for: style.fontSize) + ceil(capped),
+        return (SubtitleView.secondaryGap(for: style.fontSize) + ceil(m.used.height),
                 m.used.width + 2 + Pill.inset.width * 2)
     }
 
@@ -400,7 +406,7 @@ final class HistoryPillView: NSView {
         var size = Pill.fittingSize(
             Pill.attributed(committed: entry.text, tentative: "", size: style.fontSize,
                             measuring: true),
-            size: style.fontSize, maxWidth: maxWidth, maxLines: style.maxLines, pad: 0,
+            size: style.fontSize, maxWidth: maxWidth, maxLines: uncapped, pad: 0,
             room: room(entry, style: style))
         // The other language under the text adds its block, as it does on the
         // live box: as tall as both, as wide as the wider.
@@ -878,7 +884,7 @@ final class HistoryController {
 
     /// How the boxes are drawn, and the widest they may be. Kept from `present`
     /// so a keystroke in the search can rebuild the stack without the overlay.
-    private var style = HistoryStyle(fontSize: 30, maxLines: 2, fill: 0.7,
+    private var style = HistoryStyle(fontSize: 30, fill: 0.7,
                                      textOpacity: HistoryPillView.defaultTextOpacity)
     private var ceiling: CGFloat = 400
     private var lastAnchor = NSRect.zero

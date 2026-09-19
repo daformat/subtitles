@@ -11,7 +11,7 @@
 //   swiftc -O -emit-library -emit-module -module-name CaptionCore \
 //     -o $D/libCaptionCore.dylib app/captions/*.swift
 //   swiftc -O -o $D/harness tools/stack-harness/main.swift tools/stack-harness/stubs.swift \
-//     app/macos/History.swift app/macos/Pill.swift app/macos/Hotkey.swift \
+//     app/macos/History.swift app/macos/Pill.swift app/macos/Hotkey.swift app/macos/BackdropBlur.swift \
 //     -I $D -L $D -lCaptionCore -I core/include -Lcore/target/release -lsubs_core \
 //     -framework AppKit -framework Carbon
 //   DYLD_LIBRARY_PATH=$D $D/harness $D/shots && python3 tools/stack-harness/measure.py $D/shots
@@ -35,7 +35,7 @@ backdrop.level = .floating
 backdrop.orderFrontRegardless()
 
 let history = HistoryController()
-let style = HistoryStyle(fontSize: 30, maxLines: 2, fill: 0.7, textOpacity: 0.85)
+let style = HistoryStyle(fontSize: 30, fill: 0.7, textOpacity: 0.85)
 let anchor = NSRect(x: 750, y: 220, width: 100, height: 60)   // the live box, bottom centre
 let centreX: CGFloat = 800
 

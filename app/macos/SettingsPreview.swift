@@ -1154,7 +1154,6 @@ final class SettingsPreview: NSView {
 
         let pillStyle = HistoryStyle(
             fontSize: style.fontSize,
-            maxLines: style.maxLines,
             // Stepped back from the live box exactly as the overlay steps it, so
             // dragging Background moves both and keeps the stack behind it.
             fill: style.boxOpacity * HistoryPillView.recession,
@@ -1165,7 +1164,7 @@ final class SettingsPreview: NSView {
             iconStyle: style.iconStyle,
             textAlignment: style.textAlignment)
 
-        let key = "\(visible.joined(separator: "\u{1}"))|\(pillStyle.fontSize)|\(pillStyle.maxLines)"
+        let key = "\(visible.joined(separator: "\u{1}"))|\(pillStyle.fontSize)"
             + "|\(pillStyle.fill)|\(pillStyle.textOpacity)|\(ceiling)|\(pillStyle.iconStyle)"
             + "|\(pillStyle.textAlignment)"
         if key != pillKey {

@@ -624,10 +624,15 @@ final class OverlayController {
     private var translatedWords: TranslatedTranscript?
     /// Show the original beneath the translation. Only while a translation is
     /// what the box shows: in the source language there is nothing to pair it
-    /// with, and ⌃, which shows the original alone, wins while it is held.
+    /// with. ⌃ does nothing while this is on — both languages are already on
+    /// screen, and a key that hid one of them to show the other read as a
+    /// glitch rather than a peek.
     var showsBothLanguages = false {
         didSet {
             guard showsBothLanguages != oldValue else { return }
+            // Not left to the next poll: ⌃ held as the setting goes on would
+            // show the original alone for a tick.
+            if showsBothLanguages { showsSource = false }
             redraw()
         }
     }
@@ -697,7 +702,8 @@ final class OverlayController {
         }
         updateHistory()
     }
-    /// ⌃ held: show the original language for as long as it is down.
+    /// ⌃ held: show the original language for as long as it is down. Never
+    /// with both languages shown — see `showsBothLanguages`.
     ///
     /// Polled with ⇧ rather than watched with an event monitor, for the reason in
     /// the file header: a keyboard monitor would demand Accessibility permission,
@@ -922,15 +928,16 @@ final class OverlayController {
     }
 
     /// The stack as shown, each box wearing the icon of the app it came from.
-    /// Under ⌃ each box swaps its two languages, the way the live box shows
-    /// the original; with both languages shown the other goes under.
+    /// Under ⌃ each box shows its other language, the way the live box shows
+    /// the original; with both languages shown the other goes under, and ⌃
+    /// is not held (`showsSource` is never set then).
     private var pastPages: [HistoryEntry] {
         stack.map { box in
             let swapped = showsSource && !box.under.isEmpty
             return HistoryEntry(text: swapped ? box.under : box.text,
                                 icon: box.app.map { AppCatalog.shared.icon(for: $0) },
                                 name: box.app.map { AppCatalog.shared.name(for: $0) },
-                                under: showsBothLanguages ? (swapped ? box.text : box.under) : "")
+                                under: showsBothLanguages ? box.under : "")
         }
     }
 
@@ -1103,8 +1110,9 @@ final class OverlayController {
             // whatever is underneath.
             // ⌃ peeks at the original language. Checked before the drag branch
             // because it changes what is drawn, not how the panel behaves, and the
-            // two are independent: peeking while dragging is fine.
-            let wantsSource = NSEvent.modifierFlags.contains(.control)
+            // two are independent: peeking while dragging is fine. Inert with
+            // both languages shown: there is nothing to peek at.
+            let wantsSource = NSEvent.modifierFlags.contains(.control) && !self.showsBothLanguages
             if wantsSource != self.showsSource {
                 self.showsSource = wantsSource
                 self.redraw()
@@ -1174,7 +1182,6 @@ final class OverlayController {
         if history.shown != entries {
             let style = HistoryStyle(
                 fontSize: view.fontSize,
-                maxLines: view.maxLines,
                 fill: view.backgroundOpacity * HistoryPillView.recession,
                 textOpacity: historyTextOpacity,
                 blur: backdropBlur,
