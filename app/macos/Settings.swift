@@ -55,6 +55,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// The same state as the menu's "Recent Boxes On ⌥".
     var historyEnabled: () -> Bool = { true }
     var onToggleHistory: ((Bool) -> Void)?
+    /// The menu's "Show Both Languages", and whether Listen To is on the
+    /// microphone. Read-only here, and not drawn by the preview either: they
+    /// ride along in the style for the welcome window's demo.
+    var bothLanguages: () -> Bool = { false }
+    var microphone: () -> Bool = { false }
     /// Whether non-speech is skipped before it reaches the recogniser. This
     /// window is the only place that changes it.
     var vadEnabled: () -> Bool = { true }
@@ -1051,7 +1056,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             historyExpiry: historyExpiry(),
             historyExpires: historyExpires(),
             iconStyle: iconStyle(),
-            textAlignment: textAlignment())
+            textAlignment: textAlignment(),
+            bothLanguages: bothLanguages(),
+            microphone: microphone())
     }
 
     /// Something the menu changed, or may have: re-read the two switches it

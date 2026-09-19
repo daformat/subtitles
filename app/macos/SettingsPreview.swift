@@ -45,6 +45,7 @@ struct PreviewStyle: Equatable, Encodable {
         case revealOpacity, revealSize, revealEnabled
         case historyEnabled, historyDepth, historyTextOpacity, historyExpiry, historyExpires
         case iconStyle, textAlignment
+        case bothLanguages, microphone
     }
     typealias Field = CodingKeys
 
@@ -64,6 +65,12 @@ struct PreviewStyle: Equatable, Encodable {
     var iconStyle: Pill.IconStyle = .header
     /// See `Pill.TextAlignment`.
     var textAlignment: Pill.TextAlignment = .start
+    /// Show Both Languages, and Listen To → the microphone. Not the box's
+    /// look, and nothing the preview here draws: carried for the welcome
+    /// window's demo, whose box wears the other language under its text and
+    /// the microphone as its source, the way the overlay's does.
+    var bothLanguages = false
+    var microphone = false
 }
 
 /// Which control was last touched, so the box can explain that one.

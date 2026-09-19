@@ -30,7 +30,8 @@ OUT = ROOT / "app" / "macos" / "Demo"
 # guard names. `file` is the site's; `out` the vendored file the slice is in.
 SLICES = [
     ("HTML", "index.html", "demo.html", "demo-caption"),
-    ("CSS_ROOT", "styles.css", "demo.css", None),
+    ("CSS_ROOT", "styles.css", "demo.css", "base"),
+    ("CSS_BASE", "styles.css", "demo.css", r"\.wrap \{"),
     ("CSS_DEMO", "styles.css", "demo.css", "sections"),
     ("CSS_MENU", "styles.css", "demo.css", "landing pages"),
     ("CSS_FRAME", "styles.css", "demo.css", "works with"),
@@ -58,13 +59,12 @@ def old_slices(ranges: dict) -> dict:
     out = {}
     lines = {f: (OUT / f).read_text().split("\n") for f in ("demo.css", "demo.js")}
     # CSS and JS: a header line, then the slices, with one blank line between
-    # them — except that the palettes run straight into the demo styles, as the
-    # vendor script writes them, so no blank line is skipped before CSS_DEMO.
+    # them, as the vendor script writes them.
     for file in ("demo.css", "demo.js"):
         names = [n for n, _, o, _ in SLICES if o == file]
         at = 1
         for name in names:
-            if name != names[0] and name != "CSS_DEMO":
+            if name != names[0]:
                 at += 1
             length = ranges[name][1] - ranges[name][0] + 1
             out[name] = lines[file][at:at + length]

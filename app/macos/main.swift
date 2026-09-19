@@ -1055,6 +1055,10 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
     // words arrive appended to a sentence the previous one was saying.
     if let fluid = fluidEngine { Task { await fluid.resetContext() } }
     err("listening to: \(source.label)")
+    // The welcome window's demo follows the source, wearing the microphone
+    // as its box's source or the app playing, through the settings window's
+    // style the way the box's look does.
+    if useOverlay { SettingsWindow.shared.refreshPreview(changed: [.microphone]) }
 }
 
 func togglePause() {
@@ -1303,6 +1307,8 @@ if useOverlay {
     playingApp.start()
     settings.iconStyle = { iconStyle }
     settings.textAlignment = { textAlignment }
+    settings.bothLanguages = { controller.showsBothLanguages }
+    settings.microphone = { tap.source == .microphone }
 
     let menu = StatusMenuController()
     menu.isPaused = { isPaused }
@@ -1393,6 +1399,7 @@ if useOverlay {
                                           : "showing the translation alone")
         // The direction can depend on it — see `translationPair()`.
         refreshTranslationSource()
+        settings.refreshPreview(changed: [.bothLanguages])
     }
     menu.screenShareEnabled = { screenShareEnabled }
     menu.onToggleScreenShare = {

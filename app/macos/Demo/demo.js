@@ -51,6 +51,8 @@ const CAPTURE = window.SUBTITLES_CAPTURE === true;
 //   historyTextOpacity  0…1, the stack's text against the live box's white
 //   historyExpires      whether a silence forgets the stack
 //   historyExpiry       seconds of silence that does
+//   bothLanguages       Show Both Languages: the original under a translation
+//   microphone          Listen To → the microphone, over whatever is playing
 const readSettings = (given) => {
   const NUMBER = {
     fontSize: [1, 400], maxLines: [1, 50], boxOpacity: [0, 1], blur: [0, 200],
@@ -58,7 +60,7 @@ const readSettings = (given) => {
     historyDepth: [0, Infinity], historyTextOpacity: [0, 1], historyExpiry: [0, 1e7],
   };
   const WHOLE = ['maxLines', 'historyDepth'];
-  const FLAG = ['revealEnabled', 'historyEnabled', 'historyExpires'];
+  const FLAG = ['revealEnabled', 'historyEnabled', 'historyExpires', 'bothLanguages', 'microphone'];
   const WORD = { textAlignment: ['start', 'center'], iconStyle: ['off', 'nameTab', 'header'] };
   const out = {};
   const take = (key, value) => {
@@ -159,6 +161,12 @@ const wearApp = (box, app) => {
   dressBox(box, !!app);
 };
 
+// The microphone as a box's source, from Listen To: the app's own stand-in
+// for a source that is not an app — a white mic on a system-red tile, drawn
+// by AppCatalog.microphoneIcon and rendered to assets/apps/dock/ — under the
+// label AudioSource.microphone carries. A box wears it like any app's row.
+const MIC = { icon: 'microphone', name: 'Microphone' };
+
 // A box for the ⌥ stack, wearing `app`: the row, and under it the text,
 // which is what the search writes into.
 const newBox = (app) => {
@@ -173,11 +181,32 @@ const newBox = (app) => {
   row.append(img, name);
   const text = document.createElement('span');
   text.className = 'ov-text';
-  el.append(row, text);
+  const under = document.createElement('span');
+  under.className = 'ov-under';
+  el.append(row, text, under);
   wearApp(el, app);
   return el;
 };
 const textOf = (el) => el.querySelector('.ov-text') || el;
+// The other language under a box's text, with Show Both Languages on: the
+// app's SubtitleView.secondary, a second paragraph in a smaller, dimmer run
+// (.ov-under in styles.css), empty and taking no room when a box has only
+// the one language. The live boxes' markup has no span for it, so the first
+// write makes one; the stack's boxes are built with theirs above.
+const underOf = (el) => {
+  let under = el.querySelector('.ov-under');
+  if (!under) {
+    under = document.createElement('span');
+    under.className = 'ov-under';
+    el.append(under);
+  }
+  return under;
+};
+const setUnder = (el, text) => {
+  const under = underOf(el);
+  if (!text) { if (under.firstChild) under.textContent = ''; return; }
+  setKeys(under, text);
+};
 
 // A keyboard shortcut said inside a demo is drawn as a keycap: a run of
 // modifier glyphs, with the key letter it may carry (⌥F), becomes a <kbd>,
@@ -342,6 +371,12 @@ const nameTab = (() => {
     for (const el of history.children) {
       const st = boxes.get(el);
       if (!st) continue;
+      // A box the search has hidden has no width to centre, and half the
+      // stack's width written on it as a margin would be measured back into
+      // the stack the next time the demo stands every box up to read its
+      // width (paintHistory), which is what widened the pill with every
+      // keystroke. Left where it was placed; it is placed again when it shows.
+      if (!el.offsetWidth) continue;
       const m = Math.floor((inner - el.offsetWidth) * dpr / 2) / dpr + 'px';
       if (el.style.marginInlineStart !== m && mayWrite(el)) el.style.marginInlineStart = m;
     }
@@ -666,10 +701,13 @@ const nameTab = (() => {
   const moves = new MutationObserver((records) => records.forEach((r) => draw(r.target)));
   window.addEventListener('resize', () => boxes.forEach((st, box) => { if (box.isConnected) draw(box); }));
 
+  // The class goes on every time, not only the first: a box that has been
+  // through Off or Header Row since (undress takes it off) is the same box
+  // with the same masks, and comes back to the tab as it went.
   const dress = (box) => {
+    box.classList.add('is-tabbed');
     let st = boxes.get(box);
     if (st) return st;
-    box.classList.add('is-tabbed');
     const rim = document.createElement('span');
     rim.className = 'ov-rim';
     rim.setAttribute('aria-hidden', 'true');
@@ -695,11 +733,14 @@ const nameTab = (() => {
   };
 
   // A box back to a plain pill, or a header row: its classes off, its rim
-  // and its ring hidden. Its masks stay, unreferenced, for the next time.
+  // and its ring hidden. Its masks stay, unreferenced, for the next time;
+  // what it was last drawn as does not, so that the next draw draws it
+  // whole, rim and ring with it, even at the size it left at.
   const undress = (box) => {
     const st = boxes.get(box);
     box.classList.remove('is-tabbed', 'has-tab');
     if (!st) return;
+    st.key = '';
     st.rim.style.display = 'none';
     if (st.trace) st.trace.classList.remove('is-on', 'is-visible');
   };
@@ -784,6 +825,7 @@ const DEMO_DEFAULTS = {
   revealEnabled: true, revealOpacity: 0.95, revealWidth: 800, revealHeight: 400,
   historyEnabled: true, historyDepth: 15, historyTextOpacity: 0.65,
   historyExpires: false, historyExpiry: 30,
+  bothLanguages: false, microphone: false,
 };
 // A demo's boxes dressed to its settings. What is the box's rather than the
 // loop's goes onto the screen as custom properties, which every box on it
@@ -820,17 +862,30 @@ const menuChecks = (S) => {
   return {
     checked: ['size-' + (size || 'none'), 'align-' + S.textAlignment,
       { off: 'icon-off', nameTab: 'icon-tab', header: 'icon-header' }[S.iconStyle],
-      on('reveal', S.revealEnabled), on('history', S.historyEnabled)].filter(Boolean),
-    unchecked: [on('reveal', !S.revealEnabled), on('history', !S.historyEnabled)].filter(Boolean),
+      'audio-' + (S.microphone ? 'mic' : 'all'),
+      on('reveal', S.revealEnabled), on('history', S.historyEnabled),
+      on('both', S.bothLanguages)].filter(Boolean),
+    unchecked: [on('reveal', !S.revealEnabled), on('history', !S.historyEnabled),
+      on('both', !S.bothLanguages)].filter(Boolean),
   };
 };
 // How many lines a box's text takes, for the app's maxLines: the text block's
-// height in its own line-height, read once the words are in the page.
-const linesOf = (box) => {
-  const text = textOf(box);
+// height in its own line-height, read once the words are in the page. `part`
+// is the block to read, the caption by default; the other language under it
+// counts on its own, in its own smaller line, since the app turns the page
+// when either paragraph fills.
+const linesOf = (box, part) => {
+  const text = part || textOf(box);
   const cs = getComputedStyle(text);
-  const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.34;
+  const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2334;
   return Math.round(text.getBoundingClientRect().height / line);
+};
+// Whether a box has more lines than the app's maxLines allows, in either
+// of its paragraphs.
+const overflows = (box, maxLines) => {
+  if (linesOf(box) > maxLines) return true;
+  const under = box.querySelector('.ov-under');
+  return !!(under && under.firstChild) && linesOf(box, under) > maxLines;
 };
 // The words of `text` from `from` up to `to`, counted in a line `of` words
 // long: a page of the line itself, or the same stretch of its source, which
@@ -941,6 +996,8 @@ const statusMenu = {
 
     let manual = false;
     let walking = null;
+    // The last source picked in Listen To that was not the microphone.
+    let lastAudio = null;
     const track = [];
     const subs = [...root.querySelectorAll('.mn-sub')];
     const panels = [root, ...subs];
@@ -1153,7 +1210,19 @@ const statusMenu = {
       if (id.startsWith('size-')) { pick(id); if (a.size) a.size(Number(id.slice(5))); }
       else if (id.startsWith('align-')) { pick(id); if (a.align) a.align(id.slice(6)); }
       else if (id.startsWith('icon-')) { pick(id); if (a.icon) a.icon(id.slice(5)); }
-      else if (id === 'reveal' || id === 'history') {
+      // Listen To: all system audio or the microphone, a choice like the
+      // sizes; the apps' rows, built on each opening, have no id and shake.
+      // The microphone is a toggle as well: picked while it is the source,
+      // it hands back to the source picked before it, or all system audio
+      // when nothing was.
+      else if (id.startsWith('audio-')) {
+        let want = id;
+        if (id === 'audio-mic' && row.classList.contains('is-on')) want = lastAudio || 'audio-all';
+        else if (id !== 'audio-mic') lastAudio = id;
+        pick(want);
+        if (a.listen) a.listen(want.slice(6));
+      }
+      else if (id === 'reveal' || id === 'history' || id === 'both') {
         const on = !row.classList.contains('is-on');
         row.classList.toggle('is-on', on);
         if (a[id]) a[id](on);
@@ -1168,39 +1237,53 @@ const statusMenu = {
       else closeSubs(null, panel);
     };
     // The pointer on its way to an open submenu crosses the rows between,
-    // and macOS gives it the benefit of the doubt: while it is moving
-    // towards the submenu — inside the triangle from where it was a moment
-    // ago to the submenu's near edge — the row it is crossing is not taken
-    // as the one it wants. Once it stops, or turns away, the row is.
-    // Where the pointer has been this last third of a second, and where it
-    // set off from (`track`, above).
+    // and macOS gives it the benefit of the doubt: while it is heading for
+    // the submenu, the row it is crossing is not taken as the one it wants.
+    // Heading for it means that, going as it goes, it would cross the
+    // submenu's near edge within the next half second. Once it stops,
+    // slows or turns away, the row is taken. Heading and pace are read
+    // from its last tenth of a second on the move (`track`, above), and
+    // the pace is what tells a pointer going for the submenu from one
+    // wandering down the rows a little sideways: that one would cross the
+    // edge too, a second or two on, and is on a row it wants long before.
     let hovered = null;
     let aim = 0;
     const sample = (e) => {
       const now = performance.now();
       track.push({ x: e.clientX, y: e.clientY, t: now });
-      // The first sample kept is the last one from before this last third
-      // of a second: where the pointer was when it set off, however long it
-      // rested there.
-      while (track.length > 2 && now - track[1].t > 320) track.shift();
+      // The last tenth of a second, and one sample from before it.
+      while (track.length > 2 && now - track[1].t > 100) track.shift();
     };
     root.addEventListener('pointermove', (e) => { if (manual) sample(e); });
+    const within = (sub) => {
+      const now = track[track.length - 1];
+      const r = sub.getBoundingClientRect();
+      return !!now && now.x >= r.left && now.x <= r.right && now.y >= r.top && now.y <= r.bottom;
+    };
     const toward = (sub) => {
       if (track.length < 2) return false;
       const now = track[track.length - 1];
       const from = track[0];
-      if (Math.abs(now.x - from.x) < 2 && Math.abs(now.y - from.y) < 2) return false;
+      const dx = now.x - from.x;
+      const dy = now.y - from.y;
+      if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return false;
+      // How long the pointer took over that: the time between samples,
+      // each stretch capped at about a frame, since no event comes while
+      // it rests, and a pointer that rested on a row and then set off is
+      // going at the pace it set off at, not at the rest's.
+      let dt = 0;
+      for (let i = 1; i < track.length; i++) dt += Math.min(track[i].t - track[i - 1].t, 20);
+      if (dt <= 0) return false;
+      if (within(sub)) return true;
       const r = sub.getBoundingClientRect();
-      if (now.x >= r.left && now.x <= r.right && now.y >= r.top && now.y <= r.bottom) return true;
       // The near edge is the one that faces the row the submenu hangs off.
-      const near = Math.abs(from.x - r.right) < Math.abs(from.x - r.left) ? r.right : r.left;
-      const b = { x: near, y: r.top - 6 };
-      const c = { x: near, y: r.bottom + 6 };
-      const side = (p, q, s) => (q.x - p.x) * (s.y - p.y) - (q.y - p.y) * (s.x - p.x);
-      const d1 = side(from, b, now);
-      const d2 = side(b, c, now);
-      const d3 = side(c, from, now);
-      return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+      const near = Math.abs(now.x - r.right) < Math.abs(now.x - r.left) ? r.right : r.left;
+      // When it would reach that edge: never, going away from it or along
+      // it; too late to count, at a crawl.
+      const when = (near - now.x) / dx * dt;
+      if (!(when > 0) || when > 500) return false;
+      const y = now.y + (dy / dx) * (near - now.x);
+      return y >= r.top - 6 && y <= r.bottom + 6;
     };
     root.addEventListener('pointerover', (e) => {
       if (!manual) return;
@@ -1217,6 +1300,9 @@ const statusMenu = {
         const later = () => {
           aim = 0;
           if (hovered !== row) return;
+          // Made it, and resting on the submenu's padding or a separator
+          // rather than a row, which would have taken over: it stays.
+          if (within(sub)) return;
           const still = performance.now() - track[track.length - 1].t < 250 && toward(sub);
           if (still) aim = setTimeout(later, 150);
           else settle(row);
@@ -2230,7 +2316,18 @@ const windowResize = (() => {
       ? { icon: w.dataset.audio, name: I18N('app.' + app, APP_NAMES[app]) }
       : null;
   };
-  const playing = () => sourceOf(playingApp());
+  // Listen To → the microphone, from the demo's menu: the box wears MIC and
+  // keeps it whatever window is playing, until All system audio is picked
+  // again and the row follows the sound as before. The stack's boxes keep
+  // the source each closed under, as the app's do. The menu bar shows the
+  // orange pill macOS puts up while something listens (.mb-mic). From the
+  // seed first — the app's welcome window hands over what it is listening
+  // to with the rest of its settings — and the app's changes follow
+  // through applySettings, as the box's look does.
+  let micOn = !!S.microphone;
+  const micPill = demoEl && demoEl.querySelector('.mb-mic');
+  if (micPill) micPill.classList.toggle('is-on', micOn);
+  const playing = () => (micOn ? MIC : sourceOf(playingApp()));
 
   // Three scenes: the call, whatever you switch to while it keeps playing, and
   // the podcast. The captions are what the audio is saying.
@@ -2240,13 +2337,13 @@ const windowResize = (() => {
       lines: [
         I18N('line.meeting1', 'Universal subtitles for any app, live on your Mac.'),
         I18N('line.meeting2', 'In a meeting, second language or not, one missed word costs you the next three.'),
-        I18N('line.meeting3', 'So the captions run live, over the call, while people are still talking.'),
+        I18N('line.meeting3', 'So the captions run live, over the call, while people are talking.'),
       ],
     },
     {
       app: 'notes',
       lines: [
-        I18N('line.notes1', 'Switch to your notes and the meeting carries on without you watching it.'),
+        I18N('line.notes1', 'Switch to your notes and the meeting carries on without you actively watching it.'),
         I18N('line.notes2', 'The overlay stays above every window, so you keep the thread.'),
       ],
     },
@@ -2254,7 +2351,7 @@ const windowResize = (() => {
       app: 'player',
       lines: [
         I18N('line.player1', 'The same for a podcast, a lecture, or a video.'),
-        I18N('line.player2', 'And none of it leaves the Mac: it runs on the Neural Engine, on-device.'),
+        I18N('line.player2', 'And none of it leaves the Mac: it runs on the Neural Engine, on-device. Fully local and private.'),
       ],
     },
   ];
@@ -2285,14 +2382,21 @@ const windowResize = (() => {
   // film, as the translation pages show it: a first sentence in another
   // language, shown as it was said; the status menu opening and picking
   // Translate To and this page's language; a second sentence in that other
-  // language, shown in this one, with ⌃ giving back what was said. The other
-  // language is Spanish on the English page and English everywhere else, so
-  // what the visitor hears turn into their own is the one they most often
-  // have to follow.
+  // language, shown in this one, with ⌃ giving back what was said. Then the
+  // menu again, for Show Both Languages under the same Translate To, and a
+  // third sentence that says so, its original under it — and the podcast's
+  // last line, which follows, is said in the other language too and shown
+  // the same way. The other language is Spanish on the English page and
+  // English everywhere else, so what the visitor hears turn into their own
+  // is the one they most often have to follow, and it is the one other
+  // language from the first of these lines to the last.
   const TRANSLATE = {
     first: I18N('line.translate1', '¿Y cuando es en otro idioma?'),
     source: I18N('line.translate2-src', 'La traducción se hace en tiempo real para ti: pulsa ⌃ para ver el original.'),
     shown: I18N('line.translate2', 'The translation runs live for you: press ⌃ to reveal the original.'),
+    bothSource: I18N('line.translate3-src', 'O muestra los dos a la vez: el original se queda debajo de la traducción.'),
+    both: I18N('line.translate3', 'Or show both at once: the original stays under the translation.'),
+    lastSource: I18N('line.player2-src', 'Y nada de eso sale del Mac: se ejecuta en el Neural Engine, en el dispositivo. Totalmente local y privado.'),
   };
   const LANG = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
 
@@ -2382,12 +2486,27 @@ const windowResize = (() => {
   // arriving word by word instead of landing in one block. On the site the
   // key is the visitor's to try; on film, where there is no hand, `ctrlBeat`
   // presses it for a moment in the middle of the hold.
+  //
+  // With Show Both Languages on, the source goes under the translation as
+  // well, as the app's SubtitleView.secondary: the words the caption was
+  // made from, as far as the caption has got, at the same fraction of the
+  // line that ⌃ draws the source at. Only while the box holds a
+  // translation, since in the source language there is nothing to pair it
+  // with — the demo passes a source only with Translate To on. And ⌃ then
+  // does nothing, in the box or in the stack: the original is already on
+  // screen, and there is nothing to reveal.
   let cur = null;
   let ctrlKey = false;
   let ctrlBeat = false;
+  const peeking = () => (ctrlKey || ctrlBeat) && !S.bothLanguages;
+  const underLive = () => {
+    if (!cur || !cur.source || !S.bothLanguages) return '';
+    const of = cur.line.split(' ').length;
+    return pageOf(cur.source, cur.from, cur.i < 0 ? of : cur.i + 1, of);
+  };
   const drawLive = () => {
     if (!cur) return;
-    const text = (ctrlKey || ctrlBeat) && cur.source ? cur.source : cur.line;
+    const text = peeking() && cur.source ? cur.source : cur.line;
     const words = text.split(' ');
     // The page's first word and the word reached: the line's own, or the
     // source's, taken as fractions of the line, see above.
@@ -2399,23 +2518,42 @@ const windowResize = (() => {
       from = at(from);
       if (i >= 0) i = Math.max(at(i), from);
     }
-    if (i < 0) { setKeys(out, words.slice(from).join(' ')); live.textContent = ''; return; }
-    setKeys(out, i > from ? words.slice(from, i).join(' ') + ' ' : '');
-    setKeys(live, words[i]);
+    if (i < 0) {
+      setKeys(out, words.slice(from).join(' '));
+      live.textContent = '';
+    } else {
+      setKeys(out, i > from ? words.slice(from, i).join(' ') + ' ' : '');
+      setKeys(live, words[i]);
+    }
+    setUnder(box, underLive());
   };
   // ⌃ swaps the stack's boxes too, in place, as the app's isSwappingLanguage
   // does: each box keeps both languages from when it closed, and the search
   // reads whichever is showing. A box that closed with nothing said in
   // another language has only the one.
-  const lineText = (page) => ((ctrlKey || ctrlBeat) && page.source ? page.source : page.text);
+  //
+  // With Show Both Languages on, the source goes under each box's text, as
+  // the app's stack draws it, and ⌃ swaps nothing, see `peeking`. The
+  // pairing is the box's whether or not the setting is on, as the app's
+  // stack keeps it, so a box closed with it off shows both once it goes on.
+  // The search reads either paragraph, and lights the text's, as the app's
+  // does.
+  const lineText = (page) => (peeking() && page.source ? page.source : page.text);
+  const underText = (page) => (S.bothLanguages && page.source ? page.source : '');
+  const pageMatches = (page) => {
+    const under = underText(page);
+    return search.matches(lineText(page)) || (!!under && search.matches(under));
+  };
+  const dressLine = (el, page) => {
+    search.write(textOf(el), lineText(page));
+    setUnder(el, underText(page));
+    el.classList.toggle('is-hidden', !pageMatches(page));
+  };
   const retextHistory = () => {
     if (!history) return;
     [...history.children].forEach((el) => {
       const page = past.find((p) => String(p.id) === el.dataset.pid);
-      if (!page) return;
-      const text = lineText(page);
-      search.write(textOf(el), text);
-      el.classList.toggle('is-hidden', !search.matches(text));
+      if (page) dressLine(el, page);
     });
   };
   const redraw = () => { drawLive(); retextHistory(); };
@@ -2426,7 +2564,18 @@ const windowResize = (() => {
   // `wears` is the app the line belongs to, when the scene knows better than
   // the stack: the podcast's first line starts while its ⌘-tab is still
   // landing, and its words are the podcast's, not the call's still playing
-  // under it. Without it the box wears whatever is making the sound.
+  // under it. Without it the box wears whatever is making the sound. The
+  // microphone, when it is listened to, over either: see `boxApp`.
+  const boxApp = () => (micOn ? MIC : ((cur && cur.wears) || playing()));
+  const setMic = (on) => {
+    if (micOn === on) return;
+    micOn = on;
+    if (micPill) micPill.classList.toggle('is-on', on);
+    // The live box changes its row at once, as the app's does when the
+    // source changes; a page it closes from here on wears the new one.
+    wearApp(box, boxApp());
+    queueHole();
+  };
   async function say(line, from, to, source, wears) {
     const words = line.split(' ');
     const hold = holdFor(words.length);
@@ -2435,12 +2584,13 @@ const windowResize = (() => {
 
     // The box wears the app its words arrive under, and keeps it when it
     // closes into the stack, whatever is playing by then.
-    const app = wears || playing();
     // The first word of the page on screen: the line's, until the pager
-    // below turns the page.
+    // below turns the page. `closing` is the source the whole page closes
+    // under, read while the line is still the live one.
     let page = 0;
-    cur = { line: line, source: source || null, i: 0, from: 0 };
-    wearApp(box, app);
+    let closing = null;
+    cur = { line: line, source: source || null, i: 0, from: 0, wears: wears || null };
+    wearApp(box, boxApp());
     drawLive();
     box.classList.add('is-visible');
     progress(typed, typing);
@@ -2455,8 +2605,8 @@ const windowResize = (() => {
         // starts the next from that word. Measured with the word in the
         // page and before the frame is painted, so nothing is seen to
         // overflow; the box holds its whole sentence otherwise.
-        if (i > page && paged() && linesOf(box) > S.maxLines) {
-          closePage(pageOf(line, page, i, words.length), app,
+        if (i > page && paged() && overflows(box, S.maxLines)) {
+          closePage(pageOf(line, page, i, words.length), boxApp(),
             source && pageOf(source, page, i, words.length));
           page = i;
           cur.from = i;
@@ -2473,7 +2623,9 @@ const windowResize = (() => {
       drawLive();
       progress(to, hold + GAP_MS);
 
-      if (source && CAPTURE) {
+      // On film, only under the line that says to press it: the lines with
+      // both languages on screen have their original under them already.
+      if (source && CAPTURE && /⌃/.test(line)) {
         await step(hold * 0.45);
         ctrlBeat = true;
         redraw();
@@ -2484,6 +2636,7 @@ const windowResize = (() => {
       } else {
         await step(hold);
       }
+      closing = boxApp();
     } finally {
       cur = null;
       ctrlBeat = false;
@@ -2491,7 +2644,7 @@ const windowResize = (() => {
     box.classList.remove('is-visible');
     // The page has closed. The app records it here too, at the fade, because
     // fading is precisely when somebody looked away and will want it back.
-    closePage(page ? pageOf(line, page, words.length, words.length) : line, app,
+    closePage(page ? pageOf(line, page, words.length, words.length) : line, closing,
       page && source ? pageOf(source, page, words.length, words.length) : source);
     await step(GAP_MS);
   }
@@ -2561,6 +2714,8 @@ const windowResize = (() => {
       icon: (style) => applySettings({ iconStyle: { tab: 'nameTab', off: 'off' }[style] || 'header' }),
       reveal: (on) => applySettings({ revealEnabled: on }),
       history: (on) => applySettings({ historyEnabled: on }),
+      both: (on) => applySettings({ bothLanguages: on }),
+      listen: (which) => applySettings({ microphone: which === 'mic' }),
       reset: () => {
         box.style.left = '';
         box.style.top = '';
@@ -2580,14 +2735,32 @@ const windowResize = (() => {
   // and so does the app while its welcome window shows this demo: its
   // Welcome.swift dispatches `subtitles:settings` on the document with the
   // keys that changed, and only those.
-  const applySettings = (given) => {
+  //
+  // Show Both Languages is the one setting the loop itself changes: on for
+  // the translated lines, and back at the wrap. Back to what the reader has
+  // it set to — the seed's value, then the app's or the menu's — not to
+  // off, so an app that shows both languages sees its demo do the same
+  // through every turn. `bothBase` is that; the loop's own changes say so
+  // (`story`) and leave it alone.
+  let bothBase = !!S.bothLanguages;
+  const applySettings = (given, story) => {
     const changed = readSettings(given);
     if (!Object.keys(changed).length) return;
     Object.assign(S, changed);
+    if ('bothLanguages' in changed && !story) bothBase = S.bothLanguages;
     dressDemo(screen, S);
     if (menuUI) menuUI.check(menuChecks(S));
     if ('revealEnabled' in changed) hole.enable(S.revealEnabled);
     if ('historyEnabled' in changed) { historyOn = S.historyEnabled; showHistory(); }
+    if ('microphone' in changed) setMic(S.microphone);
+    // Show Both Languages: the live box and the stack drawn again, the
+    // other language under every box that has one, or gone from under it.
+    // The stack is repainted whole, since each box's height changes with it.
+    if ('bothLanguages' in changed) {
+      drawLive();
+      if (history && history.classList.contains('is-visible')) paintHistory();
+      else retextHistory();
+    }
     // A shallower stack loses its oldest boxes now, not at the next close.
     if ('historyDepth' in changed && past.length > pastMax()) {
       past.splice(0, past.length - pastMax());
@@ -2600,17 +2773,27 @@ const windowResize = (() => {
   document.addEventListener('subtitles:settings', (e) => applySettings(e.detail));
   const setTranslation = (target) => {
     if (!submenu) return;
-    submenu.querySelectorAll('.mn-row').forEach((r) => r.classList.toggle('is-on', r.dataset.id === target));
+    // The languages are a choice; Show Both Languages, in the submenu with
+    // them, is a toggle with its own check, kept — and greyed with
+    // translation off, as Translation Timing is, since it does nothing on
+    // its own.
+    submenu.querySelectorAll('.mn-row').forEach((r) => {
+      if (r.dataset.id === 'both') r.classList.toggle('is-dim', target === 'off');
+      else r.classList.toggle('is-on', r.dataset.id === target);
+    });
     const timing = menu.querySelector('[data-id="timing"]');
     if (timing) timing.classList.toggle('is-dim', target === 'off');
   };
-  async function pickTranslation(target) {
+  // The menu walked into Translate To and a row of it taken: the row
+  // lights, blinks as macOS blinks the item it is about to act on, and
+  // `act` does what the row does. The visitor took the menu down mid-walk:
+  // the switch still happens.
+  async function walkTranslateTo(id, act) {
     const entry = menu && menu.querySelector('[data-id="translate"]');
-    const row = submenu && submenu.querySelector('[data-id="' + target + '"]');
+    const row = submenu && submenu.querySelector('[data-id="' + id + '"]');
     if (!entry || !row || !menuUI) return;
     const walk = menuUI.walk();
-    // The visitor took the menu down mid-walk: the switch still happens.
-    const cut = () => { setTranslation(target); walk.end(); };
+    const cut = () => { act(); walk.end(); };
     walk.hot(entry);
     await step(500);
     if (walk.cancelled) return cut();
@@ -2626,10 +2809,22 @@ const windowResize = (() => {
       walk.hot(row);
       await step(70);
     }
-    setTranslation(target);
+    act();
     walk.end();
     await step(350);
   }
+  const pickTranslation = (target) => walkTranslateTo(target, () => setTranslation(target));
+  // Show Both Languages, set on rather than toggled: a visitor who ticked
+  // it first is not unticked by the walk. The loop's own change, so the
+  // reader's setting stands behind it (see applySettings).
+  const pickBothLanguages = () => walkTranslateTo('both', () => applySettings({ bothLanguages: true }, true));
+  // Translation off again, as a turn of the loop starts, and Show Both
+  // Languages back to the reader's own setting: set outright, no walk, the
+  // way the loop has always let Translate To go at the wrap.
+  const dropTranslation = () => {
+    setTranslation('off');
+    if (S.bothLanguages !== bothBase) applySettings({ bothLanguages: bothBase }, true);
+  };
   // Resolves once `text` has been typed into the live box, tentative word
   // included, so a move can land on the word that names it.
   const saidYet = async (text) => {
@@ -2659,13 +2854,18 @@ const windowResize = (() => {
     if (!menu) return from;
     // Somebody speaks the other language and the box shows it as said;
     // Translate To goes on; the next sentence arrives in this page's
-    // language, and ⌃ shows for a beat what was actually said.
-    const mid = from + (to - from) / 2;
-    const quarter = from + (to - from) / 4;
-    await say(TRANSLATE.first, from, quarter);
+    // language, and ⌃ shows for a beat what was actually said. Show Both
+    // Languages goes on, and the next sentence says so, its original under
+    // it. Three lines in the bar's first half, a sixth each; the podcast's
+    // last line takes the rest.
+    const sixth = (to - from) / 6;
+    await say(TRANSLATE.first, from, from + sixth);
     await pickTranslation(LANG);
-    await say(TRANSLATE.shown, quarter, mid, TRANSLATE.source);
-    return mid;
+    await say(TRANSLATE.shown, from + sixth, from + sixth * 2, TRANSLATE.source);
+    // Already on, from the reader's own setting: nothing to walk to.
+    if (!S.bothLanguages) await pickBothLanguages();
+    await say(TRANSLATE.both, from + sixth * 2, from + sixth * 3, TRANSLATE.bothSource);
+    return from + sixth * 3;
   }
 
   async function loop() {
@@ -2722,12 +2922,17 @@ const windowResize = (() => {
 
         for (let j = 1; j < scene.lines.length; j++) {
           // Before the last line of the last scene, so that line closes the
-          // loop, with the stack fading under it on film.
+          // loop, with the stack fading under it on film. That line is then
+          // said in the other language, as the epilogue's were, and shown
+          // in this one with the original under it — when there was a menu
+          // to switch any of it on.
           let from = j * slice;
+          let source = null;
           if (index === SCENES.length - 1 && j === scene.lines.length - 1) {
             from = await epilogue(from, (j + 1) * slice);
+            if (menu) source = TRANSLATE.lastSource;
           }
-          await say(scene.lines[j], from, (j + 1) * slice, null, wears);
+          await say(scene.lines[j], from, (j + 1) * slice, source, wears);
         }
 
         index = (index + 1) % SCENES.length;
@@ -2736,15 +2941,16 @@ const windowResize = (() => {
         // boxes start again from nothing each time round, or the search
         // would light the same line once per turn the page had run.
         if (EPILOGUE && index === 0) past.length = 0;
-        // Each turn switches translation on; the next starts with it off.
-        if (index === 0) setTranslation('off');
+        // Each turn switches translation on, and both languages with it;
+        // the next starts with both off.
+        if (index === 0) dropTranslation();
       } catch (error) {
         if (error !== JUMPED) throw error;
         // A jump out of the epilogue leaves nothing raised behind it, no menu
-        // open, and translation off again.
+        // open, and translation off again, both languages with it.
         if (EPILOGUE) endEpilogue();
         closeMenu();
-        setTranslation('off');
+        dropTranslation();
         // Somebody picked a scene. Drop whatever was mid-sentence and let the
         // next turn of the loop get there, which is also what makes a second
         // click during a switch work: it lands here again. A window click has
@@ -3089,8 +3295,10 @@ const windowResize = (() => {
   const anchorTop = (rect) => {
     if (box.classList.contains('is-visible')) return rect.top;
     const cs = getComputedStyle(box);
-    const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.34;
-    const oneLine = line + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const line = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2334;
+    // Less the line spacing the last line gives back, see .ov-text.
+    const oneLine = line + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+      + (parseFloat(getComputedStyle(textOf(box)).marginBottom) || 0);
     return Math.max(rect.top, rect.bottom - oneLine);
   };
 
@@ -3356,13 +3564,21 @@ const windowResize = (() => {
     history.style.minWidth = '';
     kids.forEach((el) => {
       const page = pageOf(el);
-      if (page) search.write(textOf(el), lineText(page));
+      if (page) {
+        search.write(textOf(el), lineText(page));
+        setUnder(el, underText(page));
+      }
       el.classList.remove('is-hidden');
+      // The name tab places each box by a margin from the stack's edge
+      // (nameTab.settle), and a margin counts towards the width read here:
+      // measured with them on, the stack could only ever grow. Off for the
+      // reading, and put back when the stack is laid out below.
+      el.style.marginInlineStart = '';
     });
     history.style.minWidth = history.offsetWidth + 'px';
     kids.forEach((el) => {
       const page = pageOf(el);
-      if (page) el.classList.toggle('is-hidden', !search.matches(lineText(page)));
+      if (page) el.classList.toggle('is-hidden', !pageMatches(page));
     });
 
     placeHistory();
@@ -3386,8 +3602,14 @@ const windowResize = (() => {
       const i = kids.indexOf(el);
       el.style.setProperty('--rise', (placedAbove ? kids.length - 1 - i : i) + (fresh ? 1 : 0));
       rising++;
-      el.addEventListener('animationend', () => { rising = Math.max(0, rising - 1); relayer(el); },
-                          { once: true });
+      el.addEventListener('animationend', () => {
+        rising = Math.max(0, rising - 1);
+        relayer(el);
+        // The last entrance over, the geometry is honest again: a wheel turned
+        // during the rise went unread, so read it now, and draw the near band
+        // it may have earned.
+        if (!rising) { parked = nearDistance() < 1; updateFade(); }
+      }, { once: true });
       el.classList.add('is-rising');
     });
   };
