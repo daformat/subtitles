@@ -58,11 +58,13 @@ struct TapFormat: Equatable {
 ///
 /// This distinction is the whole point. Browsers and Electron apps never play
 /// audio from their main process — Chrome plays through
-/// `com.google.Chrome.helper`, and tapping `com.google.Chrome` would capture
-/// silence. A family groups the parent and every helper under its bundle prefix,
-/// and the tap covers all of them at once.
+/// `com.google.Chrome.helper`, Safari through a WebKit service that is not
+/// even named after it, and tapping the app itself would capture silence. A
+/// family groups an app with every helper under its bundle prefix and every
+/// process that answers to it (`RunningApps.family`), and the tap covers all
+/// of them at once.
 struct AudioSourceEntry: Equatable {
-    let id: String      // bundle prefix, or "pid:1234" for unbundled processes
+    let id: String      // the app's bundle id, or "pid:1234" for unbundled processes
     let name: String
     let isPlaying: Bool
     let pids: [pid_t]
@@ -70,7 +72,7 @@ struct AudioSourceEntry: Equatable {
 
 /// What to listen to.
 ///
-/// Identified by bundle-prefix, never by Core Audio object ID: object IDs are
+/// Identified by family id, never by Core Audio object ID: object IDs are
 /// recycled and short-lived, and a stale one fails tap creation with `'!obj'`
 /// (hit in Spike 0B). IDs are re-resolved immediately before the tap is built.
 enum AudioSource: Equatable {
@@ -236,79 +238,124 @@ final class SystemAudioTap {
         return ids
     }
 
+    /// One process Core Audio knows about, and the family it belongs to.
+    private struct AudioProcess {
+        let objectID: AudioObjectID
+        let pid: pid_t
+        let family: (id: String, name: String)
+        let isPlaying: Bool
+    }
+
+    /// Which app answers for a process, as the system sees it: the one a
+    /// permission prompt names when a helper asks for the microphone, and
+    /// the one Activity Monitor groups it under. Inherited from the process
+    /// that started it, and set afresh by Launch Services for an app it
+    /// opens, so a helper answers to its app and an app to itself.
+    ///
+    /// This is what puts Safari's name on Safari's audio. Safari plays
+    /// through a WebKit service, com.apple.WebKit.GPU, that carries neither
+    /// Safari's bundle id nor its name; and the same service plays for every
+    /// WebKit app, one instance each, so by bundle id alone Safari, Mail and
+    /// Raycast were one family, named after whichever instance came first.
+    /// Firefox's plugin-container is the same story.
+    ///
+    /// Private, and looked up by name: libquarantine exports it and TCC is
+    /// built on it, but no header declares it. Should it go, the lookup
+    /// returns nil, the bundle-prefix rule still folds Chrome's helpers under
+    /// Chrome, and Safari is back to its service's name.
+    private static let responsiblePID: (@convention(c) (pid_t) -> pid_t)? = {
+        guard let symbol = dlsym(dlopen(nil, RTLD_LAZY),
+                                 "responsibility_get_pid_responsible_for_pid") else { return nil }
+        return unsafeBitCast(symbol, to: (@convention(c) (pid_t) -> pid_t).self)
+    }()
+
+    /// The running applications, indexed once per enumeration: every one by
+    /// pid, and the Dock-visible ones by bundle id for the prefix rule.
+    private struct RunningApps {
+        let byPID: [pid_t: NSRunningApplication]
+        let regular: [String: NSRunningApplication]
+
+        init() {
+            var byPID: [pid_t: NSRunningApplication] = [:]
+            var regular: [String: NSRunningApplication] = [:]
+            for app in NSWorkspace.shared.runningApplications {
+                byPID[app.processIdentifier] = app
+                if app.activationPolicy == .regular, let bid = app.bundleIdentifier {
+                    regular[bid] = app
+                }
+            }
+            self.byPID = byPID
+            self.regular = regular
+        }
+
+        /// The family a process belongs to, and what to call it. The name is
+        /// the one the box shows for the family: an app's own, or the last
+        /// piece of a bundle id for a daemon nobody has named.
+        ///
+        /// A Dock-visible app is its own family whoever launched it, and so
+        /// is a helper under its bundle prefix: "com.google.Chrome.helper"
+        /// folds into "com.google.Chrome" even when Chrome was started from
+        /// a terminal and answers to it. Only `.regular` apps are prefix
+        /// targets. Helpers are themselves running applications, with their
+        /// own bundle id and localised name, so matching against every
+        /// running app would just re-find the helper and group nothing.
+        /// Then the app the process answers to; then the process itself.
+        func family(pid: pid_t, bundle: String?) -> (id: String, name: String) {
+            if let bundle {
+                let parent = regular.keys
+                    .filter { bundle == $0 || bundle.hasPrefix($0 + ".") }
+                    .max(by: { $0.count < $1.count })
+                if let parent { return (parent, name(of: regular[parent], or: parent)) }
+            }
+            if let responsible = SystemAudioTap.responsiblePID?(pid), responsible != pid,
+               let app = byPID[responsible], let bid = app.bundleIdentifier {
+                return (bid, name(of: app, or: bid))
+            }
+            if let bundle { return (bundle, name(of: byPID[pid], or: bundle)) }
+            return ("pid:\(pid)", byPID[pid]?.localizedName ?? "pid \(pid)")
+        }
+
+        private func name(of app: NSRunningApplication?, or bundle: String) -> String {
+            app?.localizedName ?? bundle.split(separator: ".").last.map(String.init) ?? bundle
+        }
+    }
+
+    /// Every process Core Audio knows about, each with its family. Not
+    /// ourselves: our own aggregate device registers as a process doing audio
+    /// I/O, and counting it made the permission watchdog fire during ordinary
+    /// silence. Nor anything answering to us, for the same reason.
+    private static func processes() -> [AudioProcess] {
+        let ownPID = getpid()
+        let ownBundle = Bundle.main.bundleIdentifier
+        let apps = RunningApps()
+        var out: [AudioProcess] = []
+        for id in processObjectIDs() {
+            guard let pidRaw = uint32(id, kAudioProcessPropertyPID) else { continue }
+            let pid = pid_t(bitPattern: pidRaw)
+            if pid == ownPID { continue }
+            var bundle = cfString(id, kAudioProcessPropertyBundleID)
+            if bundle?.isEmpty == true { bundle = nil }
+            let family = apps.family(pid: pid, bundle: bundle)
+            if let ownBundle, bundle == ownBundle || family.id == ownBundle { continue }
+            let playing = (uint32(id, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0
+            out.append(AudioProcess(objectID: id, pid: pid, family: family, isPlaying: playing))
+        }
+        return out
+    }
+
     /// Selectable sources, grouped into application families.
     ///
     /// `kAudioProcessPropertyIsRunningOutput` is what makes this useful: it marks
     /// the handful of apps actually making noise right now, so the picker can put
     /// them first instead of showing 38 undifferentiated daemons.
     static func audioSources() -> [AudioSourceEntry] {
-        let ownPID = getpid()
-        let ownBundle = Bundle.main.bundleIdentifier
-
-        // Fold helper processes under the app they belong to.
-        //
-        // Only `.regular` (Dock-visible) apps are grouping targets. Helpers are
-        // themselves running applications — "Google Chrome Helper" has its own
-        // bundle id and localised name — so matching against every running app
-        // just re-finds the helper and groups nothing.
-        var appNames: [String: String] = [:]
-        var helperNames: [String: String] = [:]
-        for app in NSWorkspace.shared.runningApplications {
-            guard let bid = app.bundleIdentifier, let name = app.localizedName else { continue }
-            if app.activationPolicy == .regular {
-                appNames[bid] = name
-            } else {
-                helperNames[bid] = name
-            }
-        }
-
         var families: [String: (name: String, playing: Bool, pids: [pid_t])] = [:]
-
-        for id in processObjectIDs() {
-            guard let pidRaw = uint32(id, kAudioProcessPropertyPID) else { continue }
-            let pid = pid_t(bitPattern: pidRaw)
-            // Exclude ourselves: our own aggregate device registers as a process
-            // doing audio I/O, and counting it made the permission watchdog fire
-            // during ordinary silence.
-            if pid == ownPID { continue }
-
-            var bundle = cfString(id, kAudioProcessPropertyBundleID)
-            if bundle?.isEmpty == true { bundle = nil }
-            if let bundle, let ownBundle, bundle == ownBundle { continue }
-
-            let playing = (uint32(id, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0
-
-            // Longest running-app bundle id that prefixes this one wins:
-            // "com.google.Chrome.helper" folds into "com.google.Chrome".
-            var familyID: String
-            var familyName: String
-            if let bundle {
-                let parent = appNames.keys
-                    .filter { bundle == $0 || bundle.hasPrefix($0 + ".") }
-                    .max(by: { $0.count < $1.count })
-                if let parent {
-                    familyID = parent
-                    familyName = appNames[parent] ?? parent
-                } else {
-                    // Background-only process with no visible parent: keep it as
-                    // its own entry, named as helpfully as we can manage.
-                    familyID = bundle
-                    familyName = helperNames[bundle]
-                        ?? bundle.split(separator: ".").last.map(String.init)
-                        ?? bundle
-                }
-            } else {
-                familyID = "pid:\(pid)"
-                familyName = NSRunningApplication(processIdentifier: pid)?.localizedName
-                    ?? "pid \(pid)"
-            }
-
-            var entry = families[familyID] ?? (familyName, false, [])
-            entry.playing = entry.playing || playing
-            entry.pids.append(pid)
-            families[familyID] = entry
+        for process in processes() {
+            var entry = families[process.family.id] ?? (process.family.name, false, [])
+            entry.playing = entry.playing || process.isPlaying
+            entry.pids.append(process.pid)
+            families[process.family.id] = entry
         }
-
         return families
             .map { AudioSourceEntry(id: $0.key, name: $0.value.name,
                                     isPlaying: $0.value.playing, pids: $0.value.pids) }
@@ -324,21 +371,11 @@ final class SystemAudioTap {
         audioSources().filter(\.isPlaying).map(\.name)
     }
 
-    /// Object IDs are recycled; resolve them only at the moment of use.
+    /// Object IDs are recycled; resolve them only at the moment of use. The
+    /// same attribution as the menu's, so picking Safari taps the WebKit
+    /// service that plays for it.
     static func objectIDs(forFamily familyID: String) -> [AudioObjectID] {
-        var out: [AudioObjectID] = []
-        for id in processObjectIDs() {
-            if familyID.hasPrefix("pid:") {
-                if let raw = uint32(id, kAudioProcessPropertyPID),
-                   "pid:\(pid_t(bitPattern: raw))" == familyID {
-                    out.append(id)
-                }
-            } else if let bundle = cfString(id, kAudioProcessPropertyBundleID),
-                      bundle == familyID || bundle.hasPrefix(familyID + ".") {
-                out.append(id)
-            }
-        }
-        return out
+        processes().filter { $0.family.id == familyID }.map(\.objectID)
     }
 
     // MARK: - lifecycle

@@ -552,10 +552,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func processItem(_ p: AudioSourceEntry, current: AudioSource,
                              marker: String) -> NSMenuItem {
-        // Show the process count for families with helpers, so it is clear the
-        // selection covers "Chrome and its 3 helpers", not one process.
-        let suffix = p.pids.count > 1 ? " (\(p.pids.count))" : ""
-        let item = NSMenuItem(title: p.name + suffix + marker,
+        // The name as the box wears it, and nothing else: the row used to
+        // count the family's processes, "Google Chrome (3)", which read as a
+        // different name from the box's. That the choice covers the helpers
+        // is the tap's business.
+        let item = NSMenuItem(title: p.name + marker,
                               action: #selector(selectProcess(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = p

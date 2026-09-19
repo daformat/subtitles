@@ -4,6 +4,25 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.8.1 · 2026-09-19
+
+- Safari's audio is Safari's. Safari plays through a WebKit service that
+  carries neither its bundle id nor its name, and every WebKit app (Mail,
+  Raycast, the rest) runs an instance of the same service, so the box wore
+  the name and icon of whichever instance the app found first: "Raycast
+  Graphics and Media" for a video playing in Safari, and picking Safari in
+  Listen To tapped every one of them. A process is now attributed to the
+  app that answers for it, as the system sees it (the same answer a
+  permission prompt gives when a helper asks for the microphone): Safari's
+  service to Safari, Firefox's plugin container to Firefox, a Quick Look
+  preview to Finder. The box wears the app's own name and icon, and picking
+  the app in Listen To taps just what plays for it. A copy that had Safari
+  chosen under the old name falls back to all system audio once, with a
+  line in the log; choose Safari again.
+- Listen To names apps exactly as the box does. The rows used to carry the
+  number of processes behind an app, "Google Chrome (3)", which read as a
+  different name from the box's; the count is gone.
+
 ## 1.8.0 · 2026-09-19
 
 - **Listen To** has the microphone: whichever input Sound settings has,
