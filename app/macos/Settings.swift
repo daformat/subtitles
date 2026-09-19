@@ -890,7 +890,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         section("Recognition",
                 "Both decide what reaches the recogniser, so switching either one "
-                + "reloads the engine — a pause of a few seconds, and a download "
+                + "reloads the engine: a pause of a few seconds, and a download "
                 + "the first time speaker changes are turned on.",
                 toggles, nil)
 
@@ -988,7 +988,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             ? "Remove 1 unused model?"
             : "Remove \(doomed.count) unused models?"
         alert.informativeText =
-            doomed.map { "\($0.name) — \(ModelCache.format($0.bytes))" }.joined(separator: "\n")
+            doomed.map { "\($0.name) (\(ModelCache.format($0.bytes)))" }.joined(separator: "\n")
             + "\n\nFrees \(ModelCache.format(total)). Any of these downloads again "
             + "the next time you select it."
         alert.alertStyle = .warning

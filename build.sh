@@ -193,7 +193,7 @@ FA=".build/checkouts/FluidAudio"
 NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 [ -d "$FA" ] || { echo "!! FluidAudio checkout missing; cannot build notices" >&2; exit 1; }
 {
-  echo "Subtitles — third-party notices"
+  echo "Subtitles: third-party notices"
   echo
   # [main-edition]
   echo "Subtitles itself is FSL-1.1-ALv2 (see LICENSE), which converts to"
@@ -213,7 +213,7 @@ NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
   echo "  Silero VAD                           MIT"
   echo
   printf '=%.0s' {1..78}; echo
-  echo "FluidAudio — https://github.com/FluidInference/FluidAudio"
+  echo "FluidAudio, https://github.com/FluidInference/FluidAudio"
   printf '=%.0s' {1..78}; echo
   echo
   cat "$FA/LICENSE"
@@ -221,7 +221,7 @@ NOTICES="$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
     [ -e "$lic" ] || continue
     echo
     printf '=%.0s' {1..78}; echo
-    echo "Vendored by FluidAudio — $(basename "$lic" | sed 's/-LICENSE\.md$//')"
+    echo "Vendored by FluidAudio: $(basename "$lic" | sed 's/-LICENSE\.md$//')"
     printf '=%.0s' {1..78}; echo
     echo
     cat "$lic"

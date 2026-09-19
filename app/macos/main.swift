@@ -308,7 +308,7 @@ if listModels {
     if broken.isEmpty {
         print("\nall compiled models look complete")
     } else {
-        print("\nincomplete — will be refetched on next load:")
+        print("\nincomplete, will be refetched on next load:")
         for url in broken {
             print("  \(url.path.replacingOccurrences(of: ModelCache.directory.path + "/", with: ""))")
         }
@@ -546,7 +546,7 @@ if let name = UserDefaults.standard.string(forKey: Defaults.sourceName),
 // read, not a request: the prompt belongs to choosing the microphone, and
 // picking it again asks again.
 if startingSource == .microphone, AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
-    err("\(yellow)microphone access is not granted\(reset) — listening to all system audio instead")
+    err("\(yellow)microphone access is not granted\(reset); listening to all system audio instead")
     startingSource = .allSystemAudio
 }
 
@@ -560,7 +560,7 @@ do {
     err("\(red)capture setup failed:\(reset) \(error)")
     exit(1)
 }
-err("\(bold)subtitles\(reset) — \(Int(format.sampleRate)) Hz, \(format.channels) ch")
+err("\(bold)subtitles\(reset): \(Int(format.sampleRate)) Hz, \(format.channels) ch")
 
 // ── engine lifecycle ──
 
@@ -588,7 +588,7 @@ func resumeCapture() {
         // is usually mono and not always 48 kHz, and the input device can change
         // under it. The rebuild ends back here, with the two now agreeing.
         if live != format {
-            err("input is \(Int(live.sampleRate)) Hz, \(live.channels) ch — rebuilding the audio core for it")
+            err("input is \(Int(live.sampleRate)) Hz, \(live.channels) ch; rebuilding the audio core for it")
             format = live
             rebuildCore(generation: loadGeneration)
             return
@@ -603,7 +603,7 @@ func resumeCapture() {
 // `resumeCapture`, so a new device's format is handled and a change made while
 // paused waits for the resume.
 tap.onDefaultInputChanged = {
-    err("microphone is now \(SystemAudioTap.defaultInputName() ?? "none") — following it")
+    err("microphone is now \(SystemAudioTap.defaultInputName() ?? "none"); following it")
     resumeCapture()
 }
 
@@ -752,7 +752,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                        : "\(red)engine failed to load\(reset)")
                 engineFailure = ok
                     ? nil
-                    : "\(variant.displayName) failed to load — pick another model"
+                    : "\(variant.displayName) failed to load; pick another model"
                 engineBusyMessage = nil
                 engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
@@ -1017,7 +1017,7 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
                     if granted {
                         selectSource(.microphone, overlay: overlay)
                     } else {
-                        err("\(yellow)microphone access was declined\(reset) — still listening to \(tap.source.label)")
+                        err("\(yellow)microphone access was declined\(reset); still listening to \(tap.source.label)")
                     }
                 }
             }
@@ -1026,7 +1026,7 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
             // Refused before, and the only way past is System Settings: open it
             // at the microphone list, the way Check Audio Permission… opens the
             // other grant's pane.
-            err("\(red)microphone access is denied\(reset) — allow Subtitles under Privacy & Security › Microphone")
+            err("\(red)microphone access is denied\(reset); allow Subtitles under Privacy & Security › Microphone")
             if let url = URL(string:
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
                 NSWorkspace.shared.open(url)
@@ -1344,10 +1344,10 @@ if useOverlay {
         // one that is overwhelmingly more common.
         if !renderer.receivingAudio {
             if tap.source == .microphone {
-                return ("No sound from the microphone — check permission if you are speaking",
+                return ("No sound from the microphone. Check permission if you are speaking",
                         .idle)
             }
-            return ("No audio reaching Subtitles — check permission if audio is playing",
+            return ("No audio reaching Subtitles. Check permission if audio is playing",
                     .idle)
         }
         return (String(format: "%@ · RTF %.2f", currentVariant.displayName, lastRTF),
@@ -1475,7 +1475,7 @@ if useOverlay {
     hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
 
-    err("overlay on — click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
+    err("overlay on: click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
 }
 
 // [main-edition]
@@ -1495,7 +1495,7 @@ license.onUnblocked = {
     renderer.overlay?.setPaused(false)
     resumeCapture()
     statusMenu?.updateHealthIndicator()
-    err("resumed — licensed")
+    err("resumed, licensed")
 }
 // [/main-edition]
 

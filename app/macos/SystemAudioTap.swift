@@ -406,7 +406,7 @@ final class SystemAudioTap {
             // wrong app.
             let detail = objectIDs.map { id -> String in
                 let pid = Self.uint32(id, kAudioProcessPropertyPID).map { pid_t(bitPattern: $0) }
-                let bundle = Self.cfString(id, kAudioProcessPropertyBundleID) ?? "—"
+                let bundle = Self.cfString(id, kAudioProcessPropertyBundleID) ?? "?"
                 let live = (Self.uint32(id, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0
                 return "obj \(id) pid \(pid.map(String.init) ?? "?") \(bundle)\(live ? " ●" : "")"
             }

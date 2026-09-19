@@ -356,13 +356,13 @@ actor FluidAudioEngine {
                 headline = "Finding \(name) files…"
             case let .downloading(done, total):
                 headline = total > 0
-                    ? "Downloading \(name) — \(percent)% (\(done)/\(total) files)"
-                    : "Downloading \(name) — \(percent)%"
+                    ? "Downloading \(name) · \(percent)% (\(done)/\(total) files)"
+                    : "Downloading \(name) · \(percent)%"
             case let .compiling(model):
                 // `finished()` upstream emits an empty name at 1.0.
                 headline = model.isEmpty
-                    ? "Preparing \(name) — \(percent)%"
-                    : "Compiling \(model) — \(percent)%"
+                    ? "Preparing \(name) · \(percent)%"
+                    : "Compiling \(model) · \(percent)%"
             }
             // A phase that has reached 100% is not finished, it is between
             // phases: the bytes are down and CoreML is loading them onto the
@@ -389,7 +389,7 @@ actor FluidAudioEngine {
         // the broken ones first so the downloader treats them as missing.
         let repaired = ModelCache.repair(repo: variant.repo) + ModelCache.repair(repo: .vad)
         if !repaired.isEmpty {
-            onStatus("Repairing \(variant.displayName) — refetching \(repaired.count) incomplete model(s)")
+            onStatus("Repairing \(variant.displayName): refetching \(repaired.count) incomplete model(s)")
         }
         onStatus("Loading \(variant.displayName)…")
         do {

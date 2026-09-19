@@ -253,7 +253,8 @@ final class AboutWindow: NSObject, NSWindowDelegate {
     private static var credits: NSAttributedString {
         let block = Composer()
         block.add("subtitles-live.com\n", link: "https://subtitles-live.com")
-        block.add("Live captions for whatever your Mac is playing.\u{2028}"
+        block.add("Live captions for whatever your Mac is playing, "
+                  + "or the microphone for a conversation translated live.\u{2028}"
                   + "Nothing is recorded; no audio ever leaves the machine.\n",
                   colour: .labelColor)
         // [main-edition]
@@ -296,8 +297,8 @@ final class AboutWindow: NSObject, NSWindowDelegate {
 
     private static var versionLine: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-            as? String ?? "—"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+            as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         return "Version \(short) (\(build))"
     }
 

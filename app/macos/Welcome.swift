@@ -236,7 +236,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // paragraph would, and the one thing it cannot show — that ⇧ is being
         // held — is one of the lines underneath it.
         let blurb = NSTextField(labelWithString:
-            "Live captions for whatever your Mac plays.")
+            "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.")
         blurb.font = .systemFont(ofSize: 11)
         blurb.textColor = .secondaryLabelColor
         stack.addArrangedSubview(blurb)

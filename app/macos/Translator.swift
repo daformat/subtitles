@@ -265,7 +265,7 @@ final class Translator {
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(Self.patience))
                 guard let self, let reply = self.waiting.removeValue(forKey: id) else { return }
-                self.onStatus("translation did not answer in \(Int(Self.patience)) s — starting a new session")
+                self.onStatus("translation did not answer in \(Int(Self.patience)) s; starting a new session")
                 reply(.failure(TimedOut()))
                 self.restart()
             }
@@ -407,7 +407,7 @@ final class TranslationController {
         pipeline.onSameLanguageHandler = { [weak self] in
             guard let self, !self.isIdentity else { return }
             self.isIdentity = true
-            onStatus("audio is already \(Translator.displayName(self.target)) — not translating")
+            onStatus("audio is already \(Translator.displayName(self.target)), not translating")
         }
         pipeline.mode = mode
         currentSource = source

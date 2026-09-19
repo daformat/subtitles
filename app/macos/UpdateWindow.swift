@@ -139,7 +139,7 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
         case .permission(let allow, let decline):
             Dialog.add(stack, headline: "Check for updates automatically?",
                 blurb: "Once a day, Subtitles would ask subtitles-live.com whether there is a "
-                    + "newer version. The request carries the app's version and nothing else — "
+                    + "newer version. The request carries the app's version and nothing else: "
                     + "no audio, no captions, nothing about you. It is the only request the app "
                     + "ever makes on its own, and the menu bar can turn it off later.")
             Dialog.addButtons(stack, [Dialog.button("Don't Check", decline),

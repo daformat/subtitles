@@ -3,8 +3,10 @@
 # Subtitles
 
 Live captions for whatever your Mac is playing — videos, calls, podcasts —
-rendered as an always-on-top overlay. Everything runs on-device; no audio ever
-leaves the machine.
+rendered as an always-on-top overlay. Choose the microphone instead and it
+captions the room: with translation on and both languages shown, two people
+can each speak their own language and read the other's, live. Everything runs
+on-device; no audio ever leaves the machine.
 
 Transcription runs on the **Apple Neural Engine** via
 [FluidAudio](https://github.com/FluidInference/FluidAudio) (NVIDIA Parakeet),
@@ -237,9 +239,12 @@ entries are *families*: selecting "Google Chrome" captures Chrome and all its
 helper processes, which matters because browsers and Electron apps never play
 audio from their main process. The microphone is whichever input Sound settings
 has, followed when that changes, and it is a grant of its own — macOS asks the
-first time it is chosen, not before. Switching clears whatever is on screen and
-resets the recogniser, so the new source starts a fresh sentence rather than
-continuing the last one.
+first time it is chosen, not before; choosing it again hands capture back to
+the source it replaced. With a language in **Translate To** and **Show Both
+Languages** on, the microphone makes the box a live two-way conversation: each
+person speaks their own language and reads the other's under it. Switching
+clears whatever is on screen and resets the recogniser, so the new source
+starts a fresh sentence rather than continuing the last one.
 
 ### Command line
 
