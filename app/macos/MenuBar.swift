@@ -153,6 +153,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var currentTranslationID: () -> String? = { nil }
     var onSelectTranslationMode: ((TranslationMode) -> Void)?
     var currentTranslationMode: () -> TranslationMode = { .hybrid }
+    /// The original under the translation — see `OverlayController.showsBothLanguages`.
+    var onToggleBothLanguages: (() -> Void)?
+    var showsBothLanguages: () -> Bool = { false }
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
     var onToggleScreenShare: (() -> Void)?
@@ -738,6 +741,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         sub.addItem(off)
         sub.addItem(.separator())
 
+        // In its own group under Off, above the languages, rather than beside
+        // Translation Timing, where only someone already looking would find
+        // it: a person choosing a language for the first time sees here that
+        // the original can stay. Greyed with translation off, like Translation
+        // Timing, since it does nothing on its own — and without an action
+        // then, which is what a menu that enables its own items goes by.
+        let on = current != nil
+        let both = NSMenuItem(title: "Show Both Languages",
+                              action: on ? #selector(toggleBothLanguages) : nil,
+                              keyEquivalent: "")
+        both.target = on ? self : nil
+        both.isEnabled = on
+        both.state = showsBothLanguages() ? .on : .off
+        sub.addItem(both)
+        sub.addItem(.separator())
+
         // Same grouping the recogniser's menu uses, so the two lists read alike.
         for entry in FluidLanguage.allCases where entry != .auto {
             let row = NSMenuItem(title: entry.displayName,
@@ -753,6 +772,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         item.submenu = sub
         return item
     }
+
+    @objc private func toggleBothLanguages() { onToggleBothLanguages?() }
 
     /// How far ahead of the speaker the translator is allowed to guess.
     ///

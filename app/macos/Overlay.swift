@@ -67,7 +67,27 @@ final class SubtitlePanel: NSPanel {
 final class SubtitleView: NSView {
     var committed = "" { didSet { needsDisplay = true } }
     var tentative = "" { didSet { needsDisplay = true } }
+    /// The original under a translation, when both languages are shown: a
+    /// second paragraph beneath the caption in a smaller, dimmer run. Empty
+    /// when there is nothing to pair the caption with. Not part of `lineCount`,
+    /// so paging is decided on the caption alone and the box grows for it.
+    var secondary = "" { didSet { if secondary != oldValue { needsDisplay = true } } }
+    /// The unsettled tail of the paragraph under the caption, dimmed the way
+    /// the caption's own is — the same fraction of its run's strength — when
+    /// that paragraph is the translation. Follows the translation timing
+    /// setting exactly as the caption does, since it is the same emission.
+    var secondaryTentative = "" { didSet { if secondaryTentative != oldValue { needsDisplay = true } } }
     var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
+
+    /// The original's type against the caption's: smaller and a little
+    /// lighter, so the caption stays the line being read and the original
+    /// the note under it — the way dual subtitles are set.
+    static let secondaryScale: CGFloat = 0.8
+    static let secondaryOpacity: CGFloat = 0.75
+    var secondaryFontSize: CGFloat { fontSize * Self.secondaryScale }
+    /// Between the caption's last line and the original's first.
+    static func secondaryGap(for size: CGFloat) -> CGFloat { (size * 0.35).rounded() }
+    private var secondaryGap: CGFloat { Self.secondaryGap(for: fontSize) }
 
     /// The icon of the app whose audio is on screen, or nil for text alone,
     /// and the app's name for the styles that show it. Where it goes is
@@ -223,13 +243,47 @@ final class SubtitleView: NSView {
         metrics(committed: committed, tentative: tentative, maxWidth: width).lines
     }
 
+    func attributedSecondary(_ text: String, tentative: String = "",
+                             measuring: Bool = false) -> NSAttributedString {
+        Pill.attributed(committed: text, tentative: tentative, size: secondaryFontSize,
+                        measuring: measuring, opacity: Self.secondaryOpacity,
+                        alignment: textAlignment)
+    }
+
+    func secondaryLineCount(_ text: String, width: CGFloat) -> Int {
+        Pill.metrics(attributedSecondary(text, measuring: true),
+                     textWidth: width - (inset.width + Self.pad) * 2).lines
+    }
+
+    /// The original's block under the caption: the height it adds, gap
+    /// included and capped at `maxLines` of its own size, and the width it
+    /// hugs. nil with no original to draw.
+    private func secondaryBlock(maxWidth: CGFloat) -> (height: CGFloat, width: CGFloat)? {
+        guard !(secondary.isEmpty && secondaryTentative.isEmpty) else { return nil }
+        let m = Pill.metrics(attributedSecondary(secondary, tentative: secondaryTentative,
+                                                 measuring: true),
+                             textWidth: maxWidth - (inset.width + Self.pad) * 2)
+        guard m.lines > 0 else { return nil }
+        let capped = min(m.used.height,
+                         Pill.lineHeight(ofSize: secondaryFontSize) * CGFloat(maxLines) + 4)
+        return (secondaryGap + ceil(capped), m.used.width + 2 + (inset.width + Self.pad) * 2)
+    }
+
     /// Size the box needs, hugging its content.
     ///
     /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
     func fittingSize(maxWidth: CGFloat) -> NSSize {
-        Pill.fittingSize(attributed(committed: committed, tentative: tentative, measuring: true),
-                         size: fontSize, maxWidth: maxWidth,
-                         maxLines: maxLines, pad: Self.pad, room: iconRoom)
+        var size = Pill.fittingSize(attributed(committed: committed, tentative: tentative,
+                                               measuring: true),
+                                    size: fontSize, maxWidth: maxWidth,
+                                    maxLines: maxLines, pad: Self.pad, room: iconRoom)
+        // The original under the caption adds its block: the box is as tall as
+        // both and as wide as the wider.
+        if size.height > 0, let block = secondaryBlock(maxWidth: maxWidth) {
+            size.height += block.height
+            size.width = min(max(size.width, block.width), maxWidth)
+        }
+        return size
     }
 
     /// A resize must repaint the whole box, not just the newly exposed strip.
@@ -393,8 +447,16 @@ final class SubtitleView: NSView {
             Pill.draw(icon: icon, name: appName, style: iconStyle, on: box,
                       size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale)
         }
-        text.draw(with: Pill.textRect(in: box, room: iconRoom),
-                  options: [.usesLineFragmentOrigin, .usesFontLeading])
+        let textRect = Pill.textRect(in: box, room: iconRoom)
+        text.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+        // The original, in the room `fittingSize` added under the caption: the
+        // bottom of the text rect, the gap above it left empty.
+        if let block = secondaryBlock(maxWidth: bounds.width) {
+            let under = NSRect(x: textRect.minX, y: textRect.minY,
+                               width: textRect.width, height: block.height - secondaryGap)
+            attributedSecondary(secondary, tentative: secondaryTentative)
+                .draw(with: under, options: [.usesLineFragmentOrigin, .usesFontLeading])
+        }
     }
 }
 
@@ -433,6 +495,29 @@ final class OverlayController {
     /// and repeating its last clause then only spends room in the new box on text
     /// they are done with.
     private var pageShownAt = Date.distantPast
+
+    /// A page turn held back for reading — see `holdPage(after:)`: until when
+    /// the page on screen stays, whatever the pager has moved on to.
+    private var holdUntil: Date?
+    private var holdTimer: Timer?
+    /// The next draw is a new page, and dates `displayedPageSince`.
+    private var pendingPageChange = false
+    /// When the page on screen was first drawn: how long it has been readable.
+    private var displayedPageSince = Date.distantPast
+    /// Characters a second a reader gets through at the caption's size — 17,
+    /// the upper end of what subtitle guidelines allow, since a reader here
+    /// has been following the words as they came rather than meeting a full
+    /// box cold. Characters rather than words: it is the rendered text that
+    /// takes reading, and a word is a different amount of it in French, in
+    /// German and in Japanese. Text drawn smaller reads slower in proportion.
+    private let readingRate: Double = 17
+    /// The most a page may be held for. The hold is only what the reader is
+    /// still owed, so it is usually a fraction of this. A second, tried at
+    /// two: every hold puts the caption that much further behind the speaker,
+    /// and two read as the box lagging rather than as time to finish it.
+    private let maxHold: TimeInterval = 1
+    /// `SUBS_DEBUG_PAGING=1` reports each hold, mirroring SUBS_DEBUG_TRANSLATE.
+    private static let debugPaging = ProcessInfo.processInfo.environment["SUBS_DEBUG_PAGING"] != nil
 
     /// The last clause boundary a page break carried from.
     ///
@@ -533,10 +618,44 @@ final class OverlayController {
     /// The untranslated transcript, kept even while the translated one is on
     /// screen, so ⌃ can show the original without waiting for new speech.
     private var sourceWords: [TimedWord] = []
-    /// The translated rendering, when there is one: words, the dimmed tail, and
-    /// the chunk boundaries paging carries across a break.
-    private var translatedWords: (words: [TimedWord], speculativeFrom: TimeInterval,
-                                  chunkStarts: [TimeInterval])?
+    /// The translated rendering, when there is one: its words, the dimmed
+    /// tail, the chunk boundaries paging carries across a break, and the
+    /// transcript it was made from.
+    private var translatedWords: TranslatedTranscript?
+    /// Show the original beneath the translation. Only while a translation is
+    /// what the box shows: in the source language there is nothing to pair it
+    /// with, and ⌃, which shows the original alone, wins while it is held.
+    var showsBothLanguages = false {
+        didSet {
+            guard showsBothLanguages != oldValue else { return }
+            redraw()
+        }
+    }
+
+    /// The pair points back out of the target language: the target itself is
+    /// being spoken, and is translated into the other language. The target
+    /// stays on top whichever way the pair points — it is the language being
+    /// read, and a reader should not have to look for it — so here the
+    /// transcript as spoken is the caption and the translation goes under it.
+    /// Set by main.swift with the pair; see `translationPair()` there.
+    var translationBelow = false {
+        didSet {
+            guard translationBelow != oldValue else { return }
+            redraw()
+        }
+    }
+
+    /// The stream carrying the target language while translating: the caption
+    /// whenever a translation is shown at all.
+    private var captionStream: CaptionStreams.Stream { translationBelow ? .source : .translated }
+
+    /// The stream the box is drawing as its caption right now: the source as
+    /// spoken when there is no translation to show or ⌃ asks for the original,
+    /// else whichever carries the target language.
+    private var primaryStream: CaptionStreams.Stream {
+        showingSourceLanguage ? .source : captionStream
+    }
+
     /// Set while a translation target is chosen. Without it a stale translation
     /// would keep being drawn after translation was switched off.
     var prefersTranslation = false {
@@ -560,7 +679,8 @@ final class OverlayController {
     /// them, so nothing there is mixed; the page on screen is banked into its own
     /// stack on the way out, in the language it was written in.
     private func clearForLanguageChange() {
-        markPagersFresh()
+        cancelHold()
+        bankPages()
         boxIsCleared = true
         page = ""
         pendingCommit = ""
@@ -569,6 +689,8 @@ final class OverlayController {
         startFreshOnNextText = false
         view.committed = ""
         view.tentative = ""
+        view.secondary = ""
+        view.secondaryTentative = ""
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.2
             panel.animator().alphaValue = 0
@@ -629,6 +751,9 @@ final class OverlayController {
     private var pendingCommit = ""
     private var tentative = ""
     private var startFreshOnNextText = false
+    /// An utterance ended and the translated pager's fresh mark is waiting for
+    /// the words that are genuinely next — see `markPagersFreshAtUtteranceEnd`.
+    private var translatedFreshDeferred = false
 
     // ── history ──
     // Pages that have scrolled off, oldest first, brought back by holding ⌥.
@@ -671,6 +796,12 @@ final class OverlayController {
 
     /// When translated words last arrived, or when translation was last enabled.
     private var lastTranslatedAt = Date.distantPast
+    /// Set by a fade: the first words after it restart the wait for their
+    /// translation. The clock ran from the last translation before the fade
+    /// and had long expired, so the original was drawn for the half second a
+    /// translation takes — a flash of the other language at the start of every
+    /// turn after a silence.
+    private var patienceRestartsOnNextWords = false
 
     /// How long the box may stay empty waiting for a translation that is not
     /// coming before the original is shown instead.
@@ -680,13 +811,126 @@ final class OverlayController {
         Date().timeIntervalSince(lastTranslatedAt) >= translationPatience
     }
 
-    /// The stack for whichever language is on screen, each box wearing the
-    /// icon of the app it came from.
+    /// A box as the stack keeps it: what it showed as its caption and, when
+    /// there was one, the other language that went with it — each in the
+    /// language it was in on screen, whichever way the pair pointed then.
+    /// The stack is its own record for that reason: read off one pager's
+    /// boxes by the current direction, a turn in the other direction turned
+    /// every earlier box into the other language.
+    private struct StackBox {
+        let text: String
+        var under: String
+        let app: String?
+        /// Which way the pair pointed for this box: true when its caption was
+        /// the speech itself and the translation went under. From the pager it
+        /// came out of, not the direction at the time it was recorded — a box
+        /// that closes at a turn's end is recorded once the next turn's words
+        /// arrive, which may already be the other way round.
+        let below: Bool
+        /// The box's first word — its start in the audio and the word itself —
+        /// by which an emission is known to be about these words at all, and
+        /// its span, by which the other language is matched to it. Never by
+        /// span alone: the recogniser's clock restarts, and a box from before
+        /// the restart overlapped one after it in time and took its words.
+        let start: TimeInterval
+        let end: TimeInterval
+    }
+
+    private var stack: [StackBox] = []
+    /// How many of each pager's boxes have been taken into the stack.
+    private var recorded: [CaptionStreams.Stream: Int] = [:]
+    /// The last few emissions, newest first, kept for pairing: a box that
+    /// closes at a turn's end is recorded once the next turn's first words
+    /// arrive, when the emission about it has already been replaced.
+    private var recentEmissions: [TranslatedTranscript] = []
+
+    /// The stream whose closed boxes are the stack's: the caption's while a
+    /// translation is being shown, the source otherwise — including while
+    /// translation is on but has nothing to say, the audio being in the target
+    /// language already, when the source is what the box shows.
+    private var historyStream: CaptionStreams.Stream {
+        prefersTranslation && translationProducesOutput ? captionStream : .source
+    }
+
+    /// Take into the stack the boxes that have left the screen since last
+    /// time, from the caption's stream; the other stream's are the other
+    /// language of those, and are only marked as seen. Each new box is paired
+    /// straight away from the words on hand.
+    private func recordClosedBoxes() {
+        for stream in [CaptionStreams.Stream.source, .translated] {
+            let total = streams.closedCount(stream)
+            let unseen = total - (recorded[stream] ?? 0)
+            recorded[stream] = total
+            guard stream == historyStream, unseen > 0 else { continue }
+            let boxes = streams.boxes(stream)
+            for box in boxes.suffix(min(unseen, boxes.count)) {
+                stack.append(StackBox(text: box.text, under: "", app: box.app,
+                                      below: stream == .source, start: box.start, end: box.end))
+                if Self.debugPaging {
+                    FileHandle.standardError.write(
+                        "[stack] + \(stream) \"\(box.text.prefix(40))\"\n".data(using: .utf8)!)
+                }
+            }
+        }
+        if stack.count > effectiveHistoryDepth {
+            stack.removeFirst(stack.count - effectiveHistoryDepth)
+        }
+        pairHistory()
+    }
+
+    /// The other language under each box in the stack, from the words on
+    /// hand. A box is paired from an emission only when that emission is about
+    /// its words — its first word is one of the emission's own, at the same
+    /// moment — so a translation that lands after its page has left the screen
+    /// still reaches it, and an emission from another stretch of speech, on a
+    /// clock that has since restarted, cannot. Same rule as the live box's for
+    /// the text: the words over the box's span, and nothing when that is the
+    /// caption again.
+    private func pairHistory() {
+        guard prefersTranslation else { return }
+        let emissions = [translatedWords].compactMap { $0 } + recentEmissions
+        guard !emissions.isEmpty else { return }
+        for index in stack.indices {
+            let box = stack[index]
+            // The newest emission about this box's words, if any is.
+            guard let transcript = emissions.first(where: { emission in
+                let own = box.below ? emission.source : emission.words
+                return own.contains { $0.start == box.start && box.text.hasPrefix($0.text) }
+            }) else { continue }
+            let other = box.below ? transcript.words : transcript.source
+            let text = other.filter { $0.start >= box.start && $0.start < box.end }
+                .map(\.text).joined(separator: " ")
+            let under = TranslatedTranscript.sameWords(text, box.text) ? "" : text
+            // Only ever towards something: a pairing can be bettered by a later
+            // emission — the settled form of a tail — but never taken away by
+            // one that has nothing over this span, or the caption's own words.
+            guard !under.isEmpty, under != box.under else { continue }
+            stack[index].under = under
+            if Self.debugPaging {
+                FileHandle.standardError.write(
+                    "[stack] pair \"\(box.text.prefix(24))\" ← \"\(under.prefix(40))\"\n"
+                        .data(using: .utf8)!)
+            }
+        }
+    }
+
+    /// Everything the stack holds goes, with the pagers' boxes.
+    private func forgetStack() {
+        stack.removeAll()
+        recorded = [:]
+        recentEmissions = []
+    }
+
+    /// The stack as shown, each box wearing the icon of the app it came from.
+    /// Under ⌃ each box swaps its two languages, the way the live box shows
+    /// the original; with both languages shown the other goes under.
     private var pastPages: [HistoryEntry] {
-        streams.boxes(showingSourceLanguage ? .source : .translated).map { box in
-            HistoryEntry(text: box.text,
-                         icon: box.app.map { AppCatalog.shared.icon(for: $0) },
-                         name: box.app.map { AppCatalog.shared.name(for: $0) })
+        stack.map { box in
+            let swapped = showsSource && !box.under.isEmpty
+            return HistoryEntry(text: swapped ? box.under : box.text,
+                                icon: box.app.map { AppCatalog.shared.icon(for: $0) },
+                                name: box.app.map { AppCatalog.shared.name(for: $0) },
+                                under: showsBothLanguages ? (swapped ? box.text : box.under) : "")
         }
     }
 
@@ -704,6 +948,9 @@ final class OverlayController {
         didSet {
             guard historyDepth != oldValue else { return }
             streams.trim(to: effectiveHistoryDepth)
+            if stack.count > effectiveHistoryDepth {
+                stack.removeFirst(stack.count - effectiveHistoryDepth)
+            }
         }
     }
 
@@ -1030,21 +1277,107 @@ final class OverlayController {
     /// to show or while ⌃ is held.
     func setSourceWords(_ words: [TimedWord]) {
         sourceWords = words
+        if patienceRestartsOnNextWords {
+            patienceRestartsOnNextWords = false
+            lastTranslatedAt = Date()
+        }
         let visible = page(.source, words, chunkStarts: [])
-        guard showingSourceLanguage else { return }
-        showWords(visible)
+        // Drawn when the source is the caption: with no translation to show,
+        // under ⌃, or with the target language itself being spoken, where the
+        // translation goes under it. Not for the original under a translation:
+        // that comes from the transcript the translation was made of, with the
+        // translation, never from words it has not seen — see `underCaption`.
+        guard primaryStream == .source else { return }
+        showWords(visible, under: underCaption)
     }
 
     /// The transcript translated. Stored and drawn unless ⌃ is asking for the
     /// original.
-    func setTranslatedWords(_ words: [TimedWord], speculativeFrom: TimeInterval,
-                            chunkStarts: [TimeInterval]) {
-        translatedWords = (words, speculativeFrom, chunkStarts)
+    func setTranslatedWords(_ transcript: TranslatedTranscript) {
+        if let previous = translatedWords {
+            recentEmissions.insert(previous, at: 0)
+            if recentEmissions.count > 4 { recentEmissions.removeLast() }
+        }
+        translatedWords = transcript
         lastTranslatedAt = Date()
-        let visible = page(.translated, words, chunkStarts: chunkStarts,
-                           speculativeFrom: speculativeFrom)
+        // Translated words are proof that translation produces output, whatever
+        // the last word update was told: after a pair change the pack is
+        // confirmed again, and a turn that ends inside that moment sends no
+        // further words to carry the news. Without this its translation arrived
+        // at a box that believed there was none, and went under nothing.
+        translationProducesOutput = true
+        // The utterance's last translation lands after the endpoint that closed
+        // it: the settled form of the page on screen, not new speech, and it
+        // pages into that page. The fresh mark the endpoint left for this
+        // stream is applied by the first words that are new.
+        if translatedFreshDeferred, !transcript.settlesUtterance {
+            translatedFreshDeferred = false
+            streams.markFresh(.translated)
+        }
+        let visible = page(.translated, transcript.words, chunkStarts: transcript.chunkStarts,
+                           speculativeFrom: transcript.speculativeFrom)
+        pairHistory()
         guard !showsSource else { return }
-        showWords(visible, speculativeFrom: speculativeFrom)
+        if translationBelow {
+            // The caption is the transcript as spoken, already on screen; the
+            // translation goes under it. Not for a box that has faded — the
+            // page it would bring back is finished with, and new speech returns
+            // through the source words as it always has.
+            guard !boxIsCleared else { return }
+            showWords(streams.currentWords(.source), under: underCaption)
+        } else {
+            showWords(visible, speculativeFrom: transcript.speculativeFrom, under: underCaption)
+        }
+    }
+
+    /// Whether the other language goes under the caption right now: the
+    /// setting, and a translation that is expected. Not a question of ⌃, which
+    /// changes what is drawn and nothing else — the streams are paged the same
+    /// way whether or not they are on screen, or the stack would not match the
+    /// box.
+    private var pairsLanguages: Bool {
+        showsBothLanguages && prefersTranslation && translationProducesOutput
+    }
+
+    /// The other language, for under the caption: the words the translation was
+    /// made from, over the translated page's span — or, with the target
+    /// language itself being spoken, the translation over the caption's span
+    /// instead (`translationBelow`). Translated words
+    /// are timed over the sentence they render, so a translated page begins
+    /// where a source sentence does, and the pager has already made sure that
+    /// much fits — see `longestFittingPrefix`. Only ever those words: what the
+    /// recogniser has said since is not translated yet, and at an utterance's
+    /// end it is the next speaker, possibly in the other language — the old
+    /// translation over the new speech showed French under French. Empty
+    /// whenever the box is not showing a translation.
+    ///
+    /// And never the same language twice. A translation that came back as its
+    /// own original — the pair pointing the wrong way for the first word or two
+    /// of a new speaker, before the recogniser named the language — is the
+    /// original, and is shown once.
+    /// The paragraph under the caption: settled text, and the unsettled tail to
+    /// draw dimmed after it.
+    typealias Under = (settled: String, tentative: String)
+
+    private var underCaption: Under {
+        guard pairsLanguages, !showingSourceLanguage, let transcript = translatedWords else { return ("", "") }
+        let caption = streams.currentWords(captionStream)
+        guard let last = caption.last else { return ("", "") }
+        let from = streams.start(captionStream)
+        let other = translationBelow ? transcript.words : transcript.source
+        let span = other.filter { $0.start >= from && $0.start < last.end }
+        // Under the caption the translation keeps its unsettled tail dimmed, as
+        // it is when it is the caption: the same words, split at the same
+        // moment, so the translation timing setting reads the same either way.
+        // The original as spoken has no tail.
+        let cut = translationBelow ? transcript.speculativeFrom : .greatestFiniteMagnitude
+        let settled = span.filter { $0.start < cut }.map(\.text).joined(separator: " ")
+        var tentative = span.filter { $0.start >= cut }.map(\.text).joined(separator: " ")
+        // `Pill.attributed` joins the two runs with no separator.
+        if !settled.isEmpty, !tentative.isEmpty { tentative = " " + tentative }
+        let whole = settled + tentative
+        return TranslatedTranscript.sameWords(whole, caption.map(\.text).joined(separator: " "))
+            ? ("", "") : (settled, tentative)
     }
 
     /// Run a stream through its own pager, measuring with the live box's geometry
@@ -1075,16 +1408,80 @@ final class OverlayController {
                       speculativeFrom: TimeInterval = .greatestFiniteMagnitude) -> [TimedWord] {
         if startFreshOnNextText {
             startFreshOnNextText = false
-            streams.markFresh()
+            streams.markFresh(.source)
+            if !translatedFreshDeferred { streams.markFresh(.translated) }
         }
+        // Whichever stream is the caption pages on both paragraphs, with the
+        // other language's words over the same span — see `longestFittingPrefix`.
+        let paired: [TimedWord]? = pairsLanguages && stream == captionStream
+            ? (translationBelow ? translatedWords?.words : translatedWords?.source) : nil
+        let onScreen = stream == primaryStream
+        // What the reader has to get through before the page may turn: the
+        // caption as it stands and, with both languages shown, the paragraph
+        // drawn under it — `view.secondary`, at its smaller size. The page
+        // turns on whichever of the two fills first, and the hold is sized on
+        // whichever takes longer to read.
+        let captionBefore = streams.currentWords(stream).map(\.text).joined(separator: " ")
+        let underBefore = onScreen ? view.secondary + view.secondaryTentative : ""
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
                                    depth: effectiveHistoryDepth, allowCarry: allowsCarry,
-                                   speculativeFrom: speculativeFrom, app: playingApp) { texts in
-            longestFittingPrefix(texts, from: 0)
+                                   speculativeFrom: speculativeFrom, app: playingApp) { candidates in
+            longestFittingPrefix(candidates, pairedWith: paired)
         }
-        if paged.brokePage { pageShownAt = Date() }
+        if paged.brokePage {
+            pageShownAt = Date()
+            if onScreen {
+                pendingPageChange = true
+                holdPage(caption: captionBefore, under: underBefore)
+            }
+            recordClosedBoxes()
+        }
         pageStartTime = streams.start(stream)
         return paged.visible
+    }
+
+    /// The page on screen is leaving. Keep it for as long as a reader who has
+    /// been reading since it appeared still needs to finish it — its text as
+    /// drawn, the slower-read of its two paragraphs when there are two, at
+    /// `readingRate`, less the time it has had — and no longer than `maxHold`.
+    /// A slow speaker's page was read as it filled and turns at once; a fast
+    /// one's, or a translated sentence that landed whole, gets its moment. The
+    /// words keep arriving into the pager meanwhile, and the redraw at the end
+    /// shows wherever they have got to. A hold already running is left alone:
+    /// a page that turned during it was never seen, and is owed nothing.
+    private func holdPage(caption: String, under: String) {
+        if let holdUntil, holdUntil > Date() { return }
+        let shown = Date().timeIntervalSince(displayedPageSince)
+        let needed = max(readingTime(caption, scale: 1),
+                         readingTime(under, scale: SubtitleView.secondaryScale))
+        let owed = needed - shown
+        let hold = min(max(owed, 0), maxHold)
+        if Self.debugPaging {
+            FileHandle.standardError.write(String(
+                format: "[page] turn: %d + %d chars need %.1fs, shown %.1fs → hold %.2fs\n",
+                caption.count, under.count, needed, shown, hold).data(using: .utf8)!)
+        }
+        guard hold > 0.05 else { holdUntil = nil; return }
+        holdUntil = Date().addingTimeInterval(hold)
+        holdTimer?.invalidate()
+        holdTimer = Timer.scheduledTimer(withTimeInterval: hold, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.holdUntil = nil
+            self.redraw()
+        }
+    }
+
+    /// Seconds to read `text` drawn at `scale` of the caption's size.
+    private func readingTime(_ text: String, scale: CGFloat) -> TimeInterval {
+        Double(text.count) / (readingRate * Double(scale))
+    }
+
+    /// The box is being emptied: nothing left to hold for.
+    private func cancelHold() {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        holdUntil = nil
+        pendingPageChange = false
     }
 
     /// Draw whichever rendering is currently wanted, from what the pagers hold.
@@ -1102,11 +1499,11 @@ final class OverlayController {
         // The stack still swaps with ⌃ while the box is down; the box itself does
         // not come back until there is something new to say.
         guard !boxIsCleared else { return }
-        if showingSourceLanguage {
-            showWords(streams.currentWords(.source))
+        if primaryStream == .source {
+            showWords(streams.currentWords(.source), under: underCaption)
         } else if let translated = translatedWords {
             showWords(streams.currentWords(.translated),
-                      speculativeFrom: translated.speculativeFrom)
+                      speculativeFrom: translated.speculativeFrom, under: underCaption)
         }
     }
 
@@ -1120,9 +1517,15 @@ final class OverlayController {
     /// words from there on are drawn dimmed. It is part of `words` rather than a
     /// string beside them, which is what lets the box fill with it and turn over
     /// when full rather than evicting settled clauses to make room.
+    /// `secondary` is the original to set under these words, when both
+    /// languages are shown — see `secondaryText`; empty draws the words alone.
     func showWords(_ words: [TimedWord],
-                   speculativeFrom: TimeInterval = .greatestFiniteMagnitude) {
+                   speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
+                   under: Under = ("", "")) {
         guard !isSuppressed else { return }
+        // A page held for reading — see `holdPage(after:)`. Its own redraw
+        // comes back here when it ends.
+        if let holdUntil, holdUntil > Date() { return }
         guard !words.isEmpty else { return }
 
         // `words` is already the page: whichever pager owns this stream broke it,
@@ -1148,10 +1551,20 @@ final class OverlayController {
         // appended to text that should long since have gone.
         // The tail is part of what is on screen, so an unchanged transcript with a
         // changed tail is still new information. Comparing only `text` here left
-        // the live translation frozen on its first guess.
-        guard text != lastShownText || speculative != tentative else { return }
+        // the live translation frozen on its first guess. The original under
+        // the caption counts the same way: it changes with every spoken word
+        // while the translation above it waits for the clause to settle.
+        guard text != lastShownText || speculative != tentative
+                || under.settled != view.secondary || under.tentative != view.secondaryTentative
+        else { return }
         lastShownText = text
         lastTextAt = Date()
+        // A new page: the first draw is when its reading time starts. A box
+        // coming back from empty is a new page too.
+        if pendingPageChange || boxIsCleared {
+            displayedPageSince = Date()
+            pendingPageChange = false
+        }
 
         page = text
         pendingCommit = ""
@@ -1159,19 +1572,35 @@ final class OverlayController {
         boxIsCleared = false
         view.committed = page
         view.tentative = speculative
+        view.secondary = under.settled
+        view.secondaryTentative = under.tentative
         layout()
         show()
     }
 
-    /// Index one past the last word that still fits within `maxLines`.
-    private func longestFittingPrefix(_ words: [String], from start: Int,
-                                      tentative: String = "") -> Int {
-        var end = start
+    /// Index one past the last word that still fits within `maxLines` — and,
+    /// when the original goes under these words, one past the last whose
+    /// original still fits its own lines too, so the page turns when either
+    /// paragraph fills. The original of a run of translated words is the
+    /// speech over the same span. Translated words are spread over the
+    /// sentence they render, so within a sentence the span is approximate; at
+    /// a sentence's edges it is exact, and with chunk boundaries to carry from
+    /// that is where a page restarts anyway.
+    private func longestFittingPrefix(_ words: [TimedWord],
+                                      pairedWith original: [TimedWord]?) -> Int {
+        var end = 0
         while end < words.count {
-            let candidate = words[start...end].joined(separator: " ")
-            if view.lineCount(committed: candidate, tentative: tentative,
-                              width: maxWidth) > view.maxLines {
+            let candidate = words[0...end].map(\.text).joined(separator: " ")
+            if view.lineCount(committed: candidate, tentative: "", width: maxWidth) > view.maxLines {
                 return end
+            }
+            if let original {
+                let span = original.lazy
+                    .filter { $0.start >= words[0].start && $0.start < words[end].end }
+                    .map(\.text).joined(separator: " ")
+                if !span.isEmpty, view.secondaryLineCount(span, width: maxWidth) > view.maxLines {
+                    return end
+                }
             }
             end += 1
         }
@@ -1187,7 +1616,7 @@ final class OverlayController {
     func markPause() {
         if !pendingCommit.isEmpty { setTentative("") }
         startFreshOnNextText = true
-        markPagersFresh()
+        markPagersFreshAtUtteranceEnd()
     }
 
     /// Utterance finished: keep it on screen briefly, then fade. The next words
@@ -1201,7 +1630,7 @@ final class OverlayController {
             setTentative("")
         }
         startFreshOnNextText = true
-        markPagersFresh()
+        markPagersFreshAtUtteranceEnd()
     }
 
     /// A page just left the screen. Keep it for ⌥.
@@ -1209,8 +1638,38 @@ final class OverlayController {
     /// Deduplicated against the last entry: a page can close by more than one
     /// route in the same beat — an overflow immediately after a pause, say — and
     /// two identical boxes in the stack read as a stutter, not as history.
+    /// The page on screen goes to the stack now, in both languages, and the
+    /// next words start a page of their own. For a fade and for a clear: ⌥ is
+    /// asked for the box exactly then, and a mark for the next words left it
+    /// out of the stack until someone spoke again.
+    private func bankPages() {
+        streams.close(depth: effectiveHistoryDepth)
+        translatedFreshDeferred = false
+        recordClosedBoxes()
+    }
+
     /// The next words begin a page of their own, in both languages.
-    private func markPagersFresh() { streams.markFresh() }
+    private func markPagersFresh() {
+        streams.markFresh()
+        translatedFreshDeferred = false
+    }
+
+    /// The next words begin a page of their own — in the source now, and in
+    /// the translation once its last words for this utterance have landed.
+    /// Translation runs behind speech: the settled form of the dimmed tail
+    /// arrives after the endpoint, and a translated pager marked fresh here
+    /// put its anchor past every one of those words, so they were dropped and
+    /// the tail stayed dimmed for good. The mark is applied by the first
+    /// translated words that are new — see `setTranslatedWords`. With no
+    /// translation there is nothing to wait for.
+    private func markPagersFreshAtUtteranceEnd() {
+        streams.markFresh(.source)
+        if prefersTranslation {
+            translatedFreshDeferred = true
+        } else {
+            streams.markFresh(.translated)
+        }
+    }
 
     private func trimLeadingSpace(_ s: String) -> String {
         var out = s
@@ -1312,13 +1771,14 @@ final class OverlayController {
         // Both stacks, not the one on screen: with a target chosen the visible one
         // can be empty while the other still holds a session's worth of boxes, and
         // guarding on the visible one alone left that never expiring.
-        guard isHistoryExpiryEnabled, !streams.isEmpty else { return }
+        guard isHistoryExpiryEnabled, !streams.isEmpty || !stack.isEmpty else { return }
         // Not while it is on screen. Someone holding ⌥ is reading it, and a
         // stack that empties under their eyes because nobody spoke for a minute
         // is the one moment this must not fire.
         guard history.shown.isEmpty else { return }
         guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
         streams.clear()
+        forgetStack()
     }
 
     private func fadeIfTextIdle() {
@@ -1338,7 +1798,7 @@ final class OverlayController {
             // clean one instead of resuming a paragraph nobody can still see —
             // but keep it for ⌥ first. Fading is precisely when someone looks
             // away and wants it back.
-            self.markPagersFresh()
+            self.bankPages()
             self.boxIsCleared = true
             // The stored transcripts go too. They outlive the box on purpose so ⌃
             // can swap language instantly, but everything in them predates the
@@ -1346,11 +1806,15 @@ final class OverlayController {
             // again.
             self.sourceWords = []
             self.translatedWords = nil
+            self.recentEmissions = []
+            self.patienceRestartsOnNextWords = true
             self.page = ""
             self.pendingCommit = ""
             self.tentative = ""
             self.view.committed = ""
             self.view.tentative = ""
+            self.view.secondary = ""
+            self.view.secondaryTentative = ""
 
             // `latestWordEnd` is deliberately *kept*: engines that never reset keep
             // growing one transcript, so "fresh" must mean "the words after this
@@ -1390,6 +1854,8 @@ final class OverlayController {
                 markPagersFresh()
                 page = ""
                 view.committed = ""
+                view.secondary = ""
+                view.secondaryTentative = ""
                 startFreshOnNextText = true
             }
             layout()
@@ -1405,6 +1871,8 @@ final class OverlayController {
             markPagersFresh()
             page = ""
             view.committed = ""
+            view.secondary = ""
+            view.secondaryTentative = ""
             startFreshOnNextText = true
         }
         layout()
@@ -1434,7 +1902,10 @@ final class OverlayController {
         // pause or a model switch is the user saying this transcript is over, and
         // ⌥ offering the last thing a since-replaced model heard is a puzzle.
         streams.clear()
+        forgetStack()
+        translatedFreshDeferred = false
         history.dismiss()
+        cancelHold()
         boxIsCleared = true
         lastShownText = ""
         lastTextAt = .distantPast
@@ -1445,6 +1916,8 @@ final class OverlayController {
         startFreshOnNextText = false
         view.committed = ""
         view.tentative = ""
+        view.secondary = ""
+        view.secondaryTentative = ""
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.2
             panel.animator().alphaValue = 0

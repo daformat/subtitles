@@ -228,6 +228,19 @@ final class Translator {
         return out.first ?? ""
     }
 
+    /// A request the session never answered. Distinct from the framework's own
+    /// errors because it is the one failure worth asking again after: the
+    /// session has been replaced, and the text was never refused.
+    struct TimedOut: Error {}
+
+    /// How long a request may go unanswered before it is given up on and the
+    /// session replaced. A translation takes a few hundred milliseconds; one
+    /// that has taken this long is not coming. Seen once, live: no error from
+    /// anywhere, the pipeline's one slot held by a request that never returned,
+    /// and the box left with a dimmed tail it could never settle. Generous, so
+    /// a first request on a cold session is never cut short.
+    static let patience: TimeInterval = 10
+
     /// Translate a batch in one round trip.
     ///
     /// Batching matters more than it looks: each call crosses into the framework's
@@ -244,8 +257,30 @@ final class Translator {
             // correct; the caller's text belongs to the old target language.
             if case .terminated = channel.send.yield(Job(id: id, texts: texts)) {
                 waiting.removeValue(forKey: id)?(.failure(TranslationError.internalError))
+                return
+            }
+            // The watchdog. Still waiting when it fires means the session has
+            // stopped answering: fail the caller with something it can retry on,
+            // and start over with a fresh session for the same pair.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(Self.patience))
+                guard let self, let reply = self.waiting.removeValue(forKey: id) else { return }
+                self.onStatus("translation did not answer in \(Int(Self.patience)) s — starting a new session")
+                reply(.failure(TimedOut()))
+                self.restart()
             }
         }
+    }
+
+    /// Replace the session with a fresh one for the same pair. Whatever is
+    /// still parked on the old one is failed first, the way a pair change fails
+    /// it, and the configuration is invalidated so the framework hands out a
+    /// new session for it rather than the one that went quiet.
+    private func restart() {
+        failEverythingOutstanding()
+        box.channel?.send.finish()
+        box.channel = Channel()
+        box.config?.invalidate()
     }
 
     /// Fail every parked caller. Called before a session is replaced, so nothing
@@ -334,14 +369,22 @@ final class TranslationController {
     /// at all — a download runs for minutes, and an empty overlay for that long
     /// reads as a broken app.
     var isReady: Bool { packReady && !isIdentity }
-    private var packReady = false
+    private var packReady = false {
+        didSet { if packReady != oldValue { onReadiness?(isReady) } }
+    }
+    /// Told whenever `isReady` may have changed, so the overlay hears of a pack
+    /// confirmed after a pair change without waiting for the next words.
+    var onReadiness: ((Bool) -> Void)?
     /// Set when Apple refuses the pair because the audio is already in the target
     /// language — en → en is `.unsupported` and throws outright, so this is not
     /// optional. Cleared at every utterance boundary so it is re-probed rather
     /// than latched: one refused request per utterance costs nothing, and the
     /// alternative is being stuck on a stale answer.
-    private var isIdentity = false
+    private var isIdentity = false {
+        didSet { if isIdentity != oldValue { onReadiness?(isReady) } }
+    }
     private var currentSource: Locale.Language?
+    private let onStatus: (String) -> Void
 
     var mode: TranslationMode {
         get { pipeline.mode }
@@ -352,10 +395,11 @@ final class TranslationController {
          source: Locale.Language?,
          trustedSource: Bool = false,
          mode: TranslationMode,
-         onTranslated: @escaping ([TimedWord], TimeInterval, [TimeInterval]) -> Void,
+         onTranslated: @escaping (TranslatedTranscript) -> Void,
          onStatus: @escaping (String) -> Void,
          onProgress: @escaping (Double, String) -> Void) {
         self.target = target
+        self.onStatus = onStatus
         translator = Translator(onStatus: onStatus, onProgress: onProgress)
         pipeline = TranslationPipeline(translator: translator,
                                        onTranslated: onTranslated,
@@ -363,7 +407,7 @@ final class TranslationController {
         pipeline.onSameLanguageHandler = { [weak self] in
             guard let self, !self.isIdentity else { return }
             self.isIdentity = true
-            onStatus("audio is already \(Translator.displayName(target)) — not translating")
+            onStatus("audio is already \(Translator.displayName(self.target)) — not translating")
         }
         pipeline.mode = mode
         currentSource = source
@@ -387,11 +431,23 @@ final class TranslationController {
     ///   session, so a reading equal to the target may simply be stale. Ask the
     ///   framework instead and let a refusal settle it.
     func setSource(_ source: Locale.Language?, trusted: Bool = false) {
+        setPair(source: source, target: target, trusted: trusted)
+    }
+
+    /// Point at a different pair without rebuilding anything: the source the
+    /// recogniser's language changed underneath us, or both ends because — with
+    /// both languages on screen — a speaker of the target language is to be
+    /// translated back the other way. `translationPair()` in main.swift decides
+    /// which way is wanted; the rules for `trusted` are `setSource`'s.
+    func setPair(source: Locale.Language?, target: Locale.Language, trusted: Bool = false) {
         // The detector reports on nearly every decode; without this guard each one
         // would tear the session down and re-prepare it.
-        guard source != currentSource else { return }
+        guard source != currentSource || target != self.target else { return }
         currentSource = source
-        pipeline.reset()
+        self.target = target
+        onStatus("translating \(source.map(Translator.displayName) ?? "what is heard") → "
+                 + Translator.displayName(target))
+        pipeline.restartTurn()
         packReady = false
         let sameAsTarget = source?.minimalIdentifier == target.minimalIdentifier
         isIdentity = trusted && sameAsTarget

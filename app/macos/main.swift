@@ -152,6 +152,7 @@ enum Defaults {
     static let textAlignment = "overlay.textAlignment"
     static let translateTo = "translate.target"
     static let translateMode = "translate.mode"
+    static let bothLanguages = "translate.bothLanguages"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -232,6 +233,11 @@ nonisolated(unsafe) var useVAD =
 /// all, which meant it could not check whether the pair needed downloading, so
 /// picking a language whose pack was missing quietly produced nothing.
 nonisolated(unsafe) var lastDetectedLanguage: FluidLanguage?
+/// The last language heard that was not the translation's target: what a
+/// speaker of the target is translated back into when both languages are on
+/// screen — see `translationPair()`. Kept whether or not translation is on, so
+/// the language heard before it was switched on counts.
+nonisolated(unsafe) var lastOtherLanguage: FluidLanguage?
 /// The language of the words on screen, read from the text itself, for as long
 /// as the multilingual checkpoint has not named one. Its tag arrives at the
 /// start of a sentence as the model hears one, not on the first words, so a
@@ -329,6 +335,19 @@ let onAudioFrames: @convention(c) (UnsafePointer<Float>?, UInt, UnsafeMutableRaw
 final class Renderer {
     /// nil in --headless mode.
     var overlay: OverlayController?
+
+    /// Where the current turn begins in the transcript: the word count at the
+    /// last pause or endpoint. The recogniser keeps one transcript across a
+    /// conversation, so anything that should look at what is being said *now*
+    /// — naming its language, above all — reads from here.
+    private var turnStartWords = 0
+    private var lastWordCount = 0
+
+    /// The words of the current turn.
+    func turnWords(_ words: [TimedWord]) -> [TimedWord] {
+        if words.count < turnStartWords { turnStartWords = 0 }
+        return Array(words.dropFirst(turnStartWords))
+    }
     var onStatusRefresh: (() -> Void)?
 
     private var line = ""
@@ -355,6 +374,7 @@ final class Renderer {
     /// FluidAudio reports the whole transcript each update rather than deltas,
     /// with the audio time of every word — which is what the overlay pages on.
     func setWords(_ words: [TimedWord]) {
+        lastWordCount = words.count
         line = words.map(\.text).joined(separator: " ")
         // With translation on the overlay is driven by the pipeline instead, which
         // calls back once the target-language text exists. The terminal line below
@@ -398,6 +418,7 @@ final class Renderer {
             FileHandle.standardOutput.write("\r\(clearLine)\(trimmed)\n".data(using: .utf8)!)
         }
         line = ""
+        turnStartWords = lastWordCount
         if #available(macOS 15, *) { MainActor.assumeIsolated { translation?.finish() } }
         overlay?.endUtterance()
     }
@@ -422,6 +443,7 @@ final class Renderer {
     }
 
     func pause() {
+        turnStartWords = lastWordCount
         if #available(macOS 15, *) { MainActor.assumeIsolated { translation?.finish() } }
         overlay?.markPause()
     }
@@ -694,7 +716,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         onWords: { words in
             DispatchQueue.main.async {
                 guard generation == loadGeneration else { return }
-                guessLanguage(from: words)
+                guessLanguage(from: renderer.turnWords(words))
                 renderer.setWords(words)
             }
         },
@@ -746,14 +768,23 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 guard generation == loadGeneration else { return }
                 guard let detected = FluidLanguage.matching(code: code) else { return }
                 lastDetectedLanguage = detected
+                if detected != translateTo { lastOtherLanguage = detected }
                 err("detected \(detected.displayName)")
                 // Only meaningful on auto-detect: with the language pinned, the
                 // translator was already told and the model is only confirming it.
                 guard currentLanguage == .auto else { return }
-                if #available(macOS 15, *) {
-                    // Untrusted on purpose: see `setSource(_:trusted:)`.
-                    MainActor.assumeIsolated { translation?.setSource(detected.locale) }
-                }
+                // Untrusted on purpose — see `setSource(_:trusted:)` — and
+                // possibly the other way round: see `translationPair()`.
+                refreshTranslationSource()
+            }
+        },
+        onPause: {
+            // The detector's pause, for a microphone — see FluidAudioEngine. The
+            // same boundary the core's gate sends for system audio; both may
+            // come for one silence, and the second changes nothing.
+            DispatchQueue.main.async {
+                guard generation == loadGeneration else { return }
+                renderer.pause()
             }
         },
         onRTF: { rtf in
@@ -802,42 +833,77 @@ func applyLanguage(_ language: FluidLanguage) {
 /// so with one of those selected the source is English no matter what the
 /// language menu says — that setting only applies to the multilingual model. Nil
 /// means genuinely unknown: multilingual on auto-detect.
-var effectiveSource: Locale.Language? {
-    guard currentVariant.isMultilingual else { return FluidLanguage.en.locale }
-    guard currentLanguage == .auto else { return currentLanguage.locale }
+var spokenLanguage: FluidLanguage? {
+    guard currentVariant.isMultilingual else { return .en }
+    guard currentLanguage == .auto else { return currentLanguage }
     // On auto, whatever was last heard, or read off the transcript until then.
     // A guess, and marked as one below, but a guess is enough to ask whether
     // the pair needs downloading, and nil is not.
-    return (lastDetectedLanguage ?? guessedLanguage)?.locale
+    return lastDetectedLanguage ?? guessedLanguage
 }
 
-/// Name the language from the transcript while the checkpoint has not: eight
-/// words are enough for NaturalLanguage to tell the sixteen apart, and the
-/// last forty are what it reads so a change of speaker is caught too.
+var effectiveSource: Locale.Language? { spokenLanguage?.locale }
+
+/// Name the language from the transcript: while the checkpoint has not, and
+/// again when what is being said reads as another language than the one it
+/// named. Eight words are enough for NaturalLanguage to tell the sixteen
+/// apart, and the last sixteen are what it reads, so a change of speaker is
+/// caught within a sentence. The checkpoint's own tag is latched per decode
+/// session and can outlive the speaker it was decided on — a French turn came
+/// through under an English tag whole — and a stale tag is what a translation
+/// the wrong way round is made from. Overriding a tag asks for more certainty
+/// than first naming a language does, so the two cannot take turns on a
+/// fragment.
 func guessLanguage(from words: [TimedWord]) {
-    guard lastDetectedLanguage == nil, currentVariant.isMultilingual, currentLanguage == .auto,
-          words.count >= 8 else { return }
+    // Eight words to name a language from nothing; two to notice a change, at
+    // the higher bar below — "Bonjour John, je m'appelle Mathieu" reads as
+    // French at 0.98 and a turn in a conversation is often that short.
+    guard currentVariant.isMultilingual, currentLanguage == .auto,
+          words.count >= (lastDetectedLanguage == nil ? 8 : 2) else { return }
     let recognizer = NLLanguageRecognizer()
     recognizer.languageConstraints = [
         .english, .spanish, .french, .italian, .portuguese, .german, .dutch, .turkish,
         .russian, .arabic, .hindi, .japanese, .korean, .vietnamese, .ukrainian, .simplifiedChinese,
     ]
-    recognizer.processString(words.suffix(40).map(\.text).joined(separator: " "))
+    recognizer.processString(words.suffix(16).map(\.text).joined(separator: " "))
+    let needed = lastDetectedLanguage == nil ? 0.5 : (words.count >= 8 ? 0.8 : 0.9)
     guard let best = recognizer.languageHypotheses(withMaximum: 1).max(by: { $0.value < $1.value }),
-          best.value >= 0.5,
+          best.value >= needed,
           let guess = FluidLanguage.matching(code: best.key.rawValue),
-          guess != guessedLanguage else { return }
+          guess != spokenLanguage else { return }
     guessedLanguage = guess
+    lastDetectedLanguage = guess
+    if guess != translateTo { lastOtherLanguage = guess }
     err("language from text: \(guess.displayName)")
-    if #available(macOS 15, *) {
-        MainActor.assumeIsolated { translation?.setSource(guess.locale) }
-    }
+    refreshTranslationSource()
 }
 
 /// True when `effectiveSource` is a fact rather than a guess — see
 /// `TranslationController.setSource(_:trusted:)`.
 var effectiveSourceIsTrusted: Bool {
     !currentVariant.isMultilingual || currentLanguage != .auto
+}
+
+/// Which way the translator should be working right now, and whether its
+/// source is a fact — nil with translation off.
+///
+/// One way normally: whatever is heard, into the target. With both languages on
+/// screen the pair is a conversation's: a speaker of the target language is
+/// translated back into the other one — the recogniser's pinned language, or on
+/// auto-detect the last language heard that was not the target — so both sides
+/// of a French–English exchange read each other, each in their own language
+/// above the other's words. Until a second language has been heard there is
+/// nothing to translate back into, and the target being spoken is what it
+/// always was: shown as it is.
+func translationPair() -> (source: Locale.Language?, target: Locale.Language, trusted: Bool)? {
+    guard let target = translateTo else { return nil }
+    let spoken = spokenLanguage
+    let home = currentVariant.isMultilingual && currentLanguage == .auto ? lastOtherLanguage : spoken
+    if renderer.overlay?.showsBothLanguages == true,
+       let spoken, spoken == target, let home, home != target {
+        return (spoken.locale, home.locale, effectiveSourceIsTrusted)
+    }
+    return (spoken?.locale, target.locale, effectiveSourceIsTrusted)
 }
 
 /// Turn live translation on for a target language, or off with nil.
@@ -857,31 +923,33 @@ func applyTranslation(_ target: FluidLanguage?) {
         guard let target else {
             translationBox = nil
             renderer.overlay?.prefersTranslation = false
+            renderer.overlay?.translationBelow = false
             // Whatever is on screen is in the old target language; the next words
             // are the source language again, so do not leave the two mixed.
             renderer.overlay?.markPause()
             return
         }
+        // `auto` leaves the source unset and lets the framework identify it.
+        // Worth knowing that it is identifying per request, on one sentence at
+        // a time, which is the weakest position to ask it from.
+        let pair = translationPair()
+            ?? (source: effectiveSource, target: target.locale, trusted: effectiveSourceIsTrusted)
         let controller = TranslationController(
-            target: target.locale,
-            // `auto` leaves the source unset and lets the framework identify it.
-            // Worth knowing that it is identifying per request, on one sentence at
-            // a time, which is the weakest position to ask it from.
-            source: effectiveSource,
-            trustedSource: effectiveSourceIsTrusted,
+            target: pair.target,
+            source: pair.source,
+            trustedSource: pair.trusted,
             mode: translationMode,
-            onTranslated: { words, speculativeFrom, chunkStarts in
-                renderer.overlay?.setTranslatedWords(words, speculativeFrom: speculativeFrom,
-                                                     chunkStarts: chunkStarts)
-            },
+            onTranslated: { renderer.overlay?.setTranslatedWords($0) },
             onStatus: { message in err(message) },
             onProgress: { fraction, headline in
                 engineBusyMessage = headline.isEmpty ? nil : headline
                 engineBusyProgress = fraction
                 statusMenu?.updateHealthIndicator()
             })
+        controller.onReadiness = { renderer.overlay?.translationProducesOutput = $0 }
         translationBox = controller
         renderer.overlay?.prefersTranslation = true
+        renderer.overlay?.translationBelow = pair.target != target.locale
         err("translating to \(target.displayName) · \(translationMode.displayName)")
         // A fresh decode from here. The multilingual checkpoint latches its
         // language tag for a decode session and the engine reports it once, so
@@ -908,10 +976,13 @@ func applyTranslation(_ target: FluidLanguage?) {
 /// translator believing the source was still whatever the language menu said, and
 /// every request was refused as source-equals-target.
 func refreshTranslationSource() {
-    guard #available(macOS 15, *) else { return }
+    guard #available(macOS 15, *), let pair = translationPair(), let target = translateTo else { return }
     MainActor.assumeIsolated {
-        translation?.setSource(effectiveSource, trusted: effectiveSourceIsTrusted)
+        translation?.setPair(source: pair.source, target: pair.target, trusted: pair.trusted)
     }
+    // Which way round the box draws the pair: the target stays on top either
+    // way — see `OverlayController.translationBelow`.
+    renderer.overlay?.translationBelow = pair.target != target.locale
 }
 
 func applyTranslationMode(_ mode: TranslationMode) {
@@ -1050,6 +1121,9 @@ if useOverlay {
     var textAlignment = UserDefaults.standard.string(forKey: Defaults.textAlignment)
         .flatMap(Pill.TextAlignment.init(rawValue:)) ?? .start
     controller.textAlignment = textAlignment
+    // The original under the translation, from the Translate To menu. Off
+    // unless chosen: `bool(forKey:)` is false for a key never written.
+    controller.showsBothLanguages = UserDefaults.standard.bool(forKey: Defaults.bothLanguages)
 
     // Dials behind those switches, all live-adjustable in the settings window.
     let defaultSize = SubtitleView.defaultMaskSize
@@ -1300,6 +1374,15 @@ if useOverlay {
     menu.currentTranslationID = { translateTo?.rawValue }
     menu.onSelectTranslationMode = { applyTranslationMode($0) }
     menu.currentTranslationMode = { translationMode }
+    menu.showsBothLanguages = { controller.showsBothLanguages }
+    menu.onToggleBothLanguages = {
+        controller.showsBothLanguages.toggle()
+        UserDefaults.standard.set(controller.showsBothLanguages, forKey: Defaults.bothLanguages)
+        err(controller.showsBothLanguages ? "showing both languages"
+                                          : "showing the translation alone")
+        // The direction can depend on it — see `translationPair()`.
+        refreshTranslationSource()
+    }
     menu.screenShareEnabled = { screenShareEnabled }
     menu.onToggleScreenShare = {
         screenShareEnabled.toggle()

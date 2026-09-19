@@ -44,6 +44,12 @@ public struct CaptionStreams {
         pager(stream).boxes
     }
 
+    /// How many boxes have ever left one stream's screen — see
+    /// `StreamPager.closedCount`.
+    public func closedCount(_ stream: Stream) -> Int {
+        pager(stream).closedCount
+    }
+
     public func currentWords(_ stream: Stream) -> [TimedWord] {
         pager(stream).currentWords
     }
@@ -68,9 +74,27 @@ public struct CaptionStreams {
         translatedPager.markFresh()
     }
 
+    /// One stream's next words start a page of their own. For an utterance's
+    /// end, where the source breaks now and the translation only once its last
+    /// words for that utterance have landed — see `OverlayController
+    /// .endUtterance`; the boxes still close one for one.
+    public mutating func markFresh(_ stream: Stream) {
+        switch stream {
+        case .source: sourcePager.markFresh()
+        case .translated: translatedPager.markFresh()
+        }
+    }
+
     public mutating func clear() {
         sourcePager.clear()
         translatedPager.clear()
+    }
+
+    /// Close both pages into their stacks now: for a box that has faded, or
+    /// been emptied by a change, and is wanted under ⌥ from that moment.
+    public mutating func close(depth: Int) {
+        sourcePager.close(depth: depth)
+        translatedPager.close(depth: depth)
     }
 
     public mutating func trim(to depth: Int) {
@@ -102,7 +126,7 @@ public struct CaptionStreams {
                                 allowCarry: Bool,
                                 speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                                 app: String? = nil,
-                                fits: ([String]) -> Int) -> Page {
+                                fits: ([TimedWord]) -> Int) -> Page {
         let before = closed(stream).count
         let visible: [TimedWord]
         switch stream {

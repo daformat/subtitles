@@ -18,7 +18,7 @@ import XCTest
 @testable import CaptionCore
 
 final class CaptionStreamsTests: XCTestCase {
-    private func fits(_ capacity: Int) -> ([String]) -> Int {
+    private func fits(_ capacity: Int) -> ([TimedWord]) -> Int {
         { texts in min(capacity, texts.count) }
     }
 

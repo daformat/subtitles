@@ -19,10 +19,17 @@ public struct StreamPager {
         /// The app whose audio it transcribed, as the tap names the family, or
         /// nil when nothing was known to be playing. The stack wears its icon.
         public let app: String?
+        /// The audio the box covers, from its first word's start to its last
+        /// word's end: what the other language is matched to it by.
+        public let start: TimeInterval
+        public let end: TimeInterval
 
-        public init(text: String, app: String? = nil) {
+        public init(text: String, app: String? = nil, start: TimeInterval = 0,
+                    end: TimeInterval = 0) {
             self.text = text
             self.app = app
+            self.start = start
+            self.end = end
         }
     }
 
@@ -30,6 +37,9 @@ public struct StreamPager {
 
     /// Boxes that have left the screen, oldest first.
     public private(set) var boxes: [Box] = []
+    /// How many have ever left, trimming included: what a reader of `boxes`
+    /// keeps to know which of them it has not seen yet.
+    public private(set) var closedCount = 0
 
     /// The same boxes, as text.
     public var closed: [String] { boxes.map(\.text) }
@@ -51,11 +61,19 @@ public struct StreamPager {
     public mutating func markFresh() { anchor.markFresh() }
 
     public mutating func rewind() { anchor.rewind() }
+
+    /// Close the page on screen into the stack now — see `PageAnchor.close`.
+    public mutating func close(depth: Int) {
+        let banked = anchor.close()
+        guard !banked.isEmpty else { return }
+        append(banked, app: currentApp, depth: depth)
+    }
     public mutating func forgetProgress() { anchor.forgetProgress() }
 
     public mutating func clear() {
         anchor.reset()
         boxes.removeAll()
+        closedCount = 0
         currentApp = nil
     }
 
@@ -82,7 +100,7 @@ public struct StreamPager {
                                 depth: Int, allowCarry: Bool,
                                 speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                                 app: String? = nil,
-                                fits: ([String]) -> Int) -> [TimedWord] {
+                                fits: ([TimedWord]) -> Int) -> [TimedWord] {
         let page = anchor.page(words, chunkStarts: chunkStarts, allowCarry: allowCarry,
                                speculativeFrom: speculativeFrom, fits: fits)
         // Only the first box to close was on screen before this call; any
@@ -101,8 +119,10 @@ public struct StreamPager {
         // A page can close by more than one route in the same beat, an overflow
         // straight after a pause say, and two identical boxes in the stack read
         // as a stutter rather than as history.
-        guard !text.isEmpty, text != boxes.last?.text else { return }
-        boxes.append(Box(text: text, app: app))
+        guard !text.isEmpty, text != boxes.last?.text,
+              let first = words.first, let last = words.last else { return }
+        boxes.append(Box(text: text, app: app, start: first.start, end: last.end))
+        closedCount += 1
         trim(to: depth)
     }
 }

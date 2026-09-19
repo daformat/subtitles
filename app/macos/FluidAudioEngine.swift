@@ -241,6 +241,16 @@ actor FluidAudioEngine {
     /// FLEURS-style code (`fr-FR`). Fires only when it changes, and only for that
     /// variant — the rest are pinned to one language by construction.
     private let onLanguage: @Sendable (String) -> Void
+    /// Speech has stopped for a moment, by the detector's account rather than
+    /// the core's. The core's gate opens at -60 dBFS, which a microphone's room
+    /// never falls below, so on a microphone its pauses never come and a turn
+    /// of a conversation never ends — the next speaker's words ran on into the
+    /// last one's sentence. Fired once per silence, a second in.
+    private let onPause: @Sendable () -> Void
+    private var silentChunks = 0
+    private var heardSpeech = false
+    /// Chunks of no speech — 256 ms each — before a pause is called.
+    private static let pauseAfterChunks = 4
 
     private var processedSeconds = 0.0
     private var computeSeconds = 0.0
@@ -266,6 +276,7 @@ actor FluidAudioEngine {
          onFinal: @escaping @Sendable ([TimedWord]) -> Void,
          onReady: @escaping @Sendable (Bool) -> Void,
          onLanguage: @escaping @Sendable (String) -> Void = { _ in },
+         onPause: @escaping @Sendable () -> Void = {},
          onRTF: @escaping @Sendable (Float) -> Void,
          speakers: SpeakerTracker? = nil,
          vad: VoiceDetector? = nil) {
@@ -278,6 +289,7 @@ actor FluidAudioEngine {
         self.onReady = onReady
         self.onRTF = onRTF
         self.onLanguage = onLanguage
+        self.onPause = onPause
         self.speakers = speakers
         self.vad = vad
     }
@@ -500,6 +512,14 @@ actor FluidAudioEngine {
                 // the detector's 256 ms decision granularity.
                 if !wasSpeech { asrPending.append(contentsOf: history) }
                 asrPending.append(contentsOf: chunk)
+                heardSpeech = true
+                silentChunks = 0
+            } else if heardSpeech {
+                silentChunks += 1
+                if silentChunks == Self.pauseAfterChunks {
+                    heardSpeech = false
+                    onPause()
+                }
             }
             wasSpeech = speech
 
@@ -546,18 +566,23 @@ actor FluidAudioEngine {
             // Poll timings after each chunk rather than using the partial-text
             // callback: the text alone cannot say *when* a word was spoken, and
             // that is what the overlay anchors on.
-            let words = await currentWords()
-            if !words.isEmpty { onWords(words) }
-
             // The multilingual checkpoint emits a leading `<xx-XX>` tag and
             // FluidAudio surfaces it during the streaming decode, not only at the
             // final pass — so on auto-detect this is known within a word or two of
             // speech, which is early enough to point a translator at.
+            //
+            // Before the words, not after: a change of language re-points the
+            // translator, and the first words in the new language must not go
+            // out under the old pair. Sent after them, French read as English
+            // came back as French, and the box showed one language twice.
             if let multilingual, let detected = await multilingual.detectedLanguage(),
                detected != reportedLanguage {
                 reportedLanguage = detected
                 onLanguage(detected)
             }
+
+            let words = await currentWords()
+            if !words.isEmpty { onWords(words) }
 
             if let speakers { await speakers.feed(slice) }
 
@@ -615,6 +640,25 @@ actor FluidAudioEngine {
         return t.trimmingCharacters(in: .whitespaces)
     }
 
+    /// The multilingual checkpoint's language tag, `<xx-XX>`, wherever it
+    /// reaches the text. Upstream strips the leading one; a tag emitted again
+    /// mid-stream — the model re-deciding the language after a pause — comes
+    /// through as a word and was drawn: "priviet. <mt-MT> Jinha". Dropped
+    /// wherever it lands, on its own or glued to the word after it, with the
+    /// word's timing kept for whatever text is left.
+    private static let languageTag =
+        try! NSRegularExpression(pattern: "<[a-zA-Z]{2,3}(?:[-_][a-zA-Z]{2,4})?>")
+
+    private static func untagged(_ words: [TimedWord]) -> [TimedWord] {
+        words.compactMap { word in
+            guard word.text.contains("<") else { return word.text.isEmpty ? nil : word }
+            let text = languageTag.stringByReplacingMatches(
+                in: word.text, range: NSRange(word.text.startIndex..., in: word.text),
+                withTemplate: "").trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? nil : TimedWord(text: text, start: word.start, end: word.end)
+        }
+    }
+
     private static func assemble(_ timings: [TokenTiming]) -> [TimedWord] {
         var out: [TimedWord] = []
         for t in timings {
@@ -627,7 +671,7 @@ actor FluidAudioEngine {
                                      start: last.start, end: t.endTime))
             }
         }
-        return out.filter { !$0.text.isEmpty }
+        return untagged(out)
     }
 
     private static func assemble(tokens: [String], startsMs: [Int]) -> [TimedWord] {
@@ -642,7 +686,7 @@ actor FluidAudioEngine {
                                      start: last.start, end: start))
             }
         }
-        return out.filter { !$0.text.isEmpty }
+        return untagged(out)
     }
 
     /// Drop the recogniser's context without emitting anything.

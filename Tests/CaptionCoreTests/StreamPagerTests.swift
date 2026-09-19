@@ -10,7 +10,7 @@ import XCTest
 
 final class StreamPagerTests: XCTestCase {
     /// A box that holds `capacity` words, standing in for the real text layout.
-    private func fits(_ capacity: Int) -> ([String]) -> Int {
+    private func fits(_ capacity: Int) -> ([TimedWord]) -> Int {
         { texts in min(capacity, texts.count) }
     }
 
@@ -39,6 +39,23 @@ final class StreamPagerTests: XCTestCase {
         var pager = StreamPager()
         pager.ingest(words, chunkStarts: starts, depth: 20, allowCarry: false, fits: fits(6))
         XCTAssertEqual(pager.closed, ["the cat sat down and then", "it slept until the sun rose"])
+    }
+
+    /// A box that fades goes to the stack at once, not when the next words
+    /// arrive: ⌥ is asked for it exactly then. The words after it open a page
+    /// of their own.
+    func testCloseBanksThePageNow() {
+        let (words, starts) = stream(sample)
+        var pager = StreamPager()
+        pager.ingest(Array(words.prefix(4)), chunkStarts: starts, depth: 20, allowCarry: false,
+                     fits: fits(6))
+        XCTAssertEqual(pager.closed, [])
+        pager.close(depth: 20)
+        XCTAssertEqual(pager.closed, ["the cat sat down"])
+        XCTAssertEqual(pager.currentText, "")
+        pager.ingest(words, chunkStarts: starts, depth: 20, allowCarry: false, fits: fits(6))
+        XCTAssertEqual(pager.closed.first, "the cat sat down")
+        XCTAssertFalse(pager.currentText.hasPrefix("the cat"), "closed page must not come back")
     }
 
     /// Boxes overlap on screen so a turnover has something to re-anchor on, but

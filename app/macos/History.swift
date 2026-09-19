@@ -241,19 +241,24 @@ struct HistoryEntry: Hashable {
     let icon: NSImage?
     /// The app's name, for the styles that show it.
     let name: String?
+    /// The other language, under the text, while both are shown — the box's
+    /// pairing as the live box had it. Empty for a single paragraph.
+    let under: String
 
-    init(text: String, icon: NSImage? = nil, name: String? = nil) {
+    init(text: String, icon: NSImage? = nil, name: String? = nil, under: String = "") {
         self.text = text
         self.icon = icon
         self.name = name
+        self.under = under
     }
 
     static func == (a: HistoryEntry, b: HistoryEntry) -> Bool {
-        a.text == b.text && a.icon === b.icon && a.name == b.name
+        a.text == b.text && a.icon === b.icon && a.name == b.name && a.under == b.under
     }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(text)
+        hasher.combine(under)
         if let icon { hasher.combine(ObjectIdentifier(icon)) }
     }
 }
@@ -361,16 +366,49 @@ final class HistoryPillView: NSView {
         return lit
     }
 
+    /// The other language under the text, at the live box's proportions — see
+    /// `SubtitleView.secondary`: smaller, and dimmer by the same fraction of
+    /// this box's own strength.
+    private static func attributedUnder(_ entry: HistoryEntry, style: HistoryStyle,
+                                        measuring: Bool = false) -> NSAttributedString {
+        Pill.attributed(committed: entry.under, tentative: "",
+                        size: style.fontSize * SubtitleView.secondaryScale, measuring: measuring,
+                        opacity: style.textOpacity * SubtitleView.secondaryOpacity,
+                        alignment: style.textAlignment)
+    }
+
+    /// The block the other language adds under the text: its height, gap
+    /// included and capped at `maxLines` of its own size, and the width it
+    /// hugs. `SubtitleView.secondaryBlock`, without the ring margin.
+    private static func underBlock(_ entry: HistoryEntry, style: HistoryStyle,
+                                   maxWidth: CGFloat) -> (height: CGFloat, width: CGFloat)? {
+        guard !entry.under.isEmpty else { return nil }
+        let m = Pill.metrics(attributedUnder(entry, style: style, measuring: true),
+                             textWidth: maxWidth - Pill.inset.width * 2)
+        guard m.lines > 0 else { return nil }
+        let size = style.fontSize * SubtitleView.secondaryScale
+        let capped = min(m.used.height, Pill.lineHeight(ofSize: size) * CGFloat(style.maxLines) + 4)
+        return (SubtitleView.secondaryGap(for: style.fontSize) + ceil(capped),
+                m.used.width + 2 + Pill.inset.width * 2)
+    }
+
     /// Independent of any highlight: a background colour changes no glyph's
     /// advance, so a box measures the same lit or not, and the stack does not
     /// reflow as the query changes.
     static func fittingSize(_ entry: HistoryEntry, style: HistoryStyle,
                             maxWidth: CGFloat) -> NSSize {
-        Pill.fittingSize(
+        var size = Pill.fittingSize(
             Pill.attributed(committed: entry.text, tentative: "", size: style.fontSize,
                             measuring: true),
             size: style.fontSize, maxWidth: maxWidth, maxLines: style.maxLines, pad: 0,
             room: room(entry, style: style))
+        // The other language under the text adds its block, as it does on the
+        // live box: as tall as both, as wide as the wider.
+        if size.height > 0, let block = underBlock(entry, style: style, maxWidth: maxWidth) {
+            size.height += block.height
+            size.width = min(max(size.width, block.width), maxWidth)
+        }
+        return size
     }
 
     func fittingSize(maxWidth: CGFloat) -> NSSize {
@@ -413,8 +451,15 @@ final class HistoryPillView: NSView {
             Pill.draw(icon: icon, name: entry.name, style: style.iconStyle, on: pill,
                       size: style.fontSize, fill: style.fill, rtl: rtl, scale: scale)
         }
-        attributed.draw(with: Pill.textRect(in: pill, room: room),
-                        options: [.usesLineFragmentOrigin, .usesFontLeading])
+        let textRect = Pill.textRect(in: pill, room: room)
+        attributed.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+        // The other language, in the room `fittingSize` added under the text.
+        if let block = Self.underBlock(entry, style: style, maxWidth: bounds.width) {
+            let under = NSRect(x: textRect.minX, y: textRect.minY, width: textRect.width,
+                               height: block.height - SubtitleView.secondaryGap(for: style.fontSize))
+            Self.attributedUnder(entry, style: style)
+                .draw(with: under, options: [.usesLineFragmentOrigin, .usesFontLeading])
+        }
     }
 }
 
@@ -1090,7 +1135,10 @@ final class HistoryController {
 
         let matching = query.isEmpty
             ? shown
-            : shown.filter { HistorySearch.matches($0.text, query: query) }
+            : shown.filter {
+                HistorySearch.matches($0.text, query: query)
+                    || HistorySearch.matches($0.under, query: query)
+            }
         // Newest first: index 0 is the box nearest the live one, which is where
         // the eye goes and so where the animation starts.
         let ordered = Array(matching.reversed())

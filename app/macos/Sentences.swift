@@ -88,6 +88,14 @@ final class TranslationPipeline {
     private var tail = ""
     private var tailSource = ""
     private var translatedTail = ""
+    /// What `translatedTail` was made from, and the span it covers, as sent —
+    /// the tail itself moves on underneath. It is drawn over its own span until
+    /// a settled sentence reaches past it or a newer translation replaces it,
+    /// so a clause promoted to a sentence stays on screen, dimmed, while its
+    /// settled form is fetched. Cleared on promotion it vanished for the round
+    /// trip — a blink, whenever another request happened to be in flight.
+    private var translatedTailSource = ""
+    private var translatedTailSpan: (start: TimeInterval, end: TimeInterval) = (0, 0)
     private var tailStart: TimeInterval = 0
     private var tailEnd: TimeInterval = 0
 
@@ -114,7 +122,22 @@ final class TranslationPipeline {
     /// box overflowed because of it and could only evict *settled* words to make
     /// space, so a growing tail pushed out text the reader had not finished with,
     /// and the tail itself replaced itself wholesale instead of filling the box.
-    private let onTranslated: ([TimedWord], TimeInterval, [TimeInterval]) -> Void
+    private let onTranslated: (TranslatedTranscript) -> Void
+    /// The transcript the last request was made from: what goes under the
+    /// translation, matched by span, so the original shown is always the one
+    /// the words on screen render.
+    private var lastIngested: [TimedWord] = []
+    /// Where in the recogniser's transcript the current turn begins. The
+    /// transcript runs on across a whole conversation; a pause or an endpoint
+    /// ends a turn here, and what came before it is never settled again.
+    private var turnStart = 0
+    /// Bumped when a turn closes or restarts, so a result still on its way for
+    /// the state before is dropped rather than shown.
+    private var turnGeneration = 0
+    /// Words that arrived while a turn was closing: the next turn's, taken up
+    /// once the close has landed. `heldEnded` if a boundary came with them.
+    private var heldWords: [TimedWord]?
+    private var heldEnded = false
     private let onError: (String) -> Void
     /// Apple refused the pair as source-equals-target. Authoritative and always
     /// current, unlike the recogniser's detection — see the note in `pump`.
@@ -124,7 +147,7 @@ final class TranslationPipeline {
     var onSameLanguageHandler: (() -> Void)?
 
     init(translator: Translator,
-         onTranslated: @escaping ([TimedWord], TimeInterval, [TimeInterval]) -> Void,
+         onTranslated: @escaping (TranslatedTranscript) -> Void,
          onError: @escaping (String) -> Void = { _ in },
          onSameLanguage: @escaping () -> Void = {}) {
         self.translator = translator
@@ -137,7 +160,20 @@ final class TranslationPipeline {
     func ingest(_ words: [TimedWord], ended: Bool = false) {
         guard !words.isEmpty else { return }
         Self.trace("ingest \(words.count) words mode=\(mode.rawValue) ended=\(ended)")
+        // A transcript that has got shorter is a restarted one: the turn begins
+        // with it.
+        if words.count < turnStart { turnStart = 0 }
+        if pendingReset {
+            // The previous turn is still closing — its last request is out — and
+            // these words are the next turn's. Held until it has closed, so its
+            // settle carries nothing of them and they are translated in a turn
+            // of their own, under the pair their language asks for.
+            heldWords = words
+            heldEnded = heldEnded || ended
+            return
+        }
         seenWords = words.count
+        lastIngested = words
 
         if mode == .speculative {
             // No settled text at all: the whole transcript is provisional and is
@@ -160,12 +196,12 @@ final class TranslationPipeline {
 
         // Whatever the buffer has not released yet is the speech in progress.
         let remainder = words.suffix(from: min(buffer.released, words.count))
-        if remainder.isEmpty {
-            tail = ""
-        } else {
-            tail = remainder.map(\.text).joined(separator: " ")
-            tailStart = remainder.first!.start
-            tailEnd = remainder.last!.end
+        // The translated tail is left as it is: it keeps its own span, and
+        // `emit` stops drawing it once settled text reaches past it.
+        tail = remainder.map(\.text).joined(separator: " ")
+        if let first = remainder.first, let last = remainder.last {
+            tailStart = first.start
+            tailEnd = last.end
         }
         pump()
     }
@@ -176,10 +212,11 @@ final class TranslationPipeline {
     /// pixels either way; this only clears what would otherwise accumulate for the
     /// life of the session.
     func finish() {
+        turnStart = max(turnStart, lastIngested.count)
         if inFlight || !queued.isEmpty {
             pendingReset = true
         } else {
-            reset()
+            closeTurn()
         }
     }
 
@@ -196,27 +233,54 @@ final class TranslationPipeline {
     /// whatever is said next.
     func discardPending() {
         buffer.skip(to: seenWords)
-        queued.removeAll()
-        order.removeAll()
-        done.removeAll()
-        tail = ""
-        tailSource = ""
-        translatedTail = ""
+        turnStart = seenWords
+        heldWords = nil
+        heldEnded = false
+        clearTurn()
         pendingReset = false
-        suspended = false
     }
 
-    /// A new utterance begins: what follows is unrelated to what came before.
-    func reset() {
-        buffer.reset()
+    /// The turn is over and its last translation has landed: from here on the
+    /// transcript's earlier words are another turn's. Not a rewind of the
+    /// buffer, which the recogniser keeps growing across a whole conversation:
+    /// rewound, every earlier turn was settled and translated again, under
+    /// whatever pair the new turn had brought. Words that arrived while the
+    /// turn was closing are taken up now, as the next one.
+    private func closeTurn() {
+        buffer.skip(to: turnStart)
+        clearTurn()
+        pendingReset = false
+        if let held = heldWords {
+            heldWords = nil
+            let ended = heldEnded
+            heldEnded = false
+            ingest(held, ended: ended)
+            if ended { finish() }
+        }
+    }
+
+    /// The pair changed under the current turn: translate it again from its
+    /// first word, the new way. Nothing of it is kept — a translation the
+    /// wrong way round is no head start — and a result still on its way from
+    /// the old pair is dropped by the generation check in `pump`. While a turn
+    /// is closing there is nothing to restart: the words that brought the new
+    /// pair are held, and go out under it once the turn has closed.
+    func restartTurn() {
+        guard !pendingReset else { return }
+        buffer.restart(at: turnStart)
+        clearTurn()
+    }
+
+    private func clearTurn() {
         queued.removeAll()
         order.removeAll()
         done.removeAll()
         tail = ""
         tailSource = ""
         translatedTail = ""
-        pendingReset = false
+        lastIngested = []
         suspended = false
+        turnGeneration += 1
     }
 
     /// `SUBS_DEBUG_TRANSLATE=1` traces the pipeline, mirroring SUBS_DEBUG_PAGING.
@@ -243,8 +307,10 @@ final class TranslationPipeline {
         let batch = queued
         queued.removeAll()
         let sending = needsTail ? tail : nil
+        let span = (start: tailStart, end: tailEnd)
         if let sending { tailSource = sending }
         inFlight = true
+        let generation = turnGeneration
 
         Task { [weak self] in
             guard let self else { return }
@@ -252,17 +318,28 @@ final class TranslationPipeline {
             Self.trace("sending \(texts.count) text(s)")
             do {
                 let results = try await self.translator.translate(texts)
-                for (sentence, text) in zip(batch, results) {
-                    self.done[sentence.id] = CaptionCase.matchingLeading(text, to: sentence.text)
+                // The turn restarted under another pair while this was out: the
+                // answer is the old pair's, and is not shown.
+                if generation == self.turnGeneration {
+                    for (sentence, text) in zip(batch, results) {
+                        self.done[sentence.id] = CaptionCase.matchingLeading(text, to: sentence.text)
+                    }
+                    // Kept if the tail is what was sent or has only grown since:
+                    // the translation of its first words is still that, over the
+                    // span sent, and the follow-up pump below is already fetching
+                    // the rest. Dropped if the tail became something else.
+                    if let sending, results.count == texts.count,
+                       self.tail == sending || self.tail.hasPrefix(sending + " ") {
+                        self.translatedTail = CaptionCase.matchingLeading(
+                            results[results.count - 1], to: sending)
+                        self.translatedTailSource = sending
+                        self.translatedTailSpan = span
+                    }
+                    Self.trace("got \(results.count) result(s)")
+                    self.emit()
+                } else {
+                    Self.trace("dropped \(results.count) result(s) from a restarted turn")
                 }
-                // Drop it if the tail moved on while this was in flight; the
-                // follow-up pump below is already fetching the current one.
-                if let sending, sending == self.tail, results.count == texts.count {
-                    self.translatedTail = CaptionCase.matchingLeading(
-                        results[results.count - 1], to: sending)
-                }
-                Self.trace("got \(results.count) result(s)")
-                self.emit()
             } catch {
                 Self.trace("threw: \(error)")
                 // Nothing is put back, and `tailSource` deliberately keeps the
@@ -272,6 +349,17 @@ final class TranslationPipeline {
                 // forever. Leaving it set means the retry happens when the
                 // speaker produces different words, which is the only time a
                 // retry could succeed anyway.
+                //
+                // Except for a session that stopped answering. That is not a
+                // refusal, the translator has already replaced the session, and
+                // a round of it costs ten seconds rather than a spin — so the
+                // sentences go back to the front of the queue and the tail is
+                // marked unsent, and the pump below asks the new session. This
+                // is how a box that stalled mid-sentence still settles.
+                if error is Translator.TimedOut, generation == self.turnGeneration {
+                    self.queued = batch + self.queued
+                    self.tailSource = ""
+                } else
                 // `unsupportedLanguagePairing` on a pair we checked as supported
                 // means the audio turned out to already be the target language:
                 // en → en is refused outright. This is the *fresh* answer to that
@@ -288,7 +376,7 @@ final class TranslationPipeline {
                 }
             }
             self.inFlight = false
-            if self.pendingReset, self.queued.isEmpty { self.reset() }
+            if self.pendingReset, self.queued.isEmpty { self.closeTurn() }
             self.pump()
         }
     }
@@ -311,8 +399,12 @@ final class TranslationPipeline {
             // Nothing settles in this mode, so there are no boundaries to carry
             // and nothing to dim: it is all provisional, and a box drawn entirely
             // in the dimmed style would just look broken.
-            onTranslated(Self.spread(translatedTail, from: tailStart, to: tailEnd),
-                         .greatestFiniteMagnitude, [])
+            let words = Self.spread(translatedTail, from: translatedTailSpan.start,
+                                    to: translatedTailSpan.end)
+            let passedThrough = TranslatedTranscript.sameWords(translatedTail, translatedTailSource)
+            onTranslated(TranslatedTranscript(
+                words: words, speculativeFrom: .greatestFiniteMagnitude, chunkStarts: [],
+                source: passedThrough ? [] : lastIngested, settlesUtterance: pendingReset))
             return
         }
 
@@ -337,15 +429,50 @@ final class TranslationPipeline {
         // to `starts`: a clause that has not settled is not somewhere to carry a
         // page break to, since it will be rewritten as the speaker finishes it.
         var speculativeFrom = TimeInterval.greatestFiniteMagnitude
-        if !translatedTail.isEmpty {
-            let spread = Self.spread(translatedTail, from: tailStart, to: tailEnd)
+        if !translatedTail.isEmpty, !settledReaches(past: translatedTailSpan.start) {
+            let spread = Self.spread(translatedTail, from: translatedTailSpan.start,
+                                     to: translatedTailSpan.end)
             if let first = spread.first {
                 speculativeFrom = first.start
                 out.append(contentsOf: spread)
             }
         }
         guard !out.isEmpty else { return }
-        onTranslated(out, speculativeFrom, starts)
+        onTranslated(TranslatedTranscript(
+            words: out, speculativeFrom: speculativeFrom, chunkStarts: starts,
+            source: original(), settlesUtterance: pendingReset))
+    }
+
+    /// The transcript for under the translation, less whatever came back as
+    /// itself. A sentence the translator returned unchanged was already in the
+    /// language asked for — the other speaker's words, in a transcript that
+    /// ran on across a change of speaker without a pause to split it — and it
+    /// is on screen once, above; under it too would be the same language
+    /// twice. Spans rather than words, since the translated words are timed
+    /// over the sentence they render and the overlay pairs by span.
+    private func original() -> [TimedWord] {
+        var passedThrough: [(start: TimeInterval, end: TimeInterval)] = []
+        for sentence in order {
+            guard let text = done[sentence.id],
+                  TranslatedTranscript.sameWords(text, sentence.text) else { continue }
+            passedThrough.append((sentence.start, sentence.end))
+        }
+        if !translatedTail.isEmpty,
+           TranslatedTranscript.sameWords(translatedTail, translatedTailSource) {
+            passedThrough.append(translatedTailSpan)
+        }
+        guard !passedThrough.isEmpty else { return lastIngested }
+        return lastIngested.filter { word in
+            !passedThrough.contains { $0.start <= word.start && word.start < $0.end }
+        }
+    }
+
+    /// Whether settled text now reaches past `time`: the words a translated
+    /// tail rendered have been released as a sentence and that sentence has
+    /// come back, so the tail is superseded and not drawn again. Until then
+    /// it stays, dimmed, in its place.
+    private func settledReaches(past time: TimeInterval) -> Bool {
+        order.contains { done[$0.id] != nil && $0.end > time + 0.001 }
     }
 
     private static func spread(_ text: String,

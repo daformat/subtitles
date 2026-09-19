@@ -66,6 +66,21 @@ public struct PageAnchor {
     /// that faded out from under them. Whatever is on screen closes.
     public mutating func markFresh() { freshNext = true }
 
+    /// Close the page now. What `markFresh` would have done at the next call,
+    /// done here, and what left the screen handed back: a box that faded goes
+    /// to the stack at once rather than when the next words happen to arrive —
+    /// ⌥ is asked for it exactly then. The next words start a page of their own.
+    public mutating func close() -> [TimedWord] {
+        freshNext = false
+        let banked = currentWords.filter { $0.start >= previousEnd }
+        start = latest
+        previousEnd = latest
+        barrier = latest
+        lastCarried = -.greatestFiniteMagnitude
+        currentWords = []
+        return banked
+    }
+
     /// Begin again from the start of whatever is available. For the case where an
     /// anchor kept across a language swap turns out to sit past everything the
     /// other rendering has.
@@ -99,6 +114,9 @@ public struct PageAnchor {
     /// `fits` measures how many of these words fit the box *as it will be drawn*,
     /// which includes any dimmed tail beside them. Measuring without it is what
     /// made the stack lag: the box overflowed on text the stack could not see.
+    /// It is handed the words with their times rather than their text alone, so
+    /// a caller drawing something else under them — the original under a
+    /// translation — can measure that too, by the span the words cover.
     /// `speculativeFrom` is where the unsettled tail begins, and the page will not
     /// break at or past it.
     ///
@@ -111,7 +129,7 @@ public struct PageAnchor {
     public mutating func page(_ words: [TimedWord], chunkStarts: [TimeInterval],
                               allowCarry: Bool,
                               speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
-                              fits: ([String]) -> Int) -> Page {
+                              fits: ([TimedWord]) -> Int) -> Page {
         guard let newest = words.last else { return Page(visible: currentWords, closed: []) }
 
         // Time running backwards means the recogniser restarted its transcript,
@@ -151,7 +169,7 @@ public struct PageAnchor {
         }
 
         while true {
-            let fitted = fits(visible.map(\.text))
+            let fitted = fits(visible)
             if fitted >= visible.count { break }   // it all fits
             if fitted <= 0 { break }               // one word wider than the box
 

@@ -11,7 +11,7 @@ import XCTest
 @testable import CaptionCore
 
 final class PageAnchorTests: XCTestCase {
-    private func fits(_ capacity: Int) -> ([String]) -> Int {
+    private func fits(_ capacity: Int) -> ([TimedWord]) -> Int {
         { texts in min(capacity, texts.count) }
     }
 

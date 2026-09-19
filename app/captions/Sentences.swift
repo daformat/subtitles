@@ -162,6 +162,10 @@ public struct SentenceBuffer {
     /// across a whole utterance, so `reset` would settle it all again from the
     /// beginning. Skipping forward drops the past instead of repeating it.
     public mutating func skip(to count: Int) { consumed = max(consumed, count) }
+
+    /// Begin again from `count`, whatever has been released since: for a turn
+    /// to be translated again another way.
+    public mutating func restart(at count: Int) { consumed = count }
 }
 
 /// How much the translator is allowed to guess ahead of the speaker.
