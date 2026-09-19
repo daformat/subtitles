@@ -3,6 +3,10 @@
 // Captures system audio output with no virtual driver and no ScreenCaptureKit,
 // so the user sees the lighter audio-capture permission rather than the Screen
 // Recording prompt. Validated in Spike 0B; see PLAN.md §8b.
+//
+// The same object also reads the microphone — the default input device, taken
+// directly with an IOProc and no tap — so the rest of the app has one capture
+// to prepare, start and stop whichever the source is.
 
 import CSubs
 import AppKit
@@ -14,6 +18,8 @@ enum TapError: Error, CustomStringConvertible {
     case unsupportedOS
     case coreAudio(String, OSStatus)
     case noOutputDevice
+    case noInputDevice
+    case inputFormat(String)
     case notPrepared
     case noProcesses(String)
 
@@ -23,6 +29,10 @@ enum TapError: Error, CustomStringConvertible {
             return "process taps require macOS 14.2 or later"
         case .noOutputDevice:
             return "no default output device"
+        case .noInputDevice:
+            return "no input device"
+        case let .inputFormat(what):
+            return "unusable input format: \(what)"
         case .notPrepared:
             return "start() called before prepare()"
         case let .noProcesses(family):
@@ -65,11 +75,20 @@ struct AudioSourceEntry: Equatable {
 /// (hit in Spike 0B). IDs are re-resolved immediately before the tap is built.
 enum AudioSource: Equatable {
     case allSystemAudio
+    /// The default input device — whatever Sound settings has as the input.
+    case microphone
     case app(id: String, name: String)
+
+    /// The id the microphone goes by where a source is a string: the persisted
+    /// source, and the app a box belongs to. No bundle id looks like this, and
+    /// a copy of the app from before the microphone reads it as an app that has
+    /// gone and falls back to all system audio.
+    static let microphoneID = "microphone"
 
     var label: String {
         switch self {
         case .allSystemAudio: return "All system audio"
+        case .microphone: return "Microphone"
         case let .app(_, name): return name
         }
     }
@@ -79,15 +98,32 @@ final class SystemAudioTap {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var tapDescription: CATapDescription?
     private var aggID = AudioObjectID(kAudioObjectUnknown)
+    /// The microphone's device, which stands in for the tap and the aggregate.
+    private var inputDevice = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
+    /// The device the IOProc is on — the aggregate for a tap, the input device
+    /// for the microphone. Teardown has to address the same one.
+    private var procHost = AudioObjectID(kAudioObjectUnknown)
     private(set) var format = TapFormat(sampleRate: 48000, channels: 2, isInterleaved: true)
     private(set) var source: AudioSource = .allSystemAudio
 
     /// Called on Core Audio's realtime thread. Must not allocate, lock, or log.
     private let onAudio: (UnsafePointer<Float>, Int) -> Void
 
+    /// Called on the main queue when Sound settings' input changes, or the
+    /// current one goes — AirPods connecting, a USB microphone unplugged —
+    /// while the microphone is the source. Not followed from in here: the new
+    /// device's format may differ, and that is the caller's to handle.
+    var onDefaultInputChanged: (() -> Void)?
+
     init(onAudio: @escaping (UnsafePointer<Float>, Int) -> Void) {
         self.onAudio = onAudio
+        var addr = Self.address(kAudioHardwarePropertyDefaultInputDevice)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, .main) {
+            [weak self] _, _ in
+            guard let self, self.source == .microphone else { return }
+            self.onDefaultInputChanged?()
+        }
     }
 
     // MARK: - property helpers
@@ -131,6 +167,59 @@ final class SystemAudioTap {
             throw TapError.noOutputDevice
         }
         return uid
+    }
+
+    // MARK: - microphone
+
+    static func defaultInputDevice() throws -> AudioObjectID {
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var addr = address(kAudioHardwarePropertyDefaultInputDevice)
+        let err = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                             &addr, 0, nil, &size, &device)
+        guard err == noErr else { throw TapError.coreAudio("get default input device", err) }
+        guard device != kAudioObjectUnknown else { throw TapError.noInputDevice }
+        return device
+    }
+
+    /// The default input's name as Sound settings shows it, or nil with no
+    /// input at all. Needs no grant: it is a property read, not IO.
+    static func defaultInputName() -> String? {
+        guard let device = try? defaultInputDevice() else { return nil }
+        return cfString(device, kAudioObjectPropertyName)
+    }
+
+    /// What the device's IOProc will deliver: the virtual format of its first
+    /// input stream. Read from the stream itself rather than the device's
+    /// stream-format property, which is deprecated and reads the same stream.
+    private static func inputFormat(of device: AudioObjectID) throws -> TapFormat {
+        var streamsAddr = address(kAudioDevicePropertyStreams, kAudioDevicePropertyScopeInput)
+        var size: UInt32 = 0
+        var err = AudioObjectGetPropertyDataSize(device, &streamsAddr, 0, nil, &size)
+        guard err == noErr else { throw TapError.coreAudio("get input streams", err) }
+        var streams = [AudioObjectID](repeating: 0,
+                                      count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard !streams.isEmpty else { throw TapError.noInputDevice }
+        err = AudioObjectGetPropertyData(device, &streamsAddr, 0, nil, &size, &streams)
+        guard err == noErr else { throw TapError.coreAudio("get input streams", err) }
+
+        var asbd = AudioStreamBasicDescription()
+        var asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var fmtAddr = address(kAudioStreamPropertyVirtualFormat)
+        err = AudioObjectGetPropertyData(streams[0], &fmtAddr, 0, nil, &asbdSize, &asbd)
+        guard err == noErr else { throw TapError.coreAudio("get input stream format", err) }
+        // The HAL hands clients Float32 whatever the hardware speaks, so this is
+        // a guard rather than a code path: the sink reads the buffers as floats.
+        guard asbd.mFormatID == kAudioFormatLinearPCM,
+              asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0,
+              asbd.mBitsPerChannel == 32, asbd.mChannelsPerFrame > 0 else {
+            throw TapError.inputFormat(
+                "id \(asbd.mFormatID), \(asbd.mBitsPerChannel)-bit, flags \(asbd.mFormatFlags)")
+        }
+        return TapFormat(
+            sampleRate: asbd.mSampleRate,
+            channels: asbd.mChannelsPerFrame,
+            isInterleaved: (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0)
     }
 
     // MARK: - process enumeration
@@ -274,6 +363,19 @@ final class SystemAudioTap {
 
         let desc: CATapDescription
         switch source {
+        case .microphone:
+            // No tap and no aggregate: the input device is read as it is, and
+            // its own format is what the sink gets. A microphone is usually
+            // mono and not always 48 kHz, which is why the caller compares what
+            // this returns with what the core was built for.
+            let device = try Self.defaultInputDevice()
+            format = try Self.inputFormat(of: device)
+            inputDevice = device
+            self.source = .microphone
+            FileHandle.standardError.write(
+                ("microphone → \(Self.cfString(device, kAudioObjectPropertyName) ?? "?") "
+                    + "\(Int(format.sampleRate)) Hz, \(format.channels) ch\n").data(using: .utf8)!)
+            return format
         case .allSystemAudio:
             // Do NOT set isExclusive here. The `...ButExcludeProcesses:`
             // initializer sets it true, meaning "the list is an exclusion list" —
@@ -334,14 +436,21 @@ final class SystemAudioTap {
         return format
     }
 
-    /// Builds the aggregate device and starts IO. `prepare()` must have run first.
+    /// Starts IO. `prepare()` must have run first.
+    ///
+    /// A tap needs an aggregate device built for its IOProc to run on; the
+    /// microphone's IOProc runs on the input device itself.
     func start() throws {
+        // Already running. Stacking a second IOProc on one device leaks the
+        // first the same way `prepare()` describes.
+        guard procID == nil else { return }
+        if inputDevice != kAudioObjectUnknown {
+            try installIOProc(on: inputDevice, allBuffers: false)
+            return
+        }
         guard let desc = tapDescription else { throw TapError.notPrepared }
-        // Already running. Stacking a second aggregate on one tap leaks the first
-        // device and its IOProc the same way — see `prepare()`.
-        guard procID == nil, aggID == kAudioObjectUnknown else { return }
+        guard aggID == kAudioObjectUnknown else { return }
         let outputUID = try Self.defaultOutputUID()
-        var err: OSStatus = noErr
 
         // Private aggregate device so it never shows up in Sound settings.
         let aggDescription: [String: Any] = [
@@ -357,16 +466,23 @@ final class SystemAudioTap {
                 kAudioSubTapUIDKey: desc.uuid.uuidString,
             ]],
         ]
-        err = AudioHardwareCreateAggregateDevice(aggDescription as CFDictionary, &aggID)
+        let err = AudioHardwareCreateAggregateDevice(aggDescription as CFDictionary, &aggID)
         guard err == noErr else {
             throw TapError.coreAudio("AudioHardwareCreateAggregateDevice", err)
         }
+        try installIOProc(on: aggID, allBuffers: true)
+    }
 
-        // Realtime callback: hand samples straight to the core and return.
+    /// The realtime callback on `device`: hand samples straight to the core and
+    /// return. Every buffer for the aggregate, whose input is the tap's stream;
+    /// the first only for a microphone, since an interface that splits its
+    /// inputs into streams would otherwise feed each of them to the sink in
+    /// turn as though they were one.
+    private func installIOProc(on device: AudioObjectID, allBuffers: Bool) throws {
         let sink = onAudio
-        err = AudioDeviceCreateIOProcIDWithBlock(&procID, aggID, nil) { _, input, _, _, _ in
+        var err = AudioDeviceCreateIOProcIDWithBlock(&procID, device, nil) { _, input, _, _, _ in
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
-            for buffer in abl {
+            for buffer in abl.prefix(allBuffers ? abl.count : 1) {
                 guard let data = buffer.mData else { continue }
                 let count = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
                 if count > 0 {
@@ -377,24 +493,21 @@ final class SystemAudioTap {
         guard err == noErr else {
             throw TapError.coreAudio("AudioDeviceCreateIOProcIDWithBlock", err)
         }
+        procHost = device
 
-        err = AudioDeviceStart(aggID, procID)
+        err = AudioDeviceStart(device, procID)
         guard err == noErr else { throw TapError.coreAudio("AudioDeviceStart", err) }
     }
 
-    /// Tear down and re-create the tap against a different source.
-    ///
-    /// Returns false if the new source produces a different stream format — the
-    /// core's resampler is configured once at startup from the initial format, so
-    /// a change would need the engine rebuilt. In practice every process tap
-    /// reports 48 kHz stereo, so this is a guard rather than a code path.
-    @discardableResult
-    func switchTo(source: AudioSource) throws -> Bool {
-        let previous = format
+    /// Take `source` as the one to bring up next, tearing the current one down
+    /// now. Nothing is built here: `resumeCapture` in main.swift does that, so
+    /// a switch made while paused waits for the resume the way a variant switch
+    /// does — and so the new format can be compared with the core's before a
+    /// sample arrives. Replaces a `switchTo` that prepared and started in one
+    /// go and could only report a format change after the fact.
+    func select(_ source: AudioSource) {
         stop()
-        let newFormat = try prepare(source: source)
-        try start()
-        return newFormat == previous
+        self.source = source
     }
 
     /// Tear down IO, then the aggregate, then the tap — that order is required.
@@ -416,10 +529,17 @@ final class SystemAudioTap {
         }
 
         if let procID {
-            check("AudioDeviceStop", AudioDeviceStop(aggID, procID))
-            // Only forget the IOProc once it is genuinely gone.
-            if check("AudioDeviceDestroyIOProcID", AudioDeviceDestroyIOProcID(aggID, procID)) {
+            _ = check("AudioDeviceStop", AudioDeviceStop(procHost, procID))
+            // Only forget the IOProc once it is genuinely gone — which it also
+            // is when its device is: a microphone unplugged takes its IOProcs
+            // with it, and keeping the ID would refuse every later start as
+            // already running.
+            let destroyed = AudioDeviceDestroyIOProcID(procHost, procID)
+            let deviceGone = destroyed == kAudioHardwareBadDeviceError
+                || destroyed == kAudioHardwareBadObjectError
+            if check("AudioDeviceDestroyIOProcID", destroyed) || deviceGone {
                 self.procID = nil
+                procHost = AudioObjectID(kAudioObjectUnknown)
             }
         }
         if aggID != kAudioObjectUnknown,
@@ -430,6 +550,7 @@ final class SystemAudioTap {
            check("AudioHardwareDestroyProcessTap", AudioHardwareDestroyProcessTap(tapID)) {
             tapID = AudioObjectID(kAudioObjectUnknown)
         }
+        inputDevice = AudioObjectID(kAudioObjectUnknown)
         tapDescription = nil
         return ok
     }

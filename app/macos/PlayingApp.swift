@@ -55,6 +55,7 @@ final class AppCatalog {
     }
 
     private static func resolveName(_ family: String) -> String {
+        if family == AudioSource.microphoneID { return AudioSource.microphone.label }
         if family.hasPrefix("pid:") {
             guard let pid = pid_t(family.dropFirst(4)) else { return family }
             return NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)"
@@ -69,9 +70,10 @@ final class AppCatalog {
         return family.split(separator: ".").last.map(String.init) ?? family
     }
 
-    /// The family ids are SystemAudioTap's: a bundle id, or `pid:N` for an
-    /// unbundled process.
+    /// The family ids are SystemAudioTap's: a bundle id, `pid:N` for an
+    /// unbundled process, or the microphone's own.
     private static func resolve(_ family: String) -> NSImage? {
+        if family == AudioSource.microphoneID { return microphoneIcon() }
         if family.hasPrefix("pid:") {
             guard let pid = pid_t(family.dropFirst(4)) else { return nil }
             return NSRunningApplication(processIdentifier: pid)?.icon
@@ -86,6 +88,30 @@ final class AppCatalog {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
         return nil
+    }
+
+    /// The microphone's stand-in for an app icon: a white mic on a red rounded
+    /// square, drawn on the app-icon grid — the square inset the way an app's
+    /// is on its canvas — so it sits in a row of real icons at their size. The
+    /// red is the system's, the one the microphone button wears in dictation
+    /// and Siri (#FF453A), fixed rather than `.systemRed` so the tile is the
+    /// same colour whichever appearance the box is drawn in.
+    private static func microphoneIcon() -> NSImage {
+        NSImage(size: NSSize(width: 64, height: 64), flipped: false) { canvas in
+            let tile = canvas.insetBy(dx: canvas.width * 0.1, dy: canvas.height * 0.1)
+            NSColor(srgbRed: 1.0, green: 0.271, blue: 0.227, alpha: 1).setFill()
+            NSBezierPath(roundedRect: tile, xRadius: tile.width * 0.22, yRadius: tile.height * 0.22)
+                .fill()
+            let configuration = NSImage.SymbolConfiguration(pointSize: tile.height * 0.55,
+                                                            weight: .medium)
+                .applying(.init(paletteColors: [.white]))
+            guard let glyph = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration) else { return true }
+            let size = glyph.size
+            glyph.draw(in: NSRect(x: tile.midX - size.width / 2, y: tile.midY - size.height / 2,
+                                  width: size.width, height: size.height))
+            return true
+        }
     }
 }
 
@@ -151,6 +177,8 @@ final class PlayingAppMonitor {
         switch source {
         case let .app(id, _):
             deliver(id, why: "the source")
+        case .microphone:
+            deliver(AudioSource.microphoneID, why: "the source")
         case .allSystemAudio:
             // A poll still on its way is left to finish; the next is a second off.
             guard !inFlight else { return }

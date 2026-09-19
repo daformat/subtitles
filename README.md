@@ -136,8 +136,9 @@ red means recording, and nothing is ever written anywhere.
 
 Every box names the app it is transcribing: a row above the caption with the
 app's icon and name, or a tab on the box's top edge, or nothing, under **Show
-Source App Name**. With one app chosen as the source that is the app; with all
-system audio it is whichever app Core Audio reports playing, held steady across
+Source App Name**. With one app chosen as the source that is the app, and with
+the microphone a microphone; with all system audio it is whichever app Core
+Audio reports playing, held steady across
 notification sounds: a newcomer is listened to for three seconds and takes the
 name only if it is really making sound. Each box in the ⌥ stack keeps the app
 its words came from. Text starts from its script's edge, the left or, for
@@ -231,11 +232,14 @@ measured RTF went from 0.13–0.18 to 0.27–0.33 with it on.
 `pkill -USR2 -f Subtitles.app` does the same for sources, cycling over whatever is
 audible right now.
 
-**Listen To** picks a source. Entries are app *families*: selecting "Google Chrome"
-captures Chrome and all its helper processes, which matters because browsers and
-Electron apps never play audio from their main process. Switching clears whatever
-is on screen and resets the recogniser, so the new app starts a fresh sentence
-rather than continuing the last one.
+**Listen To** picks a source: all system audio, the microphone, or one app. App
+entries are *families*: selecting "Google Chrome" captures Chrome and all its
+helper processes, which matters because browsers and Electron apps never play
+audio from their main process. The microphone is whichever input Sound settings
+has, followed when that changes, and it is a grant of its own — macOS asks the
+first time it is chosen, not before. Switching clears whatever is on screen and
+resets the recogniser, so the new source starts a fresh sentence rather than
+continuing the last one.
 
 ### Command line
 

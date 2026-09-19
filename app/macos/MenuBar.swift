@@ -519,6 +519,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         all.target = self
         all.state = current == .allSystemAudio ? .on : .off
         sub.addItem(all)
+        sub.addItem(microphoneItem(current: current))
 
         let sources = SystemAudioTap.audioSources()
         let playing = sources.filter(\.isPlaying)
@@ -557,7 +558,28 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// The default input, named as Sound settings names it when that already
+    /// says microphone — "MacBook Pro Microphone" — and as "Microphone (AirPods
+    /// Pro)" otherwise, so the row reads as the microphone whatever is plugged
+    /// in. With no input at all the row says so and cannot be picked. Reading
+    /// the name asks nothing of the user: the microphone's grant is requested
+    /// when the row is chosen, not when the menu opens.
+    private func microphoneItem(current: AudioSource) -> NSMenuItem {
+        guard let device = SystemAudioTap.defaultInputName() else {
+            let none = NSMenuItem(title: "Microphone (none connected)", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            return none
+        }
+        let title = device.localizedCaseInsensitiveContains("microphone")
+            ? device : "Microphone (\(device))"
+        let item = NSMenuItem(title: title, action: #selector(selectMicrophone), keyEquivalent: "")
+        item.target = self
+        item.state = current == .microphone ? .on : .off
+        return item
+    }
+
     @objc private func selectAllAudio() { onSelectSource?(.allSystemAudio) }
+    @objc private func selectMicrophone() { onSelectSource?(.microphone) }
 
     @objc private func selectProcess(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? AudioSourceEntry else { return }

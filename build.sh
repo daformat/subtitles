@@ -57,6 +57,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
          all-zero samples and reports no error whatsoever. -->
     <key>NSAudioCaptureUsageDescription</key>
     <string>Subtitles transcribes the audio your Mac is playing so it can show live captions.</string>
+    <!-- The microphone is a grant of its own. It is asked for the first time
+         Microphone is chosen under Listen To, never at launch; without this
+         key that request is fatal. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Subtitles transcribes what the microphone hears when you choose it as the source, so it can show live captions.</string>
     <!-- Agent app: no Dock icon, no menu bar. -->
     <key>LSUIElement</key>                <true/>
     <!-- [main-edition] -->

@@ -12,6 +12,7 @@
 // delivers all-zero audio with no error anywhere — PLAN.md §8b.
 
 import AppKit
+import AVFoundation
 import NaturalLanguage
 import CaptionCore
 import CSubs
@@ -117,6 +118,7 @@ if listSources {
         print("  \(p.isPlaying ? "●" : " ") \(p.name)  [\(p.pids.count) proc]  \(p.id)")
     }
     print("\n● = currently playing")
+    print("microphone: \(SystemAudioTap.defaultInputName() ?? "none")")
     exit(0)
 }
 
@@ -435,7 +437,9 @@ final class Renderer {
         // which looks identical to a pause from in here: perfectly timed all-zero
         // buffers. Letting it fire while paused turns our own teardown into a
         // scary permission warning in the log.
-        if !isPaused, silentSeconds > 4, !warnedAboutSilence {
+        // Not for the microphone either: what it hears has no process to ask
+        // about, and a quiet room is only a quiet room.
+        if !isPaused, tap.source != .microphone, silentSeconds > 4, !warnedAboutSilence {
             let playing = SystemAudioTap.processesOutputtingAudio()
             if !playing.isEmpty {
                 warnedAboutSilence = true
@@ -512,10 +516,22 @@ let tap = SystemAudioTap { samples, count in
 var startingSource: AudioSource = .allSystemAudio
 if let name = UserDefaults.standard.string(forKey: Defaults.sourceName),
    let id = UserDefaults.standard.string(forKey: Defaults.sourceID) {
-    startingSource = .app(id: id, name: name)
+    startingSource = id == AudioSource.microphoneID ? .microphone : .app(id: id, name: name)
+}
+// The microphone's grant can have gone since it was chosen — withdrawn in
+// System Settings, or reset. Without it the HAL delivers silence and no error,
+// so start on system audio and say so rather than listen to nothing. A status
+// read, not a request: the prompt belongs to choosing the microphone, and
+// picking it again asks again.
+if startingSource == .microphone, AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
+    err("\(yellow)microphone access is not granted\(reset) — listening to all system audio instead")
+    startingSource = .allSystemAudio
 }
 
-let format: TapFormat
+/// The input format the core is built for. A `var` because the microphone
+/// can differ from the taps' 48 kHz stereo, and `resumeCapture` rebuilds the
+/// core when it does.
+nonisolated(unsafe) var format: TapFormat
 do {
     format = try tap.prepare(source: startingSource)
 } catch {
@@ -533,17 +549,40 @@ func makeCore() -> OpaquePointer? {
     return subs_create(&cfg)
 }
 
+/// Core rebuilds queued and not yet finished. Capture stays down while one is:
+/// the rebuild destroys the core, and a tap started in the meantime would be
+/// pushing into it from the realtime thread as it went.
+nonisolated(unsafe) var coreRebuildsPending = 0
+
 func resumeCapture() {
     // Paused means the tap stays down, whoever is asking. Variant and source
     // switches both end by calling this, and without the guard a model change
     // while paused would quietly put the app back to capturing.
-    guard !isPaused else { return }
+    guard !isPaused, coreRebuildsPending == 0 else { return }
     do {
-        try tap.prepare(source: tap.source)
+        let live = try tap.prepare(source: tap.source)
+        // The core downmixes and resamples whatever it was built for, but it is
+        // built for one format. Every process tap is 48 kHz stereo; a microphone
+        // is usually mono and not always 48 kHz, and the input device can change
+        // under it. The rebuild ends back here, with the two now agreeing.
+        if live != format {
+            err("input is \(Int(live.sampleRate)) Hz, \(live.channels) ch — rebuilding the audio core for it")
+            format = live
+            rebuildCore(generation: loadGeneration)
+            return
+        }
         try tap.start()
     } catch {
         err("\(red)could not restart capture:\(reset) \(error)")
     }
+}
+
+// Sound settings' input changed under the microphone: follow it. Through
+// `resumeCapture`, so a new device's format is handled and a change made while
+// paused waits for the resume.
+tap.onDefaultInputChanged = {
+    err("microphone is now \(SystemAudioTap.defaultInputName() ?? "none") — following it")
+    resumeCapture()
 }
 
 /// Serialises core teardown and creation. Switching used to be blocked while a
@@ -558,6 +597,50 @@ let variantQueue = DispatchQueue(label: "dev.mat.subtitles.variant")
 nonisolated(unsafe) var loadGeneration = 0
 /// The in-flight model load, held so the next switch can cancel it.
 nonisolated(unsafe) var loadTask: Task<Void, Never>?
+
+/// Tear the core down and build it again for `format`, then bring capture back
+/// up. Capture must be down when this is called: the realtime callback may
+/// otherwise have loaded the old pointer and be inside subs_push_audio as it is
+/// destroyed. Cheap — the core is the ring and the resampler, not the model —
+/// which is what lets a source with another format be switched to without a
+/// reload.
+func rebuildCore(generation: Int) {
+    coreRebuildsPending += 1
+    variantQueue.async {
+        // A later switch may have landed while this one sat in the queue.
+        guard generation == loadGeneration else {
+            DispatchQueue.main.async { coreRebuildsPending -= 1 }
+            return
+        }
+        let old = engine
+        engine = nil
+        subs_stop(old)
+        subs_destroy(old)
+
+        guard let created = makeCore() else {
+            DispatchQueue.main.async {
+                err("\(red)could not create the audio core\(reset)")
+                coreRebuildsPending -= 1
+                resumeCapture()
+            }
+            return
+        }
+        subs_set_callback(created, onEvent, nil)
+        subs_set_audio_callback(created, onAudioFrames, nil)
+        let rc = subs_start(created)
+
+        DispatchQueue.main.async {
+            engine = rc == 0 ? created : nil
+            if rc != 0 {
+                subs_destroy(created)
+                err("\(red)subs_start failed (\(rc))\(reset)")
+            }
+            coreRebuildsPending -= 1
+            resumeCapture()
+            statusMenu?.updateHealthIndicator()
+        }
+    }
+}
 
 /// Build the core and the FluidAudio engine for `variant`, replacing whatever is
 /// running.
@@ -694,36 +777,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
     // spend even the teardown on it.
     loadTask = Task { await fluid.load() }
 
-    variantQueue.async {
-        // A third switch may have landed while this one sat in the queue.
-        guard generation == loadGeneration else { return }
-        let old = engine
-        engine = nil
-        subs_stop(old)
-        subs_destroy(old)
-
-        guard let created = makeCore() else {
-            DispatchQueue.main.async {
-                engineBusyMessage = nil
-                engineBusyProgress = 0
-                resumeCapture()
-            }
-            return
-        }
-        subs_set_callback(created, onEvent, nil)
-        subs_set_audio_callback(created, onAudioFrames, nil)
-        let rc = subs_start(created)
-
-        DispatchQueue.main.async {
-            engine = rc == 0 ? created : nil
-            if rc != 0 {
-                subs_destroy(created)
-                err("\(red)subs_start failed (\(rc))\(reset)")
-            }
-            resumeCapture()
-            statusMenu?.updateHealthIndicator()
-        }
-    }
+    rebuildCore(generation: generation)
 }
 
 /// Switch the multilingual model to another language.
@@ -868,29 +922,61 @@ func applyTranslationMode(_ mode: TranslationMode) {
     err("translation timing: \(mode.displayName)")
 }
 
-/// Point the tap at a different source. One path, shared by the menu and by
+/// Point capture at a different source. One path, shared by the menu and by
 /// SIGUSR2, so what a test exercises is what the menu does.
 func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
-    do {
-        _ = try tap.switchTo(source: source)
-        switch source {
-        case .allSystemAudio:
-            UserDefaults.standard.removeObject(forKey: Defaults.sourceID)
-            UserDefaults.standard.removeObject(forKey: Defaults.sourceName)
-        case let .app(id, name):
-            UserDefaults.standard.set(id, forKey: Defaults.sourceID)
-            UserDefaults.standard.set(name, forKey: Defaults.sourceName)
+    if source == .microphone {
+        // A grant of its own, separate from audio capture, and asked for here
+        // and nowhere else: the first time the microphone is chosen, never at
+        // launch. Asked rather than left to the HAL's own prompt so a refusal
+        // can be said out loud — to the HAL a client without the grant is one
+        // that hears silence.
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        selectSource(.microphone, overlay: overlay)
+                    } else {
+                        err("\(yellow)microphone access was declined\(reset) — still listening to \(tap.source.label)")
+                    }
+                }
+            }
+            return
+        default:
+            // Refused before, and the only way past is System Settings: open it
+            // at the microphone list, the way Check Audio Permission… opens the
+            // other grant's pane.
+            err("\(red)microphone access is denied\(reset) — allow Subtitles under Privacy & Security › Microphone")
+            if let url = URL(string:
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+            return
         }
-        overlay?.clearAndHide()
-        renderer.discardLine()
-        // Clearing the overlay is not enough on its own: the recogniser keeps its
-        // accumulated transcript and its encoder context, so the new app's first
-        // words arrive appended to a sentence the previous app was saying.
-        if let fluid = fluidEngine { Task { await fluid.resetContext() } }
-        err("listening to: \(source.label)")
-    } catch {
-        err("\(red)could not switch source:\(reset) \(error)")
     }
+    tap.select(source)
+    resumeCapture()
+    switch source {
+    case .allSystemAudio:
+        UserDefaults.standard.removeObject(forKey: Defaults.sourceID)
+        UserDefaults.standard.removeObject(forKey: Defaults.sourceName)
+    case .microphone:
+        UserDefaults.standard.set(AudioSource.microphoneID, forKey: Defaults.sourceID)
+        UserDefaults.standard.set(source.label, forKey: Defaults.sourceName)
+    case let .app(id, name):
+        UserDefaults.standard.set(id, forKey: Defaults.sourceID)
+        UserDefaults.standard.set(name, forKey: Defaults.sourceName)
+    }
+    overlay?.clearAndHide()
+    renderer.discardLine()
+    // Clearing the overlay is not enough on its own: the recogniser keeps its
+    // accumulated transcript and its encoder context, so the new source's first
+    // words arrive appended to a sentence the previous one was saying.
+    if let fluid = fluidEngine { Task { await fluid.resetContext() } }
+    err("listening to: \(source.label)")
 }
 
 func togglePause() {
@@ -1169,6 +1255,10 @@ if useOverlay {
         // as a conditional hint is honest in both cases, and stays quiet in the
         // one that is overwhelmingly more common.
         if !renderer.receivingAudio {
+            if tap.source == .microphone {
+                return ("No sound from the microphone — check permission if you are speaking",
+                        .idle)
+            }
             return ("No audio reaching Subtitles — check permission if audio is playing",
                     .idle)
         }
