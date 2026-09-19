@@ -187,6 +187,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     var isPaused: () -> Bool = { false }
     var currentSource: () -> AudioSource = { .allSystemAudio }
+    /// What the microphone row goes back to when chosen while already on.
+    var sourceBeforeMicrophone: () -> AudioSource = { .allSystemAudio }
     var currentFontSize: () -> CGFloat = { 30 }
     var currentVariantID: () -> String = { "" }
     /// Non-nil while a model is downloading or loading; disables the picker.
@@ -582,7 +584,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     @objc private func selectAllAudio() { onSelectSource?(.allSystemAudio) }
-    @objc private func selectMicrophone() { onSelectSource?(.microphone) }
+
+    /// A toggle, unlike the other rows: chosen while the microphone is already
+    /// the source, it puts the microphone away and hands capture back to what
+    /// was listened to before it — all system audio when nothing was.
+    @objc private func selectMicrophone() {
+        onSelectSource?(currentSource() == .microphone ? sourceBeforeMicrophone() : .microphone)
+    }
 
     @objc private func selectProcess(_ sender: NSMenuItem) {
         guard let p = sender.representedObject as? AudioSourceEntry else { return }

@@ -993,6 +993,12 @@ func applyTranslationMode(_ mode: TranslationMode) {
     err("translation timing: \(mode.displayName)")
 }
 
+/// What the microphone replaced, for the menu to hand capture back to when
+/// the microphone row is chosen a second time. All system audio until the
+/// microphone has replaced something — a launch that restores the microphone
+/// has nothing to go back to.
+var sourceBeforeMicrophone: AudioSource = .allSystemAudio
+
 /// Point capture at a different source. One path, shared by the menu and by
 /// SIGUSR2, so what a test exercises is what the menu does.
 func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
@@ -1028,6 +1034,7 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
             return
         }
     }
+    if source == .microphone, tap.source != .microphone { sourceBeforeMicrophone = tap.source }
     tap.select(source)
     resumeCapture()
     switch source {
@@ -1300,6 +1307,7 @@ if useOverlay {
     let menu = StatusMenuController()
     menu.isPaused = { isPaused }
     menu.currentSource = { tap.source }
+    menu.sourceBeforeMicrophone = { sourceBeforeMicrophone }
     menu.currentFontSize = { fontSize }
     menu.currentVariantID = { currentVariant.rawValue }
     menu.engineBusy = { engineBusyMessage }
