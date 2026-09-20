@@ -129,7 +129,8 @@ final class SubtitleView: NSView {
         return .init(rect: Pill.tabRect(on: pill, name: appName, size: fontSize, rtl: rtl), rtl: rtl)
     }
 
-    /// The hairline's colour follows the appearance.
+    /// The box's colors follow the appearance, which is the theme's: see
+    /// `Pill.Theme`.
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
@@ -404,7 +405,7 @@ final class SubtitleView: NSView {
 
         let box = boxRect
         let rtl = isRightToLeft
-        NSColor.black.withAlphaComponent(backgroundOpacity).setFill()
+        Pill.box.withAlphaComponent(backgroundOpacity).setFill()
         Pill.pillPath(box, radius: corner, square: squareCorners).fill()
         // The tab's fill goes down with the pill's, so what is painted over
         // the box runs into the tab too; its line, icon and name come later,
@@ -630,6 +631,17 @@ final class OverlayController {
     var borealisConfig: AudioBorealis.Config {
         get { borealis.config }
         set { borealis.config = newValue }
+    }
+
+    /// The boxes' colors, the live box's and the stack's alike — see
+    /// `Pill.Theme`. Set as the panels' appearance, which every color on
+    /// them follows; nil, for auto, hands them back to the system's.
+    var theme: Pill.Theme = .auto {
+        didSet {
+            guard theme != oldValue else { return }
+            panel.appearance = theme.appearance
+            history.theme = theme
+        }
     }
 
     /// Where the icon goes, on the live box and the stack alike — see

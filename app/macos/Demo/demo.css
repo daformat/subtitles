@@ -186,10 +186,14 @@ kbd {
   user-select: none;
 
   /* The fake Mac follows the page: light desktop under a light page, dark under
-     a dark one, the way the real one follows the system. Two things do not,
-     because they do not on a Mac either — the app icons and the artwork keep
-     their own colours, and the caption box stays black with white text, since
-     that is what the app draws whatever the desktop behind it is doing.
+     a dark one, the way the real one follows the system. The app icons and the
+     artwork do not, because they do not on a Mac either: they keep their own
+     colors. The caption box follows too, as the app's does on Auto: black with
+     white type under a dark page, and under a light one turned inside out,
+     white with dark type, so it reads as a box on a light desk rather than a
+     hole in one. The menu's Color Theme (theme in script.js) pins it to
+     either, by writing the other palette's box tokens over the page's on the
+     screen.
 
      Almost every colour in here is one of two tokens: --ink, the colour of the
      things on a surface, given as an unprefixed triplet so each rule can set
@@ -199,10 +203,18 @@ kbd {
   --ink: 22 23 28;
   --bar-bg: rgb(246 246 250 / 0.35);
   --window-bg: #fdfdff;
-  /* The hairline round every caption box: a shade darker than the box in the
-     light appearance, where the picture behind is bright and a light rim would
-     read as a glint rather than an edge. Pill.outlineInk in the app. */
-  --pill-line: rgb(0 0 0 / 0.55);
+  /* The caption box's own colors, the app's Pill.box, Pill.ink, Pill.tabInk
+     and Pill.outlineInk: the box as a triplet so each rule can set its own
+     alpha (the stack steps its fill back from the live box's), its type the
+     same way (the stack dims its text), the name in the tab or header, and
+     the hairline round every box, a shade darker than the white box, where
+     a light rim would read as a glint rather than an edge. Restated in
+     script.js (BOX_THEMES), which writes them over the page's for a chosen
+     theme. */
+  --box-rgb: 255 255 255;
+  --ink-rgb: 62 62 66;
+  --box-name: rgb(0 0 0 / 0.55);
+  --pill-line: rgb(0 0 0 / 0.08);
   /* Light title bars darken downwards, and want more of it than the dark ones:
      against a white window a few per cent of ink is nothing, and the bar has to
      read as a surface of its own. */
@@ -262,6 +274,9 @@ kbd {
     --ink: 255 255 255;
     --bar-bg: rgb(24 25 29 / 0.55);
     --window-bg: #101116;
+    --box-rgb: 0 0 0;
+    --ink-rgb: 255 255 255;
+    --box-name: #d2d2d3;
     --pill-line: rgb(210 210 211 / 0.16);
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
@@ -301,6 +316,9 @@ kbd {
     --ink: 255 255 255;
     --bar-bg: rgb(24 25 29 / 0.55);
     --window-bg: #101116;
+    --box-rgb: 0 0 0;
+    --ink-rgb: 255 255 255;
+    --box-name: #d2d2d3;
     --pill-line: rgb(210 210 211 / 0.16);
     --titlebar-bg: linear-gradient(rgb(var(--ink) / 0.09), rgb(var(--ink) / 0.045));
     --window-line: rgb(var(--ink) / 0.045);
@@ -1368,11 +1386,11 @@ kbd {
   /* The app's defaultBackgroundOpacity and Pill.backdropBlur, as the seed
      sets them (seedDemo in script.js): the stack and the search pill below
      follow the same two, the stack's background receded from this one. */
-  background: rgb(0 0 0 / var(--box-alpha, 0.72));
+  background: rgb(var(--box-rgb, 0 0 0) / var(--box-alpha, 0.72));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(var(--box-blur, 6px));
   -webkit-backdrop-filter: blur(var(--box-blur, 6px));
-  color: #fff;
+  color: rgb(var(--ink-rgb, 255 255 255));
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   /* Off the screen rather than off --u, which is the one thing in here that does
      not scale with the chrome: this is what anybody actually reads, and when the
@@ -1613,11 +1631,11 @@ kbd {
   max-width: min(80.3cqw, 704px);
   padding: 0.47em 0.73em;
   border-radius: 0.533em;
-  background: rgb(0 0 0 / calc(var(--box-alpha, 0.72) * 0.92));
+  background: rgb(var(--box-rgb, 0 0 0) / calc(var(--box-alpha, 0.72) * 0.92));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(var(--box-blur, 6px));
   -webkit-backdrop-filter: blur(var(--box-blur, 6px));
-  color: rgb(255 255 255 / var(--hist-text-alpha, 0.65));
+  color: rgb(var(--ink-rgb, 255 255 255) / var(--hist-text-alpha, 0.65));
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   line-height: 1.2334;   /* the live box's, see .demo-overlay */
   font-weight: 600;
@@ -1697,11 +1715,11 @@ kbd {
 .demo-history .hist-line.is-hidden { display: none; }
 
 /* Behind a search match: the app's warm wash, rgba(1, 0.8, 0.2, 0.45), rather
-   than an inversion. The text over it goes to full white, and the wash is what
-   the eye lands on when scanning down the stack for it. */
+   than an inversion. The text over it goes to the box's ink at full strength,
+   and the wash is what the eye lands on when scanning down the stack for it. */
 .demo-history .hist-hit {
   background: rgba(255, 204, 51, 0.45);
-  color: #fff;
+  color: rgb(var(--ink-rgb, 255 255 255));
 }
 
 /* The search pill, at the edge of the stack touching the live box, drawn as one
@@ -1724,11 +1742,11 @@ kbd {
   padding: calc(var(--e) * 0.233) calc(var(--e) * 0.467);
   border-radius: calc(var(--e) * 0.533);
   transform: translateX(-50%);
-  background: rgb(0 0 0 / calc(var(--box-alpha, 0.72) * 0.92));
+  background: rgb(var(--box-rgb, 0 0 0) / calc(var(--box-alpha, 0.72) * 0.92));
   box-shadow: inset 0 0 0 var(--hairline) var(--pill-line);
   backdrop-filter: blur(var(--box-blur, 6px));
   -webkit-backdrop-filter: blur(var(--box-blur, 6px));
-  color: rgb(255 255 255 / var(--hist-text-alpha, 0.65));
+  color: rgb(var(--ink-rgb, 255 255 255) / var(--hist-text-alpha, 0.65));
   font-family: ui-rounded, "SF Pro Rounded", var(--font);
   font-size: max(13px, var(--e) * 0.5);
   line-height: 1.34;
@@ -1779,7 +1797,7 @@ kbd {
   height: 1em;
   padding: 0.075em;
   box-sizing: border-box;
-  color: rgba(255, 255, 255, 0.49);
+  color: rgb(var(--ink-rgb, 255 255 255) / 0.49);
 }
 .demo-search .ds-field {
   flex: 1 1 0;
@@ -1792,12 +1810,12 @@ kbd {
   font: inherit;
   line-height: inherit;
   color: inherit;
-  /* The system's caret is invisible on a black pill. */
-  caret-color: #fff;
+  /* The system's caret is invisible on a black pill: the box's ink. */
+  caret-color: rgb(var(--ink-rgb, 255 255 255));
   cursor: text;
 }
 .demo-search .ds-field::placeholder {
-  color: rgba(255, 255, 255, 0.325);
+  color: rgb(var(--ink-rgb, 255 255 255) / 0.325);
   opacity: 1;
 }
 /* "⌥F", at the far end of the closed pill: the one place the shortcut can be
@@ -1806,7 +1824,7 @@ kbd {
 .demo-search .ds-hint {
   flex: none;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.325);
+  color: rgb(var(--ink-rgb, 255 255 255) / 0.325);
 }
 .demo-search.is-open .ds-hint { display: none; }
 /* The circled ✕, there while the field holds text. Room for it is held whether
@@ -1822,7 +1840,7 @@ kbd {
   margin: 0;
   border: 0;
   background: none;
-  color: rgba(255, 255, 255, 0.49);
+  color: rgb(var(--ink-rgb, 255 255 255) / 0.49);
   visibility: hidden;
   cursor: default;
 }
@@ -1837,10 +1855,10 @@ kbd {
 }
 
 /* The in-flight word, before the recogniser commits it. */
-.demo-overlay .tentative { color: rgba(255, 255, 255, 0.55); }
+.demo-overlay .tentative { color: rgb(var(--ink-rgb, 255 255 255) / 0.55); }
 
 /* A shortcut said inside a box is drawn as a keycap on the box's own ink:
-   the same outline as everywhere, white on the black, sized to the caption
+   the same outline as everywhere, in the box's ink, sized to the caption
    so it follows the text size the menu sets, and no taller than the line so
    the box keeps its shape. script.js draws these from the text as it types
    (appendKeys), so no translated line carries markup for it. Whole rather
@@ -1864,7 +1882,7 @@ kbd {
   text-align: center;
   color: inherit;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgb(var(--ink-rgb, 255 255 255) / 0.45);
   border-radius: 0.41em;
   vertical-align: 0.04em;
 }
@@ -1901,7 +1919,7 @@ kbd {
   overflow: hidden;
   font-size: 0.6em;
   line-height: 1;
-  color: #d2d2d3;
+  color: var(--box-name, #d2d2d3);
   white-space: nowrap;
   text-overflow: ellipsis;
 }

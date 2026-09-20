@@ -107,10 +107,18 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         self.window = window
         startPolling()
 
-        // Deliberately not ordered front yet — see `present()`. The fallback is
-        // what guarantees the window appears at all: no bundled demo, a page that
-        // fails to load, a web process that dies, and `didFinish` never comes.
-        readyTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+        // Deliberately not ordered front yet — see `present()`. With no bundled
+        // demo there is nothing to wait for. Otherwise the fallback is what
+        // guarantees the window appears at all: a page that fails to load, a
+        // web process that dies, and `didFinish` never comes. Three seconds,
+        // because the first web process after launch takes about 1.7 s to
+        // load and paint the page (measured), and a fallback shorter than
+        // that opened the window on an empty pane the demo then popped into.
+        guard Self.demoURL != nil else {
+            present()
+            return
+        }
+        readyTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { [weak self] _ in
             self?.present()
         }
     }
@@ -121,6 +129,15 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// front first meant it opened at its guessed height around an empty web view,
     /// then the demo appeared and the window resized under it — two visible jumps
     /// in the first half second the app is ever seen.
+    ///
+    /// On screen but invisible first. WebKit paints only a web view whose window
+    /// is on screen, so the demo's first frame cannot be drawn before the window
+    /// is ordered in: ordered in at zero alpha it draws (measured: the page's
+    /// animation frames run, and `document.hidden` is false), the page reports
+    /// a painted frame, and the window is revealed with the demo already on it
+    /// rather than opening on an empty pane the demo then pops into. A second
+    /// is the most the reveal waits for that report, so a page that never
+    /// answers still shows.
     fileprivate func present() {
         guard let window, !presented else { return }
         presented = true
@@ -130,7 +147,29 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // `center` puts a window taller than the screen half off the top of it.
         WindowFit.clamp(window)
         if let pageScroll { WindowFit.scrollToTop(pageScroll) }
+        window.alphaValue = 0
         window.makeKeyAndOrderFront(nil)
+        guard demoLoaded, let web = webView else {
+            reveal()
+            return
+        }
+        let fallback = DispatchWorkItem { [weak self] in self?.reveal() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: fallback)
+        // Two frames: the first callback can run before the frame it belongs
+        // to is painted, the second only after.
+        web.callAsyncJavaScript(
+            "await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));",
+            arguments: [:], in: nil, in: .page
+        ) { [weak self] _ in
+            fallback.cancel()
+            self?.reveal()
+        }
+    }
+
+    /// The window, as it is: `present` put it on screen at zero alpha.
+    private func reveal() {
+        guard let window, window.alphaValue < 1 else { return }
+        window.alphaValue = 1
     }
 
     /// Torn down rather than hidden — see AboutWindow, which does the same and

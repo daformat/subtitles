@@ -52,6 +52,10 @@ enum AudioBorealisPainter {
     static func draw(_ frame: AudioBorealis.Frame, in ctx: CGContext, pill: NSRect,
                      path: NSBezierPath, fontSize: CGFloat) {
         guard pill.width > 0, pill.height > 0, frame.glow > 0.002 else { return }
+        // Whether the box is the light one, from the appearance it is being
+        // drawn in (the theme's, see `Pill.Theme`): the monochrome haze is
+        // the opposite of the box's color, and only here is the box known.
+        let light = !Pill.isDark(NSAppearance.currentDrawing())
         let bounds = path.bounds.union(pill)
         let sx = min(2.4, max(0.9, pill.width / 350))
         let sy = max(0.5, fontSize / 30)
@@ -60,7 +64,7 @@ enum AudioBorealisPainter {
         guard opacity > 0 else { return }
         if frame.config.glowOpacity > 0,
            let glow = rendered(at: glowResolution, over: bounds, { bitmap in
-               paintGlow(frame, in: bitmap, pill: pill, path: path, sx: sx, sy: sy)
+               paintGlow(frame, in: bitmap, pill: pill, path: path, sx: sx, sy: sy, light: light)
            }) {
             ctx.saveGState()
             ctx.setAlpha(opacity)
@@ -69,7 +73,7 @@ enum AudioBorealisPainter {
             ctx.restoreGState()
         }
 
-        paintCurves(frame, in: ctx, pill: pill, path: path, sx: sx, sy: sy)
+        paintCurves(frame, in: ctx, pill: pill, path: path, sx: sx, sy: sy, light: light)
     }
 
     /// Run `body` in a bitmap of `bounds` at `resolution`, reusing one of
@@ -135,9 +139,9 @@ enum AudioBorealisPainter {
 
     /// The bloom and the inner light, at full size in `ctx`.
     private static func paintGlow(_ frame: AudioBorealis.Frame, in ctx: CGContext, pill: NSRect,
-                                  path: NSBezierPath, sx: CGFloat, sy: CGFloat) -> Bool {
+                                  path: NSBezierPath, sx: CGFloat, sy: CGFloat, light: Bool) -> Bool {
         let centre = NSPoint(x: pill.midX, y: pill.minY)
-        let colors = ColorKey(frame)
+        let colors = ColorKey(frame, light: light)
         var painted = false
 
         ctx.saveGState()
@@ -193,7 +197,7 @@ enum AudioBorealisPainter {
     /// under the edge, not faint. The clip is kept to the curves' own box,
     /// since a fill through a path clip costs by the clip's area.
     private static func paintCurves(_ frame: AudioBorealis.Frame, in ctx: CGContext, pill: NSRect,
-                                    path: NSBezierPath, sx: CGFloat, sy: CGFloat) {
+                                    path: NSBezierPath, sx: CGFloat, sy: CGFloat, light: Bool) {
         let c = frame.config
         let opacity = CGFloat(min(1, max(0, c.opacity)))
         let fill = CGFloat(c.curveOpacity) * opacity
@@ -215,7 +219,7 @@ enum AudioBorealisPainter {
         ctx.setLineWidth(1)
         ctx.setLineJoin(.round)
         for (b, curve) in curves.enumerated() where curve.contains(where: { $0.y > 0.3 }) {
-            let color = AudioBorealis.color(b, config: c, drift: frame.hue)
+            let color = color(b, config: c, drift: frame.hue, light: light)
             let points = curve.map { CGPoint(x: pill.minX + $0.x, y: pill.minY + $0.y) }
             let crest = pill.minY + CGFloat(curve.map(\.y).max() ?? 0)
             // The hill: from below the bottom edge at one end, along the
@@ -277,19 +281,37 @@ enum AudioBorealisPainter {
 
     private static let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
+    /// The monochrome haze on the light box: a 65% gray rather than black,
+    /// which read as a stain on a white box, leaning blue (#475975, hue
+    /// 215) since a neutral gray read as concrete and an indigo cast was
+    /// not enough. On the dark box it is the driver's own white.
+    private static let lightBoxHaze = (r: 0.28, g: 0.35, b: 0.46)
+
+    /// The `index`th colour of a frame drawn on a light or a dark box: the
+    /// driver's, except the monochrome haze on the light box, which the
+    /// driver has no word for.
+    private static func color(_ index: Int, config c: AudioBorealis.Config, drift: Double,
+                              light: Bool) -> (r: Double, g: Double, b: Double) {
+        if c.colorMode == .monochrome, light { return lightBoxHaze }
+        return AudioBorealis.color(index, config: c, drift: drift)
+    }
+
     /// What decides the colours of a frame, quantised so a slow drift does
-    /// not make a new gradient every frame.
+    /// not make a new gradient every frame. The box's lightness is part of
+    /// it, for the monochrome haze.
     private struct ColorKey: Hashable {
         let mode: AudioBorealis.ColorMode
         let hue: Int
         let width: Int
         let saturation: Int
+        let light: Bool
 
-        init(_ frame: AudioBorealis.Frame) {
+        init(_ frame: AudioBorealis.Frame, light: Bool) {
             mode = frame.config.colorMode
             hue = Int((frame.config.hueStart + frame.hue).rounded())
             width = Int(frame.config.hueWidth.rounded())
             saturation = Int((frame.config.saturation * 100).rounded())
+            self.light = light
         }
 
         /// A config that makes these colours, for the driver's colour function.
@@ -321,7 +343,7 @@ enum AudioBorealisPainter {
         let key = LobeKey(layer: layer, lobe: lobe, colors: colors)
         if let cached = lobeCache[key] { return cached }
         if lobeCache.count > 4096 { lobeCache.removeAll() }
-        let c = AudioBorealis.color(lobe, config: colors.config, drift: 0)
+        let c = color(lobe, config: colors.config, drift: 0, light: colors.light)
         let gradient = self.gradient(r: c.r, g: c.g, b: c.b, stops: layer.stops)
         lobeCache[key] = gradient
         return gradient

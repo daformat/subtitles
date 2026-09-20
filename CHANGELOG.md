@@ -4,9 +4,25 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.8.3 · 2026-09-21
+
+- **Color Theme**, in the status menu above Audio Borealis: Auto, Light or
+  Dark. Dark is the box as it has always been, black with white type. Light
+  turns it inside out: white with dark type, the app's name in the tab or
+  header black at half strength, and the hairline a shade darker than the
+  box rather than lighter, as the site's demo draws its light box. Auto,
+  the default, follows the system's appearance, so a Mac in light mode now
+  gets light boxes; choose Dark to keep them black. The recent boxes on ⌥
+  and their search pill wear the same theme, caret included, and so does
+  the Settings preview.
+- **Monochrome Haze** is White Haze's new name in Audio Borealis, and the
+  haze is now the opposite of the box's color: white on the dark box, a
+  dark gray on the light one. A copy that had White Haze chosen keeps its
+  choice under the new name.
+
 ## 1.8.2 · 2026-09-20
 
-- **Audio Borealis**: colour along the bottom of the box that rises and falls
+- **Audio Borealis**: color along the bottom of the box that rises and falls
   with the sound. Soft lobes fan out from the edge, each following a band of
   the voice, and over them one translucent curve per band, lows to highs,
   lifts as its band is heard, so a vowel and a sibilant move different
@@ -68,7 +84,7 @@ and the DMG name show.
   at Lines per box and the stack's boxes used to be cut at the same height,
   which lost the end of an original shown under ⌃ (the page was cut on the
   translation, not on it) and of a page closed at a smaller text size.
-- Translation works in turns. The recogniser keeps one transcript across a
+- Translation works in turns. The recognizer keeps one transcript across a
   conversation, and finishing a sentence used to rewind and re-translate all
   of it; now a pause or an endpoint closes a turn, words arriving while it
   settles wait for the next, and changing the target re-translates only the
@@ -110,7 +126,7 @@ and the DMG name show.
 - The ⌥ stack's fades at its clipped edges ease in and out rather than
   ramping straight, on the overlay and in the Settings preview alike.
 <!-- [main-edition] -->
-- The licence window says Buy a Key without naming a price: the price is
+- The license window says Buy a Key without naming a price: the price is
   set on Gumroad, and a number in the app went stale the moment it changed.
 <!-- [/main-edition] -->
 
@@ -148,7 +164,7 @@ and the DMG name show.
 - Each box in the ⌥ stack wears the app its words arrived under, not the app
   of the words that closed it: a box that faded during a call stays the
   call's when a video's first words open the next one. Icons in the stack
-  keep their full colour, since a dimmed icon reads as a disabled app rather
+  keep their full color, since a dimmed icon reads as a disabled app rather
   than an older box.
 - Under all system audio the app is worked out from what Core Audio reports
   playing, and that is a noisy answer: browsers hold the audio device open
@@ -156,10 +172,10 @@ and the DMG name show.
   second. So the choice is sticky, and nothing takes it over until it has
   been playing for two polls running. With one app chosen as the source, it
   is that app. Polled once a second, off the main thread.
-- Text starts from its script's leading edge rather than being centred: the
+- Text starts from its script's leading edge rather than being centered: the
   left for most languages, the right for Arabic and Hebrew, where the tab or
   header sits on the right with it. The box fills a word at a time, and a
-  line that grows from a fixed edge is easier to follow than one re-centred
+  line that grows from a fixed edge is easier to follow than one re-centered
   on every word. **Text Size and Alignment** in the menu offers **Center
   Alignment** for the old look.
 - A hairline round every box, one pixel wide, the way the system edges its
@@ -197,20 +213,20 @@ and the DMG name show.
   third-party notices, reflowed into paragraphs and set in the app's type, in
   a soft box that scrolls.
 - Translation starts as soon as it is turned on. It used to wait for the
-  recogniser to name the language it was hearing, which the multilingual model
+  recognizer to name the language it was hearing, which the multilingual model
   does at the start of a sentence rather than on the first words, so captions
   that began mid-sentence, or a target picked in that stretch, went
   untranslated until the next full stop. The language is read off the
   transcript itself until the model names one, and turning translation on or
-  changing its target starts the recogniser afresh, so the next words open a
+  changing its target starts the recognizer afresh, so the next words open a
   new box in the new language instead of finishing the old one.
 <!-- [main-edition] -->
 - The trial ending puts the same red badge on the menu bar icon that a
   waiting update does, so it is seen without opening the menu. The badge is
   never dimmed: pausing fades the icon, and used to fade the badge with it.
   An update and an ended trial at once show a 2.
-- The update window's release notes box shows in light mode now; its grey was
-  too faint to read as a well. It also takes its colour when drawn rather than
+- The update window's release notes box shows in light mode now; its gray was
+  too faint to read as a well. It also takes its color when drawn rather than
   when the window is built, so a window open through a change of appearance
   gets the right one.
 <!-- [/main-edition] -->
@@ -240,7 +256,7 @@ and the DMG name show.
 <!-- [main-edition] -->
 ## 1.6.3 · 2026-09-09
 
-- A licence key can be pasted into the licence window now. ⌘V, and ⌘C, ⌘X,
+- A license key can be pasted into the license window now. ⌘V, and ⌘C, ⌘X,
   ⌘A and ⌘Z with it, reach a text field only as the key equivalents of an
   Edit menu, and an app without a menu bar has no Edit menu unless it makes
   one; it has one now, which nothing ever shows. The Clear After field in
@@ -269,15 +285,15 @@ and the DMG name show.
   the ones already up, or when the widest one leaves. The stack is as wide as
   its widest box, so its left edge moves at those moments; what moved with it,
   for a tenth of a second, was every box in it, because the edge was what the
-  stack's follow animation was attached to. It is attached to the centre now,
-  and each box is placed from that centre rather than centred in the stack, so
+  stack's follow animation was attached to. It is attached to the center now,
+  and each box is placed from that center rather than centered in the stack, so
   the stack's width can change under them without a box moving by a point.
 
 <!-- [0bsd-edition]
 ## 1.6.0 · 2026-09-07
 
 - Nothing changes in this edition. The main edition gained a free trial and
-  licence keys; this one has neither, by design.
+  license keys; this one has neither, by design.
 
 ## 1.5.0 · 2026-09-07
 
@@ -287,11 +303,11 @@ and the DMG name show.
 <!-- [main-edition] -->
 ## 1.6.0 · 2026-09-07
 
-- The app is a free download with a seven-day trial, and a licence key is what
+- The app is a free download with a seven-day trial, and a license key is what
   you buy. The trial starts when the captions do, not at the first launch, so
   the model download does not count against it. When it ends the app keeps
   running but stops transcribing: the icon dims as it does for Pause, the menu
-  says why, and Resume opens the licence window instead. Settings and the ⌥
+  says why, and Resume opens the license window instead. Settings and the ⌥
   stack stay where they were.
 - **Enter License Key…** sits above Settings, or reads **Trial: N days left**
   or **Licensed**. The window takes the key as it was pasted from a receipt or
@@ -342,7 +358,7 @@ and the DMG name show.
 
 ## 1.4.2 · 2026-09-06
 
-- The settings preview's screen is the demo's again: its coloured desktop, a menu
+- The settings preview's screen is the demo's again: its colored desktop, a menu
   bar with this app's glyph and the clock in it, and a call in front with the ring
   handed round whoever is talking. The ⌥ stack stops at the menu bar, as on a real
   screen. The preview is a little taller.
@@ -389,7 +405,7 @@ and the DMG name show.
 
 - Re-vendored the site's caption demo for the welcome window. It brings the demo's
   menu bar — the Apple mark, the app in front, the first menus — and a desktop
-  with some colour in it, along with the waveform fitter the podcast scene now
+  with some color in it, along with the waveform fitter the podcast scene now
   relies on, which the vendor script had been leaving behind.
 - The demo screen's corners are tighter in the welcome window than on the site,
   so they no longer crop the Apple mark at one end of the menu bar and the clock
@@ -401,7 +417,7 @@ and the DMG name show.
   to produce nothing at all: no download, no prompt, and the original left on
   screen. The translator was being built without a source language, and without
   one it cannot tell whether a pair needs downloading, so it never asked.
-- The language the recogniser detects is remembered rather than only reported when
+- The language the recognizer detects is remembered rather than only reported when
   it changes. By the time a target is picked, the detection that matters is usually
   minutes old and will not happen again, which is what left the translator with
   nothing to go on.
@@ -485,7 +501,7 @@ Translation framework, so nothing leaves the machine and the app keeps the prope
 it was built around.
 
 - Every ordered pair works, not just the ones involving English. That is what ruled
-  out doing this in the recogniser: NVIDIA's canary checkpoint translates speech
+  out doing this in the recognizer: NVIDIA's canary checkpoint translates speech
   directly, but only to or from English, and half this app's languages are not in its
   set at all. Apple's covers all 240 pairs of the sixteen.
 - Two timings, because the interesting cost is not compute. Translating a sentence
@@ -502,7 +518,7 @@ it was built around.
   to re-anchor on when the box turns over instead of a hard cut. Only from a box
   that turned over quickly: one that sat there long enough to be read already gave
   you that time.
-- On auto-detect the source language comes from the recogniser's own language tag
+- On auto-detect the source language comes from the recognizer's own language tag
   rather than from asking the translator to guess per sentence. It is known within a
   word or two of speech.
 - Hold `⌃` to see the original language, live box and `⌥` stack together, for as
@@ -524,7 +540,7 @@ failed to load on every launch from then on, with no transcript and nothing on s
 to say why. Those bundles are now detected and refetched, and only the broken ones, so
 a variant whose encoder alone is truncated costs one encoder rather than 600 MB.
 
-- A recogniser that cannot load says so in the menu, in red, instead of leaving
+- A recognizer that cannot load says so in the menu, in red, instead of leaving
   "listening" or "no audio" on screen. Both were wrong, and both pointed away from the
   cause.
 - `--list-models` reports incomplete bundles too, which is the one way to ask what is
@@ -650,7 +666,7 @@ What went into it, in the order it happened:
   ANE via CoreML, unusable on CPU at RTF 10.7–31.8 and fine on the Neural Engine. sherpa
   came out again once FluidAudio was the only engine worth keeping. Punctuation and
   capitalisation come from the model rather than a casing pass.
-- **Silero VAD**, so music never reaches the recogniser. An energy gate only knows loud
+- **Silero VAD**, so music never reaches the recognizer. An energy gate only knows loud
   from quiet, so a backing track was poisoning the encoder's context and losing the
   first words after every musical passage.
 - **The overlay.** Pages anchored on audio time rather than word counts, a fade driven

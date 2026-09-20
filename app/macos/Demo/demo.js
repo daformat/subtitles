@@ -53,8 +53,9 @@ const CAPTURE = window.SUBTITLES_CAPTURE === true;
 //   historyExpiry       seconds of silence that does
 //   bothLanguages       Show Both Languages: the original under a translation
 //   microphone          Listen To → the microphone, over whatever is playing
-//   borealis            Audio Borealis: off | rainbow | northernLights | autumn | whiteHaze
+//   borealis            Audio Borealis: off | rainbow | northernLights | autumn | monochromeHaze
 //   borealisStrength    strong | medium | subtle
+//   theme               Color Theme, the boxes' colors: auto (the page's) | light | dark
 const readSettings = (given) => {
   const NUMBER = {
     fontSize: [1, 400], maxLines: [1, 50], boxOpacity: [0, 1], blur: [0, 200],
@@ -65,8 +66,9 @@ const readSettings = (given) => {
   const FLAG = ['revealEnabled', 'historyEnabled', 'historyExpires', 'bothLanguages', 'microphone'];
   const WORD = {
     textAlignment: ['start', 'center'], iconStyle: ['off', 'nameTab', 'header'],
-    borealis: ['off', 'rainbow', 'northernLights', 'autumn', 'whiteHaze'],
+    borealis: ['off', 'rainbow', 'northernLights', 'autumn', 'monochromeHaze'],
     borealisStrength: ['strong', 'medium', 'subtle'],
+    theme: ['auto', 'light', 'dark'],
   };
   const out = {};
   const take = (key, value) => {
@@ -363,15 +365,19 @@ const borealis = (() => {
     rainbow: { colorMode: 'spectrum', hueStart: 0, hueWidth: 360 },
     northernLights: { colorMode: 'spectrum', hueStart: 100, hueWidth: 180 },
     autumn: { colorMode: 'spectrum', hueStart: 310, hueWidth: 90 },
-    whiteHaze: { colorMode: 'white' },
+    // The opposite of the box's color: white on the dark box, a dark grey
+    // on the light one, read off the box where it is painted (`inkOf`).
+    monochromeHaze: { colorMode: 'monochrome' },
   };
   const STRENGTHS = { strong: 1, medium: 0.5, subtle: 0.35 };
 
   // The `index`th colour: its share of the wheel from the start, turned by
-  // the drift, at the saturation; or white or black alone.
-  const color = (index, c, drift) => {
+  // the drift, at the saturation; or white or black alone; or, monochrome,
+  // `ink`, the box's counter-colour, white unless the box says otherwise.
+  const color = (index, c, drift, ink) => {
     if (c.colorMode === 'white') return [1, 1, 1];
     if (c.colorMode === 'black') return [0, 0, 0];
+    if (c.colorMode === 'monochrome') return ink || [1, 1, 1];
     const hue = wrap(c.hueStart + c.hueWidth * HUE_SHARES[index % HUE_SHARES.length] + drift, 360);
     return hsb(hue / 360, clamp01(c.saturation), 1);
   };
@@ -527,7 +533,7 @@ const borealis = (() => {
   // Paint `frame` on `ctx`, a box `w` by `h` CSS px with corners of `radius`
   // and type of `fontPx`, `scratch` a second canvas the masked layers are
   // built on. Canvas y runs down: the bottom edge is y = h.
-  const paint = (ctx, scratch, frame, w, h, radius, fontPx) => {
+  const paint = (ctx, scratch, frame, w, h, radius, fontPx, ink) => {
     const c = frame.config;
     const opacity = clamp01(c.opacity);
     ctx.clearRect(0, 0, w, h);
@@ -558,7 +564,7 @@ const borealis = (() => {
           const lrx = lobe.w * GLOW_WIDTH * layer.sizeX * frame.width * sx;
           const lry = lobe.h * GLOW_HEIGHT * layer.sizeY * frame.height * frame.lobeAmplitude[i] * sy;
           if (lrx <= 0.5 || lry <= 0.5) return;
-          ellipse(sc, cx + frame.lobeX[i] * frame.width * sx, cy, lrx, lry, color(i, c, frame.hue), layer.stops, false);
+          ellipse(sc, cx + frame.lobeX[i] * frame.width * sx, cy, lrx, lry, color(i, c, frame.hue, ink), layer.stops, false);
         });
         sc.globalCompositeOperation = 'destination-in';
         ellipse(sc, cx, cy, rx, ry, [1, 1, 1], layer.maskStops, true);
@@ -583,7 +589,7 @@ const borealis = (() => {
       const band = (c.curveOffset + c.curveBase * frame.bend) * sy;
       hills.forEach((points, k) => {
         if (!points.some((p) => p[1] > 0.3)) return;
-        const rgb = color(k, c, frame.hue);
+        const rgb = color(k, c, frame.hue, ink);
         const crest = Math.max(...points.map((p) => p[1]));
         ctx.save();
         ctx.beginPath();
@@ -727,10 +733,21 @@ const borealis = (() => {
         el.height = Math.round(h * dpr);
       });
     };
+    // The monochrome haze's colour: the opposite of the box's, which is
+    // read off the box's own type, white on a dark box and on a light one a
+    // 65% grey leaning blue (#475975), as the app's painter has it (black
+    // read as a stain, neutral grey as concrete), so it follows the theme
+    // wherever the theme comes from, the page's or the menu's. Read only
+    // when the look asks for it.
+    const inkOf = () => {
+      if (drive.state.config.colorMode !== 'monochrome') return null;
+      const rgb = (getComputedStyle(box).color.match(/[\d.]+/g) || [255, 255, 255]).map(Number);
+      return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 > 128 ? [1, 1, 1] : [0.28, 0.35, 0.46];
+    };
     const draw = (frame) => {
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      paint(ctx, scratch, frame, w, h, radius, fontPx);
+      paint(ctx, scratch, frame, w, h, radius, fontPx, inkOf());
     };
     size();
     // Sizing a canvas clears it, and the box resizes on almost every word:
@@ -1343,7 +1360,17 @@ const DEMO_DEFAULTS = {
   historyExpires: false, historyExpiry: 30,
   bothLanguages: false, microphone: false,
   borealis: 'rainbow', borealisStrength: 'medium',
+  theme: 'auto',
 };
+// Color Theme: the boxes' colors for a chosen theme, as the stylesheet's two
+// palettes state them (--box-rgb, --ink-rgb, --box-name and --pill-line under
+// .demo in styles.css), restated here so a pick can write the other palette's
+// box over the page's. Auto has no entry: the page's own tokens stand.
+const BOX_THEMES = {
+  light: ['255 255 255', '62 62 66', 'rgb(0 0 0 / 0.55)', 'rgb(0 0 0 / 0.08)'],
+  dark: ['0 0 0', '255 255 255', '#d2d2d3', 'rgb(210 210 211 / 0.16)'],
+};
+const BOX_TOKENS = ['--box-rgb', '--ink-rgb', '--box-name', '--pill-line'];
 // A demo's boxes dressed to its settings. What is the box's rather than the
 // loop's goes onto the screen as custom properties, which every box on it
 // wears, the stack's and the search pill with the live one; the loop reads
@@ -1361,6 +1388,13 @@ const dressDemo = (screen, S) => {
     set('--hole-w', (S.revealWidth / 60).toFixed(3) + 'em');
     set('--hole-h', (S.revealHeight / 60).toFixed(3) + 'em');
     set('--hist-text-alpha', S.historyTextOpacity);
+    // The boxes' colors: the chosen palette's over the page's, or, on Auto,
+    // nothing of their own, so the page's tokens show through again.
+    const theme = BOX_THEMES[S.theme];
+    BOX_TOKENS.forEach((name, i) => {
+      if (theme) screen.style.setProperty(name, theme[i]);
+      else screen.style.removeProperty(name);
+    });
   }
   setIconStyle(S.iconStyle);
 };
@@ -1380,7 +1414,7 @@ const menuChecks = (S) => {
     checked: ['size-' + (size || 'none'), 'align-' + S.textAlignment,
       { off: 'icon-off', nameTab: 'icon-tab', header: 'icon-header' }[S.iconStyle],
       'audio-' + (S.microphone ? 'mic' : 'all'),
-      'borealis-' + S.borealis, 'glow-' + S.borealisStrength,
+      'borealis-' + S.borealis, 'glow-' + S.borealisStrength, 'theme-' + S.theme,
       on('reveal', S.revealEnabled), on('history', S.historyEnabled),
       on('both', S.bothLanguages)].filter(Boolean),
     unchecked: [on('reveal', !S.revealEnabled), on('history', !S.historyEnabled),
@@ -1752,6 +1786,8 @@ const statusMenu = {
       // choice among its group.
       else if (id.startsWith('borealis-')) { pick(id); if (a.borealis) a.borealis(id.slice(9)); }
       else if (id.startsWith('glow-')) { pick(id); if (a.glow) a.glow(id.slice(5)); }
+      // Color Theme: auto, light or dark, a choice among the three.
+      else if (id.startsWith('theme-')) { pick(id); if (a.theme) a.theme(id.slice(6)); }
       else if (id === 'reset' && a.reset) a.reset();
     };
     const settle = (row) => {
@@ -3277,6 +3313,7 @@ const windowResize = (() => {
       listen: (which) => applySettings({ microphone: which === 'mic' }),
       borealis: (look) => applySettings({ borealis: look }),
       glow: (strength) => applySettings({ borealisStrength: strength }),
+      theme: (which) => applySettings({ theme: which }),
       reset: () => {
         box.style.left = '';
         box.style.top = '';

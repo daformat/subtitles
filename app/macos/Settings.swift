@@ -38,6 +38,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var iconStyle: () -> Pill.IconStyle = { .header }
     /// See `Pill.TextAlignment`.
     var textAlignment: () -> Pill.TextAlignment = { .start }
+    /// See `Pill.Theme`.
+    var theme: () -> Pill.Theme = { .auto }
     var onMaxLines: ((Int) -> Void)?
     var boxOpacity: () -> CGFloat = { SubtitleView.defaultBackgroundOpacity }
     var onBoxOpacity: ((CGFloat) -> Void)?
@@ -877,7 +879,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let rowWidth = Self.contentWidth
         let vad = ToggleRow(
-            "Skip non-speech", detail: "Stops music reaching the recogniser.",
+            "Skip non-speech", detail: "Stops music reaching the recognizer.",
             value: vadEnabled(), width: rowWidth) { [weak self] in self?.onToggleVAD?($0) }
         let speakers = ToggleRow(
             "New box on speaker change", detail: "Runs a second model on the Neural Engine.",
@@ -893,7 +895,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         toggles.spacing = 10
 
         section("Recognition",
-                "Both decide what reaches the recogniser, so switching either one "
+                "Both decide what reaches the recognizer, so switching either one "
                 + "reloads the engine: a pause of a few seconds, and a download "
                 + "the first time speaker changes are turned on.",
                 toggles, nil)
@@ -1061,6 +1063,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             historyExpires: historyExpires(),
             iconStyle: iconStyle(),
             textAlignment: textAlignment(),
+            theme: theme(),
             bothLanguages: bothLanguages(),
             microphone: microphone(),
             borealis: borealis(),

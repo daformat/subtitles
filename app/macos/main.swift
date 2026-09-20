@@ -153,6 +153,8 @@ enum Defaults {
     /// See `Pill.IconStyle` and `Pill.TextAlignment`.
     static let iconStyle = "overlay.iconStyle"
     static let textAlignment = "overlay.textAlignment"
+    /// See `Pill.Theme`.
+    static let theme = "overlay.theme"
     static let translateTo = "translate.target"
     static let translateMode = "translate.mode"
     static let bothLanguages = "translate.bothLanguages"
@@ -1134,7 +1136,7 @@ if useOverlay {
     // look and at the strength last chosen.
     var borealisEnabled = UserDefaults.standard.object(forKey: Defaults.borealis) as? Bool ?? true
     var borealisLook = UserDefaults.standard.string(forKey: Defaults.borealisLook)
-        .flatMap(AudioBorealis.Look.init(rawValue:)) ?? .rainbow
+        .flatMap(AudioBorealis.Look.named) ?? .rainbow
     var borealisStrength = UserDefaults.standard.string(forKey: Defaults.borealisStrength)
         .flatMap(AudioBorealis.Strength.init(rawValue:)) ?? .medium
     controller.isBorealisEnabled = borealisEnabled
@@ -1155,6 +1157,11 @@ if useOverlay {
     var textAlignment = UserDefaults.standard.string(forKey: Defaults.textAlignment)
         .flatMap(Pill.TextAlignment.init(rawValue:)) ?? .start
     controller.textAlignment = textAlignment
+    // The boxes' colors, from the menu: the system's appearance unless
+    // chosen otherwise.
+    var theme = UserDefaults.standard.string(forKey: Defaults.theme)
+        .flatMap(Pill.Theme.init(rawValue:)) ?? .auto
+    controller.theme = theme
     // The original under the translation, from the Translate To menu. Off
     // unless chosen: `bool(forKey:)` is false for a key never written.
     controller.showsBothLanguages = UserDefaults.standard.bool(forKey: Defaults.bothLanguages)
@@ -1253,7 +1260,7 @@ if useOverlay {
                     Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
                     Defaults.revealOpacity,
                     Defaults.revealWidth, Defaults.revealHeight,
-                    Defaults.iconStyle, Defaults.textAlignment] {
+                    Defaults.iconStyle, Defaults.textAlignment, Defaults.theme] {
             UserDefaults.standard.removeObject(forKey: key)
         }
 
@@ -1276,6 +1283,8 @@ if useOverlay {
         controller.iconStyle = .header
         textAlignment = .start
         controller.textAlignment = .start
+        theme = .auto
+        controller.theme = .auto
         controller.maxLines = SubtitleView.defaultMaxLines
         controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
         controller.backdropBlur = Pill.backdropBlur
@@ -1338,6 +1347,7 @@ if useOverlay {
     playingApp.start()
     settings.iconStyle = { iconStyle }
     settings.textAlignment = { textAlignment }
+    settings.theme = { theme }
     settings.bothLanguages = { controller.showsBothLanguages }
     settings.microphone = { tap.source == .microphone }
     settings.borealis = { borealisEnabled ? borealisLook.rawValue : "off" }
@@ -1505,6 +1515,14 @@ if useOverlay {
         settings.refreshPreview(changed: [.iconStyle])
         UserDefaults.standard.set(style.rawValue, forKey: Defaults.iconStyle)
         err("app icon on boxes: \(style.title)")
+    }
+    menu.currentTheme = { theme }
+    menu.onSelectTheme = { choice in
+        theme = choice
+        controller.theme = choice
+        settings.refreshPreview(changed: [.theme])
+        UserDefaults.standard.set(choice.rawValue, forKey: Defaults.theme)
+        err("color theme: \(choice.title)")
     }
     // Speech has stopped even if audio has not. Drop the recogniser's context so
     // a backing track cannot swallow the first words of whoever speaks next.

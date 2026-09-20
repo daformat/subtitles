@@ -164,6 +164,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var onSelectBorealisStrength: ((AudioBorealis.Strength) -> Void)?
     var borealisLook: () -> AudioBorealis.Look? = { .rainbow }
     var borealisStrength: () -> AudioBorealis.Strength = { .medium }
+    /// The boxes' colors — see `Pill.Theme`.
+    var onSelectTheme: ((Pill.Theme) -> Void)?
+    var currentTheme: () -> Pill.Theme = { .auto }
     var onToggleScreenShare: (() -> Void)?
     var screenShareEnabled: () -> Bool = { true }
     var onToggleHistory: (() -> Void)?
@@ -497,8 +500,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         history.toolTip = "Hold ⌥ to stack the last few boxes back up; scroll for older"
         menu.addItem(history)
 
-        // The glow, a group of its own under the box's switches.
+        // The box's colors and the glow, a group of their own under the
+        // box's switches.
         menu.addItem(.separator())
+        menu.addItem(themeMenuItem())
         menu.addItem(borealisMenuItem())
 
         // An action among checkmarks, set apart from them.
@@ -937,10 +942,33 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleReveal() { onToggleReveal?() }
 
+    /// Auto, light and dark — see `Pill.Theme`.
+    private func themeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Color Theme", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentTheme()
+        for choice in Pill.Theme.allCases {
+            let entry = NSMenuItem(title: choice.title, action: #selector(selectTheme(_:)),
+                                   keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = choice.rawValue
+            entry.state = choice == current ? .on : .off
+            if choice == .auto { entry.toolTip = "Follows the system's appearance" }
+            sub.addItem(entry)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectTheme(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let choice = Pill.Theme(rawValue: raw) else { return }
+        onSelectTheme?(choice)
+    }
+
     /// Off and the looks, then the strengths in a group of their own.
     private func borealisMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Audio Borealis", action: nil, keyEquivalent: "")
-        item.toolTip = "Colour along the box's edge that rises and falls with the sound"
         let sub = NSMenu()
         let look = borealisLook()
         let off = NSMenuItem(title: "Off", action: #selector(selectBorealisLook(_:)), keyEquivalent: "")

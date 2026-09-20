@@ -44,7 +44,7 @@ struct PreviewStyle: Equatable, Encodable {
         case fontSize, maxLines, boxOpacity, blur
         case revealOpacity, revealSize, revealEnabled
         case historyEnabled, historyDepth, historyTextOpacity, historyExpiry, historyExpires
-        case iconStyle, textAlignment
+        case iconStyle, textAlignment, theme
         case bothLanguages, microphone
         case borealis, borealisStrength
     }
@@ -66,6 +66,8 @@ struct PreviewStyle: Equatable, Encodable {
     var iconStyle: Pill.IconStyle = .header
     /// See `Pill.TextAlignment`.
     var textAlignment: Pill.TextAlignment = .start
+    /// See `Pill.Theme`.
+    var theme: Pill.Theme = .auto
     /// Show Both Languages, and Listen To → the microphone. Not the box's
     /// look, and nothing the preview here draws: carried for the welcome
     /// window's demo, whose box wears the other language under its text and
@@ -94,9 +96,10 @@ enum PreviewTopic {
 /// demo in the Welcome window does — the two sit a menu apart, and one of them
 /// staying dark in a light window looks like a bug in the other.
 ///
-/// What does *not* change is the caption box. The overlay is black with white
-/// text over whatever is playing, in either appearance, and the demo draws it
-/// that way too.
+/// The caption box has a switch of its own, the menu's Color Theme: black
+/// with white text, white with dark text, or, on Auto, whichever the
+/// appearance calls for. Its colors are dynamic, so the theme is set on the
+/// box and the stack as an appearance — see `Pill.Theme`.
 private struct DesktopPalette {
     /// Things drawn *on* a surface, at whatever alpha each one wants — the
     /// stylesheet's `--ink`, and the reason its alphas hold across the swap.
@@ -1123,6 +1126,11 @@ final class SettingsPreview: NSView {
         box.appName = Self.callName
         box.iconStyle = style.iconStyle
         box.textAlignment = style.textAlignment
+        // The theme is the boxes' appearance, as it is the overlay's panels':
+        // on the live box and on the stack's scroll view, so every box in it
+        // follows. Nil is the window's own, which is the system's.
+        Self.wear(style.theme, on: box)
+        Self.wear(style.theme, on: scroll)
         box.backgroundOpacity = style.boxOpacity
         boxBlur.radius = style.blur
         box.maskStrength = style.revealOpacity
@@ -1143,6 +1151,14 @@ final class SettingsPreview: NSView {
         layoutStack(above: box.frame.maxY - SubtitleView.pad)
         syncStack()
         updateMask()
+    }
+
+    /// Set `theme` as `view`'s appearance, when it is not already: this runs
+    /// on every tick of the loop, and an appearance set again relayers the
+    /// blur under the box for nothing.
+    private static func wear(_ theme: Pill.Theme, on view: NSView) {
+        let wanted = theme.appearance
+        if view.appearance?.name != wanted?.name { view.appearance = wanted }
     }
 
     /// Build the stack, and frame the scroll view against the live box.

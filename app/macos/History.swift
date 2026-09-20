@@ -76,13 +76,14 @@ final class HistoryPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     /// The search field edits through the window's shared field editor, whose
-    /// caret is the system's, which is invisible on a black pill. Set here, on
-    /// the editor itself, rather than after each click: the editor is handed
-    /// out fresh whenever editing begins, and a colour set on the last one
-    /// does not carry.
+    /// caret is the system's, which is invisible on a black pill; it takes
+    /// the boxes' ink, which follows the theme. Set here, on the editor
+    /// itself, rather than after each click: the editor is handed out fresh
+    /// whenever editing begins, and a color set on the last one does not
+    /// carry.
     override func fieldEditor(_ createFlag: Bool, for object: Any?) -> NSText? {
         let editor = super.fieldEditor(createFlag, for: object)
-        (editor as? NSTextView)?.insertionPointColor = .white
+        (editor as? NSTextView)?.insertionPointColor = Pill.ink
         return editor
     }
 
@@ -277,8 +278,8 @@ final class HistoryPillView: NSView {
     static let recession: CGFloat = 0.92
 
     /// Behind a search match. A warm wash rather than an inversion: the text
-    /// over it stays white, at full strength, and the wash is what the eye
-    /// lands on when scanning down the stack for it.
+    /// over it stays in the box's ink, at full strength, and the wash is what
+    /// the eye lands on when scanning down the stack for it.
     private static let highlight = NSColor(calibratedRed: 1, green: 0.8, blue: 0.2, alpha: 0.45)
 
     private let entry: HistoryEntry
@@ -359,7 +360,7 @@ final class HistoryPillView: NSView {
         guard !highlights.isEmpty else { return base }
         let lit = NSMutableAttributedString(attributedString: base)
         for range in highlights {
-            lit.addAttributes([.backgroundColor: Self.highlight, .foregroundColor: NSColor.white],
+            lit.addAttributes([.backgroundColor: Self.highlight, .foregroundColor: Pill.ink],
                               range: range)
         }
         return lit
@@ -445,7 +446,7 @@ final class HistoryPillView: NSView {
         // — the mask across the whole scroll view.
         let pill = Pill.pillRect(in: bounds, pad: 0, room: room)
         let rtl = isRightToLeft
-        NSColor.black.withAlphaComponent(style.fill).setFill()
+        Pill.box.withAlphaComponent(style.fill).setFill()
         Pill.pillPath(pill, radius: Pill.corner, square: squareCorners).fill()
         let scale = window?.backingScaleFactor ?? 2
         if style.fill > 0 {
@@ -478,7 +479,8 @@ private final class PillFace: NSView {
         drawing?(bounds)
     }
 
-    /// The hairline's colour follows the appearance.
+    /// The box's colors follow the appearance, which is the theme's: see
+    /// `Pill.Theme`.
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
@@ -583,7 +585,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         super.init(frame: .zero)
 
         face.drawing = { [unowned self] bounds in
-            NSColor.black.withAlphaComponent(self.style.fill).setFill()
+            Pill.box.withAlphaComponent(self.style.fill).setFill()
             NSBezierPath(roundedRect: bounds, xRadius: Pill.corner, yRadius: Pill.corner).fill()
             // One more box, so it wears the boxes' hairline.
             if self.style.fill > 0 {
@@ -644,18 +646,19 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         self.style = style
         let font = Pill.font(ofSize: fontSize)
         field.font = font
-        field.textColor = NSColor.white.withAlphaComponent(style.textOpacity)
+        // In the boxes' ink, which follows the theme the way the fill does.
+        field.textColor = Pill.ink.withAlphaComponent(style.textOpacity)
         field.placeholderAttributedString = NSAttributedString(
             string: "Search", attributes: [
                 .font: font,
-                .foregroundColor: NSColor.white.withAlphaComponent(style.textOpacity * 0.5),
+                .foregroundColor: Pill.ink.withAlphaComponent(style.textOpacity * 0.5),
             ])
-        icon.contentTintColor = NSColor.white.withAlphaComponent(style.textOpacity * 0.75)
+        icon.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.75)
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                 weight: .semibold)
-        clearButton.contentTintColor = NSColor.white.withAlphaComponent(style.textOpacity * 0.75)
+        clearButton.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.75)
         hint.font = Pill.font(ofSize: (fontSize * 0.85).rounded())
-        hint.textColor = NSColor.white.withAlphaComponent(style.textOpacity * 0.5)
+        hint.textColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.5)
         clearButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                        weight: .semibold)
         needsLayout = true
@@ -860,6 +863,12 @@ final class HistoryController {
     /// neither.
     var isVisibleInScreenShare = true {
         didSet { panel.sharingType = isVisibleInScreenShare ? .readOnly : .none }
+    }
+
+    /// The boxes' colors, as the live box wears them — see `Pill.Theme`. The
+    /// panel's appearance, which every box in it and the search pill follow.
+    var theme: Pill.Theme = .auto {
+        didSet { if theme != oldValue { panel.appearance = theme.appearance } }
     }
 
     /// Holds the scroll view and the search pill at its near edge.

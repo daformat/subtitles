@@ -135,20 +135,83 @@ enum Pill {
         return false
     }
 
+    // MARK: colors
+
+    /// Which colors the boxes are drawn in. Chosen from the menu.
+    ///
+    /// Not a color of its own but an appearance: every color on a box is
+    /// dynamic, resolved against the appearance of whatever draws it, so the
+    /// theme is set on the overlay's panels (and, in the Settings preview, on
+    /// the views) and every box in them follows, hairline and caret included.
+    enum Theme: String, CaseIterable, Encodable {
+        /// The system's: dark boxes under a dark appearance, light boxes
+        /// under a light one, changing as it does.
+        case auto
+        case light
+        case dark
+
+        var title: String {
+            switch self {
+            case .auto: return "Auto"
+            case .light: return "Light"
+            case .dark: return "Dark"
+            }
+        }
+
+        /// The appearance to draw the boxes in; nil leaves them following
+        /// the system's.
+        var appearance: NSAppearance? {
+            switch self {
+            case .auto: return nil
+            case .light: return NSAppearance(named: .aqua)
+            case .dark: return NSAppearance(named: .darkAqua)
+            }
+        }
+    }
+
+    /// Whether boxes drawn under `appearance` are the dark ones.
+    static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    /// The box's own color, at whatever opacity the setting gives it: black
+    /// in the dark theme, and in the light one the box turned inside out,
+    /// white, so it reads as a box on a light desk rather than a hole in
+    /// one. The site's demo states both, and every value below.
+    static let box = NSColor(name: nil) { isDark($0) ? .black : .white }
+
+    /// The caption's color: white on the black box, a near-black gray on the
+    /// white one.
+    static let ink = NSColor(name: nil) { appearance in
+        isDark(appearance)
+            ? .white
+            : NSColor(srgbRed: 62 / 255, green: 62 / 255, blue: 66 / 255, alpha: 1)
+    }
+
+    /// The name's color, in the tab and the header: a fixed light gray on
+    /// the black box and black at half strength on the white one, on the
+    /// live box and in the stack alike, rather than the text's ink at the
+    /// box's opacity.
+    static let tabInk = NSColor(name: nil) { appearance in
+        isDark(appearance)
+            ? NSColor(srgbRed: 210 / 255, green: 210 / 255, blue: 211 / 255, alpha: 1)
+            : NSColor.black.withAlphaComponent(0.55)
+    }
+
     // MARK: outline
 
     /// A hairline round every box, one device pixel wide, just inside the
     /// pill's edge, the way the system edges its own panels. A shade lighter
-    /// than the box in dark mode; a shade darker than it in light mode, where
-    /// the picture behind is bright and a light rim reads as a glint from
-    /// behind the box rather than its edge. Drawn by the app on every system.
-    /// The rim Liquid Glass draws on macOS 26 is NSGlassEffectView's alone,
-    /// which would replace the backdrop under the pill rather than this line
-    /// — a change to make against the 26 SDK, on a machine that can show it.
+    /// than the black box; a shade darker than the white one, where a light
+    /// rim would read as a glint from behind the box rather than its edge.
+    /// Drawn by the app on every system. The rim Liquid Glass draws on macOS
+    /// 26 is NSGlassEffectView's alone, which would replace the backdrop
+    /// under the pill rather than this line — a change to make against the
+    /// 26 SDK, on a machine that can show it.
     static let outlineInk = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        isDark(appearance)
             ? NSColor(srgbRed: 210 / 255, green: 210 / 255, blue: 211 / 255, alpha: 0.16)
-            : NSColor.black.withAlphaComponent(0.55)
+            : NSColor.black.withAlphaComponent(0.08)
     }
 
     /// One device pixel, in points.
@@ -236,11 +299,6 @@ enum Pill {
                             minWidth: inset.width * 2 + side + (label > 0 ? headerNameGap + label : 0))
         }
     }
-
-    /// The name's colour, in the tab and the header: a fixed light grey, on
-    /// the live box and in the stack alike, rather than the text's white at
-    /// the box's opacity.
-    static let tabInk = NSColor(srgbRed: 210 / 255, green: 210 / 255, blue: 211 / 255, alpha: 1)
 
     /// The name tab: its icon, its type, its top corners, and the room inside
     /// it. The tab is flush with the pill's edge, so its ends take the text's
@@ -422,7 +480,7 @@ enum Pill {
     /// and contents later with `draw(icon:filled: false)`.
     static func fillTab(on pill: NSRect, name: String?, size: CGFloat, fill: CGFloat, rtl: Bool) {
         let tab = tabRect(on: pill, name: name, size: size, rtl: rtl)
-        NSColor.black.withAlphaComponent(fill).setFill()
+        box.withAlphaComponent(fill).setFill()
         tabPath(tab: tab, pill: pill, rtl: rtl, offset: 0, closed: true).fill()
     }
 
@@ -438,7 +496,7 @@ enum Pill {
         // outer side, into the pill's own lines at either end — see
         // `outline`, which leaves the pill's top clear under it.
         if filled {
-            NSColor.black.withAlphaComponent(fill).setFill()
+            box.withAlphaComponent(fill).setFill()
             tabPath(tab: tab, pill: pill, rtl: rtl, offset: 0, closed: true).fill()
         }
         let width = hairlineWidth(scale: scale)
@@ -544,12 +602,12 @@ enum Pill {
         let out = NSMutableAttributedString()
         out.append(NSAttributedString(string: committed, attributes: [
             .font: f,
-            .foregroundColor: NSColor.white.withAlphaComponent(opacity),
+            .foregroundColor: ink.withAlphaComponent(opacity),
             .paragraphStyle: style,
         ]))
         out.append(NSAttributedString(string: tentative, attributes: [
             .font: f,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.55 * opacity),
+            .foregroundColor: ink.withAlphaComponent(0.55 * opacity),
             .paragraphStyle: style,
         ]))
         return out

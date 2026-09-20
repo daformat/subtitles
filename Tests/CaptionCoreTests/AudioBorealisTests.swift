@@ -227,8 +227,23 @@ final class AudioBorealisTests: XCTestCase {
         config.colorMode = .black
         let black = AudioBorealis.color(2, config: config, drift: 30)
         XCTAssertEqual(black.r + black.g + black.b, 0, accuracy: 1e-9)
+        // Monochrome is white from the driver; the painter darkens it on a
+        // light box.
+        config.colorMode = .monochrome
+        let mono = AudioBorealis.color(2, config: config, drift: 30)
+        XCTAssertEqual(mono.r + mono.g + mono.b, 3, accuracy: 1e-9)
         config.colorModeIndex = 0
         XCTAssertEqual(config.colorMode, .spectrum)
+    }
+
+    func testTheHazeIsMonochromeUnderItsOldNameToo() {
+        var config = AudioBorealis.Config()
+        AudioBorealis.Look.monochromeHaze.apply(to: &config)
+        XCTAssertEqual(config.colorMode, .monochrome)
+        XCTAssertEqual(AudioBorealis.Look.named("whiteHaze"), .monochromeHaze)
+        XCTAssertEqual(AudioBorealis.Look.named("monochromeHaze"), .monochromeHaze)
+        XCTAssertEqual(AudioBorealis.Look.named("autumn"), .autumn)
+        XCTAssertNil(AudioBorealis.Look.named("mauve"))
     }
 
     func testEachBandHasACurveThatRisesWithIt() {

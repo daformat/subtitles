@@ -134,20 +134,32 @@ public struct AudioBorealis {
 
     public enum ColorMode: Int, CaseIterable {
         case spectrum, white, black
+        /// The opposite of the box's own color: white on the dark box, a
+        /// dark gray on the light one. The driver does not know which box
+        /// it is drawn on, so it gives white, the dark box's; the painter,
+        /// which does, turns it gray on a light box (`lightBoxHaze`).
+        case monochrome
     }
 
     /// The looks the menu offers: each a setting of the colours, laid over
     /// the config's other knobs.
     public enum Look: String, CaseIterable {
-        case rainbow, northernLights, autumn, whiteHaze
+        case rainbow, northernLights, autumn, monochromeHaze
 
         public var title: String {
             switch self {
             case .rainbow: return "Rainbow"
             case .northernLights: return "Northern Lights"
             case .autumn: return "Autumn"
-            case .whiteHaze: return "White Haze"
+            case .monochromeHaze: return "Monochrome Haze"
             }
+        }
+
+        /// The look under its stored name, the haze's 1.8.2 name included:
+        /// it shipped as White Haze, and a copy that chose it keeps its
+        /// choice under the new name.
+        public static func named(_ raw: String) -> Look? {
+            raw == "whiteHaze" ? .monochromeHaze : Look(rawValue: raw)
         }
 
         public func apply(to config: inout Config) {
@@ -164,8 +176,8 @@ public struct AudioBorealis {
                 config.colorMode = .spectrum
                 config.hueStart = 310
                 config.hueWidth = 90
-            case .whiteHaze:
-                config.colorMode = .white
+            case .monochromeHaze:
+                config.colorMode = .monochrome
             }
         }
     }
@@ -491,11 +503,12 @@ public struct AudioBorealis {
     /// The `index`th colour, as `r, g, b` in 0-1: its share of the hue
     /// wheel from the start, turned by the frame's `drift`, at the
     /// configured saturation and full brightness; or white or black alone.
+    /// Monochrome is white here, the dark box's: see `ColorMode`.
     /// The site's `hsl()` gives the same colour from the same numbers.
     public static func color(_ index: Int, config c: Config, drift: Double)
         -> (r: Double, g: Double, b: Double) {
         switch c.colorMode {
-        case .white: return (1, 1, 1)
+        case .white, .monochrome: return (1, 1, 1)
         case .black: return (0, 0, 0)
         case .spectrum:
             let share = hueShares[index % hueShares.count]
