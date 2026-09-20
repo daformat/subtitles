@@ -36,6 +36,7 @@ and the DMG name show.
 - The welcome window's demo glows the same way, and follows the look and
   strength you pick.
 
+## 1.8.1 · 2026-09-19
 
 - Safari's audio is Safari's. Safari plays through a WebKit service that
   carries neither its bundle id nor its name, and every WebKit app (Mail,
