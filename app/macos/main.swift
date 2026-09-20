@@ -126,6 +126,9 @@ if listSources {
 enum Defaults {
     static let fontSize = "overlay.fontSize"
     static let reveal = "overlay.reveal"
+    static let borealis = "overlay.borealis"
+    static let borealisLook = "overlay.borealisLook"
+    static let borealisStrength = "overlay.borealisStrength"
     static let history = "overlay.history"
     static let historyDepth = "overlay.historyDepth"
     static let maxLines = "overlay.maxLines"
@@ -530,8 +533,11 @@ let onEvent: @convention(c) (UnsafePointer<subs_event_t>?, UnsafeMutableRawPoint
 // without starting IO, so the worker is running before a single sample is
 // captured; starting capture first buries the opening seconds of speech behind a
 // model load's worth of buffered audio.
+/// How loud what the app listens to is, for the glow along the live box.
+let voiceMeter = VoiceMeter()
 let tap = SystemAudioTap { samples, count in
     if isPaused { return }
+    voiceMeter.feed(samples, count: count)
     subs_push_audio(engine, samples, UInt(count))
 }
 
@@ -561,6 +567,7 @@ do {
     exit(1)
 }
 err("\(bold)subtitles\(reset): \(Int(format.sampleRate)) Hz, \(format.channels) ch")
+voiceMeter.configure(for: format)
 
 // ── engine lifecycle ──
 
@@ -590,6 +597,7 @@ func resumeCapture() {
         if live != format {
             err("input is \(Int(live.sampleRate)) Hz, \(live.channels) ch; rebuilding the audio core for it")
             format = live
+            voiceMeter.configure(for: format)
             rebuildCore(generation: loadGeneration)
             return
         }
@@ -1049,6 +1057,7 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
         UserDefaults.standard.set(name, forKey: Defaults.sourceName)
     }
     overlay?.clearAndHide()
+    voiceMeter.clear()
     renderer.discardLine()
     // Clearing the overlay is not enough on its own: the recogniser keeps its
     // accumulated transcript and its encoder context, so the new source's first
@@ -1121,6 +1130,20 @@ if useOverlay {
         UserDefaults.standard.object(forKey: Defaults.screenShare) as? Bool ?? true
     controller.isVisibleInScreenShare = screenShareEnabled
     controller.isRevealEnabled = revealEnabled
+    // The glow along the box with the sound: on unless turned off, in the
+    // look and at the strength last chosen.
+    var borealisEnabled = UserDefaults.standard.object(forKey: Defaults.borealis) as? Bool ?? true
+    var borealisLook = UserDefaults.standard.string(forKey: Defaults.borealisLook)
+        .flatMap(AudioBorealis.Look.init(rawValue:)) ?? .rainbow
+    var borealisStrength = UserDefaults.standard.string(forKey: Defaults.borealisStrength)
+        .flatMap(AudioBorealis.Strength.init(rawValue:)) ?? .medium
+    controller.isBorealisEnabled = borealisEnabled
+    // The glow's knobs: the tuned defaults, with the chosen look and
+    // strength over them.
+    var glowConfig = AudioBorealis.Config()
+    borealisLook.apply(to: &glowConfig)
+    borealisStrength.apply(to: &glowConfig)
+    controller.borealisConfig = glowConfig
     var historyEnabled = UserDefaults.standard.object(forKey: Defaults.history) as? Bool ?? true
     controller.isHistoryEnabled = historyEnabled
     // Where the source app's icon and name go, and how the text sits, both
@@ -1223,7 +1246,8 @@ if useOverlay {
         // Forget them rather than write the defaults back: a key that is absent
         // follows the default if the default ever changes, and a key holding the
         // same number by coincidence does not.
-        for key in [Defaults.fontSize, Defaults.reveal, Defaults.history,
+        for key in [Defaults.fontSize, Defaults.reveal, Defaults.borealis,
+                    Defaults.borealisLook, Defaults.borealisStrength, Defaults.history,
                     Defaults.historyDepth, Defaults.historyTextOpacity,
                     Defaults.historyExpiry, Defaults.historyExpires,
                     Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
@@ -1239,6 +1263,13 @@ if useOverlay {
         controller.setFontSize(fontSize)
         revealEnabled = true
         controller.isRevealEnabled = true
+        borealisEnabled = true
+        borealisLook = .rainbow
+        borealisStrength = .medium
+        controller.isBorealisEnabled = true
+        borealisLook.apply(to: &glowConfig)
+        borealisStrength.apply(to: &glowConfig)
+        controller.borealisConfig = glowConfig
         historyEnabled = true
         controller.isHistoryEnabled = true
         iconStyle = .header
@@ -1309,6 +1340,9 @@ if useOverlay {
     settings.textAlignment = { textAlignment }
     settings.bothLanguages = { controller.showsBothLanguages }
     settings.microphone = { tap.source == .microphone }
+    settings.borealis = { borealisEnabled ? borealisLook.rawValue : "off" }
+    settings.borealisStrength = { borealisStrength.rawValue }
+    controller.voiceMeter = voiceMeter
 
     let menu = StatusMenuController()
     menu.isPaused = { isPaused }
@@ -1406,6 +1440,32 @@ if useOverlay {
         screenShareEnabled.toggle()
         controller.isVisibleInScreenShare = screenShareEnabled
         UserDefaults.standard.set(screenShareEnabled, forKey: Defaults.screenShare)
+    }
+    menu.borealisLook = { borealisEnabled ? borealisLook : nil }
+    menu.borealisStrength = { borealisStrength }
+    // A look chosen turns the glow on in its colours; Off leaves them as
+    // they are.
+    menu.onSelectBorealisLook = { look in
+        if let look {
+            borealisLook = look
+            borealisEnabled = true
+            UserDefaults.standard.set(look.rawValue, forKey: Defaults.borealisLook)
+            look.apply(to: &glowConfig)
+            controller.borealisConfig = glowConfig
+        } else {
+            borealisEnabled = false
+        }
+        controller.isBorealisEnabled = borealisEnabled
+        UserDefaults.standard.set(borealisEnabled, forKey: Defaults.borealis)
+        // The welcome window's demo glows the same way.
+        settings.refreshPreview(changed: [.borealis])
+    }
+    menu.onSelectBorealisStrength = { strength in
+        borealisStrength = strength
+        UserDefaults.standard.set(strength.rawValue, forKey: Defaults.borealisStrength)
+        strength.apply(to: &glowConfig)
+        controller.borealisConfig = glowConfig
+        settings.refreshPreview(changed: [.borealisStrength])
     }
     menu.revealEnabled = { revealEnabled }
     menu.onToggleReveal = {

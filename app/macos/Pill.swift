@@ -323,14 +323,16 @@ enum Pill {
     /// The icon itself is always at full strength: a box in the stack dims
     /// its text to sit behind the live one, but a dimmed icon reads as a
     /// disabled app rather than a box that sits back.
+    /// `filled` false leaves the tab's fill to the caller (see `fillTab`),
+    /// for a box that paints something between the fill and the tab's line.
     static func draw(icon: NSImage, name: String?, style: IconStyle, on pill: NSRect,
-                     size: CGFloat, fill: CGFloat, rtl: Bool, scale: CGFloat) {
+                     size: CGFloat, fill: CGFloat, rtl: Bool, scale: CGFloat, filled: Bool = true) {
         switch style {
         case .off:
             return
         case .nameTab:
             tab(icon, name: name, in: tabRect(on: pill, name: name, size: size, rtl: rtl), on: pill,
-                size: size, fill: fill, rtl: rtl, scale: scale)
+                size: size, fill: fill, rtl: rtl, scale: scale, filled: filled)
         case .header:
             header(icon, name: name, on: pill, size: size, rtl: rtl)
         }
@@ -416,8 +418,16 @@ enum Pill {
                   respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
     }
 
+    /// The tab's fill alone, at `fill`, for a box that draws the tab's line
+    /// and contents later with `draw(icon:filled: false)`.
+    static func fillTab(on pill: NSRect, name: String?, size: CGFloat, fill: CGFloat, rtl: Bool) {
+        let tab = tabRect(on: pill, name: name, size: size, rtl: rtl)
+        NSColor.black.withAlphaComponent(fill).setFill()
+        tabPath(tab: tab, pill: pill, rtl: rtl, offset: 0, closed: true).fill()
+    }
+
     private static func tab(_ icon: NSImage, name: String?, in tab: NSRect, on pill: NSRect,
-                            size: CGFloat, fill: CGFloat, rtl: Bool, scale: CGFloat) {
+                            size: CGFloat, fill: CGFloat, rtl: Bool, scale: CGFloat, filled: Bool) {
         let iconSide = tabIconSide(ofSize: size)
         let edge = tabEdge, gap = tabGap
 
@@ -427,8 +437,10 @@ enum Pill {
         // meet. The hairline runs up the foot, over the top and down the
         // outer side, into the pill's own lines at either end — see
         // `outline`, which leaves the pill's top clear under it.
-        NSColor.black.withAlphaComponent(fill).setFill()
-        tabPath(tab: tab, pill: pill, rtl: rtl, offset: 0, closed: true).fill()
+        if filled {
+            NSColor.black.withAlphaComponent(fill).setFill()
+            tabPath(tab: tab, pill: pill, rtl: rtl, offset: 0, closed: true).fill()
+        }
         let width = hairlineWidth(scale: scale)
         let line = tabPath(tab: tab, pill: pill, rtl: rtl, offset: width / 2, closed: false)
         line.lineWidth = width

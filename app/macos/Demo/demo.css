@@ -1993,6 +1993,21 @@ kbd {
 }
 .is-tabbed.has-tab .ov-app img { width: 0.5em; height: 0.5em; }
 .is-tabbed.has-tab .ov-name { font-size: 0.433em; }
+/* Audio Borealis: the glow the sound raises along the box's bottom edge,
+   painted by script.js on a canvas laid inside the box, between its fill and
+   its text (a negative z-index in the box's own stacking context paints
+   after the background and before the in-flow text). It takes the box's
+   corners and, on a tabbed box, the box's mask cuts it to the silhouette
+   with everything else. */
+.ov-borealis {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+}
 /* The hairline's inner corner, over the fill and under the text: the box keeps
    the stylesheet's inset hairline, which the mask cuts to the silhouette and
    which every engine paints on whole pixels; what that cannot draw, the tab's

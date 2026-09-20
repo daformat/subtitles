@@ -139,6 +139,12 @@ final class SubtitleView: NSView {
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
 
+    /// The borealis's frame to paint along the bottom of the pill; nil
+    /// paints none. See AudioBorealis.
+    var borealis: AudioBorealis.Frame? {
+        didSet { if borealis != oldValue { needsDisplay = true } }
+    }
+
     /// Cursor position in view coordinates, or nil when the pointer is nowhere
     /// near (or ⇧ is held). Punches a soft hole through the box so whatever the
     /// overlay is covering can be read by pointing at it.
@@ -400,6 +406,21 @@ final class SubtitleView: NSView {
         let rtl = isRightToLeft
         NSColor.black.withAlphaComponent(backgroundOpacity).setFill()
         Pill.pillPath(box, radius: corner, square: squareCorners).fill()
+        // The tab's fill goes down with the pill's, so what is painted over
+        // the box runs into the tab too; its line, icon and name come later,
+        // over that.
+        let wearsTab = icon != nil && iconStyle == .nameTab
+        if wearsTab, backgroundOpacity > 0 {
+            Pill.fillTab(on: box, name: appName, size: fontSize, fill: backgroundOpacity, rtl: rtl)
+        }
+        // The glow, over the box and under everything on it, inside its whole
+        // silhouette, tab included. With no pill there is no edge to sit on.
+        if let borealis, backgroundOpacity > 0, let ctx {
+            AudioBorealisPainter.draw(borealis, in: ctx, pill: box,
+                                      path: Pill.silhouette(pill: box, style: iconStyle, icon: icon != nil,
+                                                            name: appName, size: fontSize, rtl: rtl, grow: 0),
+                                      fontSize: fontSize)
+        }
         // No pill, no outline: at zero the setting says bare text over the picture.
         let scale = window?.backingScaleFactor ?? 2
         if backgroundOpacity > 0 {
@@ -445,7 +466,7 @@ final class SubtitleView: NSView {
         // through the icon as it does through the text.
         if let icon {
             Pill.draw(icon: icon, name: appName, style: iconStyle, on: box,
-                      size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale)
+                      size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale, filled: false)
         }
         let textRect = Pill.textRect(in: box, room: iconRoom)
         text.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
@@ -596,6 +617,19 @@ final class OverlayController {
             // The box makes room for the icon, so whatever is on screen re-fits.
             layout()
         }
+    }
+
+    /// How loud what the app listens to is, for the glow along the box's
+    /// bottom edge; nil paints none.
+    var voiceMeter: VoiceMeter?
+    /// Whether the glow is wanted at all: the menu's Audio Borealis row.
+    var isBorealisEnabled = true
+    private var borealis = AudioBorealis()
+    private var borealisTickedAt: CFTimeInterval = 0
+    /// The glow's knobs, live: the debug window turns them.
+    var borealisConfig: AudioBorealis.Config {
+        get { borealis.config }
+        set { borealis.config = newValue }
     }
 
     /// Where the icon goes, on the live box and the stack alike — see
@@ -1141,6 +1175,7 @@ final class OverlayController {
         let cursor = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.updateHistory()
             self?.updateMask()
+            self?.tickAudioBorealis()
         }
         RunLoop.main.add(cursor, forMode: .common)
         cursorTimer = cursor
@@ -1194,6 +1229,28 @@ final class OverlayController {
             // The live box resizes on every word; the stack rides along with it.
             history.reposition(anchor: panel.frame, centreX: boxCentreX)
         }
+    }
+
+    /// One frame of the glow: read the meter, advance the driver, paint.
+    /// Only while the box is up and the glow is wanted; otherwise the glow
+    /// is dropped and the driver rests, so it opens from silence.
+    private func tickAudioBorealis() {
+        guard let voiceMeter, isBorealisEnabled, panel.alphaValue > 0, !boxIsCleared else {
+            if view.borealis != nil {
+                view.borealis = nil
+                borealis.reset()
+            }
+            borealisTickedAt = 0
+            return
+        }
+        let now = CACurrentMediaTime()
+        let dt = borealisTickedAt == 0 ? 1.0 / 60 : min(0.05, now - borealisTickedAt)
+        borealisTickedAt = now
+        let reading = voiceMeter.read()
+        let frame = borealis.step(dt: dt, loudness: reading.loudness, bands: reading.bands)
+        // Nothing to paint in silence, and nothing to redraw for: the box is
+        // left alone until a voice lifts the glow.
+        view.borealis = frame.glow > 0.002 ? frame : nil
     }
 
     /// Point the reveal at the cursor, or turn it off.

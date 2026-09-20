@@ -46,6 +46,7 @@ struct PreviewStyle: Equatable, Encodable {
         case historyEnabled, historyDepth, historyTextOpacity, historyExpiry, historyExpires
         case iconStyle, textAlignment
         case bothLanguages, microphone
+        case borealis, borealisStrength
     }
     typealias Field = CodingKeys
 
@@ -71,6 +72,11 @@ struct PreviewStyle: Equatable, Encodable {
     /// the microphone as its source, the way the overlay's does.
     var bothLanguages = false
     var microphone = false
+    /// Audio Borealis, the menu's look ("off", or a `AudioBorealis.Look`)
+    /// and strength (a `AudioBorealis.Strength`): carried for the welcome
+    /// window's demo the same way, whose box glows as the overlay's does.
+    var borealis = "rainbow"
+    var borealisStrength = "medium"
 }
 
 /// Which control was last touched, so the box can explain that one.

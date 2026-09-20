@@ -60,6 +60,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// ride along in the style for the welcome window's demo.
     var bothLanguages: () -> Bool = { false }
     var microphone: () -> Bool = { false }
+    /// The menu's Audio Borealis look ("off" for off) and strength, by their
+    /// raw names, for the welcome window's demo.
+    var borealis: () -> String = { "rainbow" }
+    var borealisStrength: () -> String = { "medium" }
     /// Whether non-speech is skipped before it reaches the recogniser. This
     /// window is the only place that changes it.
     var vadEnabled: () -> Bool = { true }
@@ -1058,7 +1062,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             iconStyle: iconStyle(),
             textAlignment: textAlignment(),
             bothLanguages: bothLanguages(),
-            microphone: microphone())
+            microphone: microphone(),
+            borealis: borealis(),
+            borealisStrength: borealisStrength())
     }
 
     /// Something the menu changed, or may have: re-read the two switches it

@@ -4,7 +4,22 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
-## 1.8.1 · 2026-09-19
+## 1.8.2 · 2026-09-20
+
+- **Audio Borealis**: colour along the bottom of the box that rises and falls
+  with the sound. Soft lobes fan out from the edge, each following a band of
+  the voice, and over them one translucent curve per band, lows to highs,
+  lifts as its band is heard, so a vowel and a sibilant move different
+  hills. Silence is nothing; a voice makes it pulse with the syllables. It
+  follows whatever the app listens to, an app's audio or the microphone
+  alike, scaled to its own peaks so a quiet voice across a desk fills the
+  same range a film's soundtrack does. On by default, in the new Audio
+  Borealis submenu of the status menu: Off, or a look (Rainbow, Northern
+  Lights, Autumn, White Haze) and a strength (Strong, Medium, Subtle).
+  Rainbow and Medium unless you choose otherwise.
+- The welcome window's demo glows the same way, and follows the look and
+  strength you pick.
+
 
 - Safari's audio is Safari's. Safari plays through a WebKit service that
   carries neither its bundle id nor its name, and every WebKit app (Mail,

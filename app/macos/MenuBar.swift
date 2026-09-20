@@ -158,6 +158,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var showsBothLanguages: () -> Bool = { false }
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
+    /// The glow along the box with the sound: its look (nil for off) and
+    /// its strength.
+    var onSelectBorealisLook: ((AudioBorealis.Look?) -> Void)?
+    var onSelectBorealisStrength: ((AudioBorealis.Strength) -> Void)?
+    var borealisLook: () -> AudioBorealis.Look? = { .rainbow }
+    var borealisStrength: () -> AudioBorealis.Strength = { .medium }
     var onToggleScreenShare: (() -> Void)?
     var screenShareEnabled: () -> Bool = { true }
     var onToggleHistory: (() -> Void)?
@@ -490,6 +496,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         history.state = historyEnabled() ? .on : .off
         history.toolTip = "Hold ⌥ to stack the last few boxes back up; scroll for older"
         menu.addItem(history)
+
+        // The glow, a group of its own under the box's switches.
+        menu.addItem(.separator())
+        menu.addItem(borealisMenuItem())
 
         // An action among checkmarks, set apart from them.
         menu.addItem(.separator())
@@ -926,6 +936,50 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     @objc private func togglePause() { onTogglePause?() }
     @objc private func toggleReveal() { onToggleReveal?() }
+
+    /// Off and the looks, then the strengths in a group of their own.
+    private func borealisMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Audio Borealis", action: nil, keyEquivalent: "")
+        item.toolTip = "Colour along the box's edge that rises and falls with the sound"
+        let sub = NSMenu()
+        let look = borealisLook()
+        let off = NSMenuItem(title: "Off", action: #selector(selectBorealisLook(_:)), keyEquivalent: "")
+        off.target = self
+        off.representedObject = ""            // empty stands for off
+        off.state = look == nil ? .on : .off
+        sub.addItem(off)
+        for choice in AudioBorealis.Look.allCases {
+            let entry = NSMenuItem(title: choice.title, action: #selector(selectBorealisLook(_:)),
+                                   keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = choice.rawValue
+            entry.state = choice == look ? .on : .off
+            sub.addItem(entry)
+        }
+        sub.addItem(.separator())
+        let strength = borealisStrength()
+        for choice in AudioBorealis.Strength.allCases {
+            let entry = NSMenuItem(title: choice.title, action: #selector(selectBorealisStrength(_:)),
+                                   keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = choice.rawValue
+            entry.state = choice == strength ? .on : .off
+            sub.addItem(entry)
+        }
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectBorealisLook(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        onSelectBorealisLook?(AudioBorealis.Look(rawValue: raw))
+    }
+
+    @objc private func selectBorealisStrength(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let choice = AudioBorealis.Strength(rawValue: raw) else { return }
+        onSelectBorealisStrength?(choice)
+    }
 
     // MARK: icon style
 
