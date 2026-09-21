@@ -73,6 +73,40 @@ actor VoiceDetector {
         }
     }
 
+    /// The probability a 256 ms chunk must reach to count as a voice when
+    /// the question is "is there one", rather than the gate's "might there
+    /// be". The gate takes the model's own bar (0.85) and fails open, since a
+    /// missed word costs more than a chunk of music let through; here a
+    /// false yes hands a music player the box. Measured 2026-09-21 on this
+    /// machine: speech, recorded or synthesized, scores 1.00 on nearly every
+    /// chunk and rap 0.98 and above between its beats, while instrumental
+    /// music sits near zero with a synth lead or a string swell reaching
+    /// 0.85 to 0.89 on a chunk here and there.
+    static let sureVoice: Float = 0.95
+
+    /// How much of a stretch of audio is a voice: the share of its 256 ms
+    /// chunks that reach `sureVoice`, judged from a fresh state so the
+    /// stream's own is left where it was. For the playing-app monitor, which
+    /// has listened to an app and wants to know whether the sound it heard
+    /// has words in it. Nil when the detector is not loaded, or the audio is
+    /// shorter than one chunk: no answer rather than a wrong one. Not counted
+    /// in the compute the engine reports, which is per second of the audio
+    /// it transcribes.
+    func speechFraction(in samples: [Float]) async -> Double? {
+        guard loaded, let manager else { return nil }
+        let whole = samples.prefix(samples.count / Self.chunkSamples * Self.chunkSamples)
+        guard !whole.isEmpty else { return nil }
+        do {
+            let results = try await manager.process(Array(whole))
+            guard !results.isEmpty else { return nil }
+            return Double(results.filter { $0.probability >= Self.sureVoice }.count)
+                / Double(results.count)
+        } catch {
+            onStatus("VAD error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Compute seconds since the last call, for folding into the engine's RTF.
     func takeComputeSeconds() -> Double {
         let value = computeSeconds

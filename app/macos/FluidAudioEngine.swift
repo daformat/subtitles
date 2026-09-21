@@ -193,6 +193,15 @@ actor FluidAudioEngine {
     private var nemotron: StreamingNemotronAsrManager?
     private var unified: StreamingUnifiedAsrManager?
     private var multilingual: StreamingNemotronMultilingualAsrManager?
+    /// The multilingual models as loaded once for two managers: the live one
+    /// and the monitor's word probe, which costs its own stream state and not
+    /// a second copy of the models. Nil for the other variants, whose
+    /// managers load their models for themselves alone.
+    private var sharedMultilingual: SharedNemotronMultilingualModels?
+    /// A second recognizer over the shared models, for the playing-app
+    /// monitor: what an app is saying on its own, to hold against the
+    /// captions. See WordProbe.
+    private var probe: WordProbe?
     /// Which language the multilingual variant is pinned to. Ignored by the
     /// English-only variants.
     private let language: FluidLanguage
@@ -403,10 +412,22 @@ actor FluidAudioEngine {
                     languageCode: language.code,
                     chunkMs: 560,
                     progressHandler: progress)
+                // Loaded once as a bundle both managers consume: the same
+                // models, configuration and per-stream state as loading them
+                // into the manager directly, less the zero-input warm-up of
+                // the ANE programs, which the probe does below for both.
+                let shared = try await StreamingNemotronMultilingualAsrManager.preloadShared(from: dir)
                 let manager = StreamingNemotronMultilingualAsrManager()
-                try await manager.loadModels(from: dir)
+                try await manager.loadFromShared(shared)
                 await manager.setLanguage(language == .auto ? nil : language.code)
                 multilingual = manager
+                sharedMultilingual = shared
+                let second = StreamingNemotronMultilingualAsrManager()
+                try await second.loadFromShared(shared)
+                await second.setLanguage(language == .auto ? nil : language.code)
+                let probe = WordProbe(manager: second, onStatus: onStatus)
+                await probe.warmUp()
+                self.probe = probe
             } else if variant.isUnified {
                 // The only variant that punctuates and capitalises. Costs latency:
                 // its [70,13,13] window is 2.08 s against EOU's 320 ms.
@@ -764,6 +785,13 @@ actor FluidAudioEngine {
         }
     }
 
+    /// The monitor's second ear: a recognizer of its own over the loaded
+    /// models, under the multilingual variant once it is ready. Nil for the
+    /// other variants, and until then.
+    func wordProbe() -> WordProbe? {
+        loaded ? probe : nil
+    }
+
     /// Fraction of gated-on audio the detector called speech. Everything else is
     /// what the recogniser used to process for nothing.
     func speechFraction() async -> Double {
@@ -779,6 +807,9 @@ actor FluidAudioEngine {
         if let eou { await eou.cleanup() }
         if let nemotron { await nemotron.cleanup() }
         if let multilingual { await multilingual.cleanup() }
+        if let probe { await probe.cleanup() }
+        probe = nil
+        sharedMultilingual = nil
         unified = nil
         eou = nil
         nemotron = nil

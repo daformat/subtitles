@@ -189,6 +189,10 @@ if !license.entitlement.allowsTranscription {
 // Globals rather than captures: the audio callback must not touch ARC.
 nonisolated(unsafe) var engine: OpaquePointer?
 nonisolated(unsafe) var fluidEngine: FluidAudioEngine?
+/// The engine's voice detector, for the playing-app monitor to ask whether
+/// the sound it heard from an app has a voice in it. Rebuilt with the engine,
+/// and nil with Skip non-speech off.
+nonisolated(unsafe) var voiceDetector: VoiceDetector?
 /// Multilingual on auto-detect, because a default should work before it is
 /// configured and the English-only checkpoints simply do not, for most of the
 /// world's audio. It costs nothing measurable: RTF 0.08–0.11 on French here,
@@ -376,10 +380,15 @@ final class Renderer {
     /// edition's updater does, before opening a window unasked.
     private(set) var silentSeconds: Float = 0
 
+    /// The transcript as it is shown, for the playing-app monitor to hold a
+    /// listen's words against. Source language, whatever is drawn.
+    var onWords: (([TimedWord]) -> Void)?
+
     /// FluidAudio reports the whole transcript each update rather than deltas,
     /// with the audio time of every word — which is what the overlay pages on.
     func setWords(_ words: [TimedWord]) {
         lastWordCount = words.count
+        onWords?(words)
         line = words.map(\.text).joined(separator: " ")
         // With translation on the overlay is driven by the pipeline instead, which
         // calls back once the target-language text exists. The terminal line below
@@ -812,6 +821,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
         speakers: tracker,
         vad: detector)
     fluidEngine = fluid
+    voiceDetector = detector
 
     // Start the load now rather than after the core swap. It needs nothing from
     // the core, and on a cold cache this is a ~600 MB download — no reason to
@@ -1344,6 +1354,9 @@ if useOverlay {
     playingApp.source = { tap.source }
     playingApp.isPaused = { isPaused }
     playingApp.onChange = { controller.playingApp = $0 }
+    playingApp.voice = { voiceDetector }
+    playingApp.probe = { await fluidEngine?.wordProbe() }
+    renderer.onWords = { playingApp.noteWords($0) }
     playingApp.start()
     settings.iconStyle = { iconStyle }
     settings.textAlignment = { textAlignment }

@@ -141,8 +141,10 @@ app's icon and name, or a tab on the box's top edge, or nothing, under **Show
 Source App Name**. With one app chosen as the source that is the app, and with
 the microphone a microphone; with all system audio it is whichever app Core
 Audio reports playing, held steady across
-notification sounds: a newcomer is listened to for three seconds and takes the
-name only if it is really making sound. Each box in the ⌥ stack keeps the app
+notification sounds and music: a newcomer is listened to for three seconds and
+takes the name only if it is heard saying the words on screen (a voice, under
+the models other than Multilingual), so a playlist never takes it from a call.
+Each box in the ⌥ stack keeps the app
 its words came from. Text starts from its script's edge, the left or, for
 Arabic and Hebrew, the right, because a line that grows from a fixed edge is
 easier to follow as the words arrive; **Text Size and Alignment** can centre it

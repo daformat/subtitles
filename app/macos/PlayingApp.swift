@@ -7,9 +7,15 @@
 // Core Audio says is playing, through the rules in PlayingAppPicker: sticky,
 // and slow to hand over, because "playing" is a noisy set — browsers hold the
 // audio device open with a video paused, and a notification ding holds it for
-// seconds after the sound. Under `Rules.byEar` the picker also names an app
-// worth listening to, and the monitor puts a LevelMeter on it for a moment
-// and reports back whether it was really making sound.
+// seconds after the sound, and a music player is playing in every sense
+// without the words on screen being its. Under `Rules.byEar` the picker
+// also names an app worth listening to, and the monitor puts a LevelMeter
+// on it for a moment, asks the voice detector whether there is a voice in
+// what it heard and, when there is, has the word probe transcribe it and
+// holds those words against the ones the captions showed. It reports back
+// one of three things: the app is saying the words on screen, it is making
+// some other sound (music, lyrics, a voice that is not the one captioned),
+// or it is silent.
 //
 // Polled once a second rather than asked when words arrive. Words arrive many
 // times a second, and the enumeration walks every process Core Audio knows
@@ -126,6 +132,16 @@ final class PlayingAppMonitor {
     var isPaused: () -> Bool = { false }
     /// The answer changed: an app's family id, or nil while nothing is known.
     var onChange: (String?) -> Void = { _ in }
+    /// The engine's voice detector, asked whether the sound a listen heard
+    /// has a voice in it. Nil with Skip non-speech off, and not loaded yet
+    /// while the models are; either way sound is taken for a voice, as it
+    /// was before the detector had a say. No answer is not a verdict.
+    var voice: () -> VoiceDetector? = { nil }
+    /// The engine's word probe, which transcribes a listen on its own so its
+    /// words can be held against the ones on screen. Nil under a model
+    /// without one, and until the model is loaded; then a voice is taken for
+    /// the words' source, as it was before the probe had a say.
+    var probe: () async -> WordProbe? = { nil }
 
     private(set) var app: String?
     private var picker: PlayingAppPicker
@@ -142,12 +158,26 @@ final class PlayingAppMonitor {
 
     /// The meter listening right now, if any, and how long a listen lasts.
     /// Three seconds is enough speech to be sure of, and short enough that a
-    /// call is labelled while its first sentence is still on screen.
+    /// call is labeled while its first sentence is still on screen.
     private var meter: LevelMeter?
     private let listenFor: TimeInterval = 3
+    /// The app a listen is about, from the meter going on to the verdict:
+    /// longer than the meter is on, since the words of a listen are held
+    /// against the captions only once they have had time to reach the
+    /// screen, and a second listen in that gap would be about the same app.
+    private var listening: String?
     /// Apps a meter could not be put on, and when: tried again after a while
     /// rather than on every poll.
     private var unlistenable: [String: TimeInterval] = [:]
+    /// Apps whose last listen heard a voice saying too few words to place.
+    /// Listened to again at once, since a call opens on "hi, can you hear
+    /// me"; a second such listen is sound until the recheck.
+    private var inconclusive: Set<String> = []
+
+    /// What the captions showed, as it arrived: the running transcript at
+    /// each update, stamped, kept for as long as a listen looks back.
+    private var shown: [(at: TimeInterval, words: [TimedWord])] = []
+    private static let shownFor: TimeInterval = 30
 
     init(rules: PlayingAppPicker.Rules) {
         picker = PlayingAppPicker(rules: rules)
@@ -165,11 +195,36 @@ final class PlayingAppMonitor {
         poll()
     }
 
+    /// The captions' running transcript, each time it changes. On main.
+    func noteWords(_ words: [TimedWord]) {
+        guard !words.isEmpty else { return }
+        let now = now
+        shown.append((now, words))
+        shown.removeAll { now - $0.at > Self.shownFor }
+    }
+
+    /// The words on screen from `since` on. The running transcript is
+    /// cumulative within an utterance and can reach back a paragraph, so
+    /// each update contributes only its last stretch, the words spoken in
+    /// the seconds before it.
+    private func wordsShown(since: TimeInterval) -> [String] {
+        var out: [String] = []
+        for update in shown where update.at >= since {
+            guard let last = update.words.last else { continue }
+            out.append(contentsOf: update.words
+                .filter { last.end - $0.end <= Self.wordsReach }
+                .map(\.text))
+        }
+        return out
+    }
+    private static let wordsReach: TimeInterval = 10
+
     func poll() {
         let source = source()
         // What was playing under the old source says nothing about the new.
         if source != lastSource {
             picker.reset()
+            inconclusive = []
             lastSource = source
         }
         guard !isPaused() else { return }
@@ -192,6 +247,7 @@ final class PlayingAppMonitor {
                     guard lastSource == .allSystemAudio, !isPaused() else { return }
                     let previous = picker.pick
                     let next = picker.update(playing: playing, at: now)
+                    inconclusive = inconclusive.filter { picker.age(of: $0) != nil }
                     deliver(next, why: reason(previous: previous))
                     listenIfDue()
                 }
@@ -201,39 +257,161 @@ final class PlayingAppMonitor {
 
     /// Put a meter on whichever app the picker wants heard, if none is on.
     private func listenIfDue() {
-        guard meter == nil, let app = picker.candidate() else { return }
+        guard listening == nil, let app = picker.candidate() else { return }
         if let failedAt = unlistenable[app], now - failedAt < picker.rules.recheck { return }
         let name = name(app)
         let meter: LevelMeter
         do {
-            meter = try LevelMeter(family: app)
+            meter = try LevelMeter(family: app, seconds: listenFor)
         } catch {
             log("listen to \(name): \(error)")
             unlistenable[app] = now
             return
         }
         self.meter = meter
+        listening = app
         unlistenable[app] = nil
+        let started = now
         DispatchQueue.main.asyncAfter(deadline: .now() + listenFor) { [self] in
             let reading = meter.stop()
             self.meter = nil
+            let ended = now
             guard let fraction = reading.loudFraction else {
                 log("listened to \(name) for \(seconds(listenFor)): no audio delivered")
                 unlistenable[app] = now
+                listening = nil
                 return
             }
-            let sustained = fraction >= Self.sustainedFraction
-            log(String(format: "listened to %@ for %@: %.0f%% of blocks above the floor → %@",
-                       name, seconds(listenFor), fraction * 100, sustained ? "sound" : "silence"))
-            deliver(picker.judge(app, sustained: sustained, at: now),
-                    why: sustained ? "heard" : "\(name) heard to be silent")
+            let level = String(format: "%.0f%% of blocks above the floor", fraction * 100)
+            guard fraction >= Self.sustainedFraction else {
+                conclude(app, name, .silence, detail: level, verdict: "silence",
+                         why: "\(name) heard to be silent")
+                return
+            }
+            // Sustained sound. Whether there is a voice in it, and whose
+            // words it is saying, are the detector's and the probe's calls,
+            // made off the main thread; the verdict lands back here, and the
+            // picker ignores it if the app has stopped meanwhile.
+            let detector = voice()
+            let probe = probe
+            Task { [self] in
+                let ear = await self.hear(reading.samples, detector: detector, probe: probe)
+                // The captions run a second or two behind the audio: the
+                // words of the listen are given time to reach the screen
+                // before the two are held against each other.
+                if case .voice(_, .some) = ear {
+                    let wait = ended + Self.captionLag - self.now
+                    if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+                }
+                DispatchQueue.main.async { [self] in
+                    judge(app, name, ear, level: level, listenedFrom: started)
+                }
+            }
         }
+    }
+
+    /// What the detector and the probe make of a listen's sound.
+    private enum Ear {
+        /// No detector to ask.
+        case noDetector
+        /// A voice, this share of the listen, and the words the probe heard
+        /// in it: nil with no probe to ask, or a probe that failed.
+        case voice(Double, words: [String]?)
+        /// Sound with no voice in it, or not enough of one.
+        case noVoice(Double)
+    }
+
+    private func hear(_ samples: [Float], detector: VoiceDetector?,
+                      probe: () async -> WordProbe?) async -> Ear {
+        guard let speech = await detector?.speechFraction(in: samples) else { return .noDetector }
+        guard speech >= Self.speechFraction else { return .noVoice(speech) }
+        guard let probe = await probe() else { return .voice(speech, words: nil) }
+        return .voice(speech, words: await probe.words(in: samples))
+    }
+
+    /// The verdict on a listen, on main.
+    private func judge(_ app: String, _ name: String, _ ear: Ear, level: String,
+                       listenedFrom started: TimeInterval) {
+        switch ear {
+        case .noDetector:
+            conclude(app, name, .speech, detail: "\(level), no voice detection to ask",
+                     verdict: "speech", why: "heard speaking")
+        case let .noVoice(speech):
+            conclude(app, name, .sound, detail: "\(level), \(percent(speech)) of it a voice",
+                     verdict: "sound, no voice", why: "\(name) heard playing sound, no voice")
+        case let .voice(speech, nil):
+            conclude(app, name, .speech, detail: "\(level), \(percent(speech)) of it a voice",
+                     verdict: "speech", why: "heard speaking")
+        case let .voice(speech, .some(heard)):
+            let quoted = "\"" + heard.joined(separator: " ") + "\""
+            let detail = "\(level), \(percent(speech)) of it a voice, heard \(quoted)"
+            let screen = wordsShown(since: started - Self.wordsBefore)
+            guard let match = TranscriptMatch.compare(heard: heard, shown: screen) else {
+                // Too few words to place, or nothing on screen to place them
+                // against. Once more right away, since a call opens on a few
+                // words and the captions may be a moment behind; a second
+                // time it is sound until the recheck.
+                let why = TranscriptMatch.words(screen).isEmpty
+                    ? "nothing on screen to place them against" : "too few words to place"
+                if inconclusive.insert(app).inserted {
+                    log("listened to \(name) for \(seconds(listenFor)): \(detail), "
+                        + "\(why), listening again")
+                    listening = nil
+                    return
+                }
+                conclude(app, name, .sound, detail: "\(detail), \(why)",
+                         verdict: "sound", why: "\(name) heard, \(why)")
+                return
+            }
+            let placed = "\(match.matched) of \(match.total) words on screen"
+            if match.share >= Self.wordsFraction {
+                conclude(app, name, .speech, detail: "\(detail), \(placed)",
+                         verdict: "speech", why: "heard saying the words on screen")
+            } else {
+                conclude(app, name, .sound, detail: "\(detail), \(placed)",
+                         verdict: "sound, other words", why: "\(name) heard, not the words on screen")
+            }
+        }
+    }
+
+    private func conclude(_ app: String, _ name: String, _ heard: PlayingAppPicker.Heard,
+                          detail: String, verdict: String, why: String) {
+        inconclusive.remove(app)
+        listening = nil
+        log("listened to \(name) for \(seconds(listenFor)): \(detail) → \(verdict)")
+        // A verdict that lands after the source has changed is about a
+        // picker that has since been reset: nothing to judge, and no answer
+        // to give.
+        guard lastSource == .allSystemAudio else { return }
+        deliver(picker.judge(app, heard: heard, at: now), why: why)
     }
 
     /// Share of ~10 ms blocks above the floor that counts as sound. Speech with
     /// its pauses runs well above half; a ding in a three-second window, or a
     /// stream held open playing zeros, nowhere near.
     static let sustainedFraction = 0.3
+
+    /// Share of the detector's 256 ms chunks that must be a voice, at the
+    /// detector's surer bar (`VoiceDetector.sureVoice`), for sound to count
+    /// as a voice: half of a three-second listen. Measured 2026-09-21: speech
+    /// scored 73% (rap, between its beats) to 100% of a listen, instrumental
+    /// music 0% at that bar and never more than 27% at the gate's looser
+    /// one. A listen that lands on a pause in a call falls short and is
+    /// tried again after the recheck; music that fools the model on half a
+    /// listen would go on to the probe, which is the costlier mistake.
+    static let speechFraction = 0.5
+
+    /// Share of a listen's content words that must be on screen for the
+    /// words to be that app's. Two runs of the same recognizer over the same
+    /// speech, one on the app's own feed and one on the mix, agree on most
+    /// of it; lyrics under a call share the odd word with it and no more.
+    static let wordsFraction = 0.5
+    /// How far behind the audio the captions run, at most, before the words
+    /// of a listen are looked for on screen.
+    static let captionLag: TimeInterval = 2.5
+    /// How far before the listen the screen is read from, since the words of
+    /// its first moments reach the screen while it runs.
+    static let wordsBefore: TimeInterval = 2
 
     private func deliver(_ next: String?, why: String) {
         guard next != app else { return }
@@ -272,5 +450,9 @@ final class PlayingAppMonitor {
 
     private func seconds(_ t: TimeInterval) -> String {
         String(format: "%.1fs", t)
+    }
+
+    private func percent(_ share: Double) -> String {
+        String(format: "%.0f%%", share * 100)
     }
 }

@@ -4,6 +4,28 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.8.4 · 2026-09-21
+
+- The name on the box follows the words in it. Under All System Audio, when
+  a second app starts playing, the app listens to it for three seconds, as
+  it did, and now asks its voice detection whether there is a voice in what
+  it hears and, under the Multilingual model, transcribes that moment on its
+  own and holds the words against the ones on screen. An app heard saying
+  the words on screen takes the box's name and icon; one heard playing
+  music, with or without lyrics, or any voice other than the one being
+  captioned, does not, however long it plays, so a playlist started during
+  a call leaves the call's name on its words. It is listened to again every
+  twenty seconds in case that changes, hold music becoming the call. When
+  the app whose words were on screen stops, the box falls to an app heard
+  speaking before one heard playing sound, and to that before one heard
+  silent; and an app heard speaking keeps the box against one that could
+  not be listened to, which used to take it after thirty seconds. The
+  captions themselves are untouched: the check runs a second recognizer
+  over the same loaded model, on the app's own audio, for a fraction of a
+  second on the Neural Engine per listen. Under the other models the check
+  stops at a voice, and with Skip non-speech off in Settings, or while the
+  model is still loading, sound counts as words as before.
+
 ## 1.8.3 · 2026-09-21
 
 - **Color Theme**, in the status menu above Audio Borealis: Auto, Light or
