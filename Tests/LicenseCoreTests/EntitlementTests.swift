@@ -316,6 +316,82 @@ final class EntitlementTests: XCTestCase {
         XCTAssertEqual(r.entitlement(now: t0), .grandfathered)
     }
 
+    // MARK: free minutes
+
+    private let minute: TimeInterval = 60
+
+    func testTrialInProgressHasNoFreeWindowToOpen() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        XCTAssertFalse(r.openFreeWindow(now: at(day)))
+        XCTAssertNil(r.freeWindowStart)
+        XCTAssertTrue(r.allowsCaptions(now: at(day)))
+    }
+
+    func testExpiredCaptionsFiveMinutesThenRestsThirty() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        let end = 7 * day
+        // Due: listening, with nothing given until a caption opens a window.
+        XCTAssertEqual(r.freeMinutes(now: at(end)), .due)
+        XCTAssertTrue(r.allowsCaptions(now: at(end + day)))
+        XCTAssertEqual(r.freeMinutes(now: at(end + day)), .due)
+
+        XCTAssertTrue(r.openFreeWindow(now: at(end)))
+        XCTAssertEqual(r.freeMinutes(now: at(end)), .open(until: at(end + 5 * minute)))
+        XCTAssertTrue(r.allowsCaptions(now: at(end + 5 * minute - 1)))
+        XCTAssertEqual(r.entitlement(now: at(end + minute)), .expired)
+
+        XCTAssertFalse(r.allowsCaptions(now: at(end + 5 * minute)))
+        XCTAssertEqual(r.freeMinutes(now: at(end + 5 * minute)), .resting(until: at(end + 35 * minute)))
+        XCTAssertFalse(r.openFreeWindow(now: at(end + 20 * minute)))
+        XCTAssertEqual(r.freeWindowStart, at(end))
+
+        XCTAssertEqual(r.freeMinutes(now: at(end + 35 * minute)), .due)
+        XCTAssertTrue(r.allowsCaptions(now: at(end + 35 * minute)))
+        XCTAssertTrue(r.openFreeWindow(now: at(end + 35 * minute)))
+        XCTAssertTrue(r.allowsCaptions(now: at(end + 36 * minute)))
+    }
+
+    func testOpenWindowCannotBeRestarted() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        XCTAssertTrue(r.openFreeWindow(now: at(7 * day)))
+        XCTAssertFalse(r.openFreeWindow(now: at(7 * day + 2 * minute)))
+        XCTAssertEqual(r.freeWindowStart, at(7 * day))
+    }
+
+    func testClockBehindTheWindowRests() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        r.openFreeWindow(now: at(8 * day))
+        XCTAssertEqual(r.freeMinutes(now: at(8 * day - 10 * minute)),
+                       .resting(until: at(8 * day + 35 * minute)))
+    }
+
+    func testRevokedKeyGetsNoFreeMinutes() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        r.activate(key, outcome: valid, now: at(day))
+        r.reverify(outcome: .revoked(.refunded), now: at(2 * day))
+        XCTAssertFalse(r.openFreeWindow(now: at(3 * day)))
+        XCTAssertFalse(r.allowsCaptions(now: at(3 * day)))
+    }
+
+    func testLicensedAllowsCaptionsWhateverTheWindow() {
+        var r = LicenseRecord()
+        r.noteEngineReady(now: t0)
+        r.openFreeWindow(now: at(7 * day))
+        r.activate(key, outcome: valid, now: at(7 * day + 5 * minute))
+        XCTAssertTrue(r.allowsCaptions(now: at(7 * day + 6 * minute)))
+    }
+
+    func testRecordWithoutFreeWindowDecodes() throws {
+        let json = #"{"grandfathered":false,"migrated":true}"#
+        let r = try JSONDecoder().decode(LicenseRecord.self, from: Data(json.utf8))
+        XCTAssertNil(r.freeWindowStart)
+    }
+
     // MARK: copy
 
     func testMenuTitles() {

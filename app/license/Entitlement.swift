@@ -24,7 +24,8 @@ public enum Entitlement: Equatable {
     /// first `engine ready`: the first launch is a 633 MB download, and the
     /// clock does not run on it.
     case trial(daysLeft: Int, started: Bool)
-    /// The trial is over. The app runs, and does not transcribe.
+    /// The trial is over. The app runs, and captions only in the free
+    /// minutes `LicenseRecord.freeMinutes(now:)` hands out.
     case expired
     /// A key Gumroad confirmed. `email` is the buyer's, when Gumroad gave one.
     case licensed(email: String?)
@@ -39,7 +40,8 @@ public enum Entitlement: Equatable {
     /// that is evidence enough of a purchase, and no key is asked for.
     case grandfathered
 
-    /// The one thing the pipeline asks.
+    /// Whether the state itself allows transcription. Not the whole answer
+    /// for an expired trial: `LicenseRecord.allowsCaptions(now:)` is.
     public var allowsTranscription: Bool {
         switch self {
         case .trial, .licensed, .provisional, .grandfathered: return true
@@ -93,6 +95,19 @@ public enum Entitlement: Equatable {
     }
 }
 
+/// Where an expired trial is in its free minutes: five minutes of captions,
+/// then thirty of rest, then five again, for as long as the app runs. A taste
+/// of the thing rather than a wall, and a reminder at every rest.
+public enum FreeMinutes: Equatable {
+    /// Captioning, until `until`.
+    case open(until: Date)
+    /// Resting, until `until`, when the next window opens.
+    case resting(until: Date)
+    /// No window running and none owed a rest: listening, and the next
+    /// window opens with the first caption drawn.
+    case due
+}
+
 /// Everything the app has learned about this copy's entitlement. Stored by
 /// the app (the key and the trial start in the Keychain as well as the
 /// defaults, so a reinstall changes nothing; the rest in the defaults) and
@@ -114,6 +129,9 @@ public struct LicenseRecord: Codable, Equatable {
     public var provisionalSince: Date?
     /// Gumroad's definitive answer that `key` no longer stands.
     public var revocation: Revocation?
+    /// When the current free window of an expired trial opened. Kept in the
+    /// defaults with the rest, so quitting during a rest does not end it.
+    public var freeWindowStart: Date?
     /// Set once, on 1.6's first launch, if the app already had preferences.
     public var grandfathered: Bool = false
     /// True once that first-launch check has run, so it never runs again —
@@ -127,6 +145,9 @@ public struct LicenseRecord: Codable, Equatable {
     /// set back. An hour: time servers correct by seconds, and no time zone
     /// or daylight change moves absolute time at all.
     public static let clockTolerance: TimeInterval = 3_600
+    /// An expired trial's free minutes: this long captioning, then `freeRest`.
+    public static let freeWindow: TimeInterval = 5 * 60
+    public static let freeRest: TimeInterval = 30 * 60
 
     public init() {}
 
@@ -154,6 +175,42 @@ public struct LicenseRecord: Codable, Equatable {
     }
 
     public static var trialDays: Int { Int(trialLength / 86_400) }
+
+    /// The one thing the pipeline asks: the state's answer, and for an
+    /// expired trial whether it is outside a rest. A window that is due
+    /// listens too: until words reach the box nothing has been given, and
+    /// the first caption is what opens the window.
+    public func allowsCaptions(now: Date) -> Bool {
+        let e = entitlement(now: now)
+        if e.allowsTranscription { return true }
+        guard e == .expired else { return false }
+        if case .resting = freeMinutes(now: now) { return false }
+        return true
+    }
+
+    /// Where the free minutes stand, whatever the entitlement; only an
+    /// expired trial reads it. A clock behind the window's start is a rest
+    /// counted from that start, not a new window.
+    public func freeMinutes(now: Date) -> FreeMinutes {
+        guard let start = freeWindowStart else { return .due }
+        let end = start.addingTimeInterval(Self.freeWindow)
+        let rested = end.addingTimeInterval(Self.freeRest)
+        if now < start { return .resting(until: rested) }
+        if now < end { return .open(until: end) }
+        if now < rested { return .resting(until: rested) }
+        return .due
+    }
+
+    /// Open a free window, if the trial is over and one is due: called at the
+    /// first caption drawn. From then on it runs on the clock, captions or
+    /// not. Returns whether it opened.
+    @discardableResult
+    public mutating func openFreeWindow(now: Date) -> Bool {
+        guard entitlement(now: now) == .expired, freeMinutes(now: now) == .due else { return false }
+        freeWindowStart = now
+        observe(now: now)
+        return true
+    }
 
     /// True when `now` is behind the latest time this record has seen by
     /// more than the tolerance. Not sticky: a clock put right again is a

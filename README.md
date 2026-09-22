@@ -107,9 +107,12 @@ against a local server; release.sh writes the real one, and
 
 **The trial and the key** (PLAN.md §24). The app works in full for seven days,
 counted from the first `engine ready` rather than the first launch, so the
-model download costs nothing. When the trial ends the app keeps running and
-stops transcribing: the icon dims as it does for Pause and wears the red badge
-an update does, the status line says why, and Resume opens the licence window
+model download costs nothing. When the trial ends the app keeps captioning
+five minutes at a time: a window opens with the first caption, and when it
+closes the box says so in the app's own name, with a link to the store that a
+click on the box opens, and the app rests for thirty minutes. While it rests
+the icon dims as it does for Pause and wears the red badge an update does, the
+status line says when captions resume, and Resume opens the license window
 instead. One item above Settings…
 reads **Trial: N days left**, **Enter License Key…** or **Licensed**, and opens
 that window: a field for the key, Activate, Buy a Key and Where Is My Key?, and

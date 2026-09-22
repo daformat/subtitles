@@ -4,6 +4,23 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.9.0 · 2026-09-22
+
+- **Free minutes after the trial.** When the seven-day trial ends, the app
+  no longer stops captioning for good. It captions for five minutes, then
+  rests for thirty, and starts again, for as long as it runs. The five
+  minutes start with the first caption, so a quiet Mac or a model still
+  loading uses none of them, and once started they run on the clock
+  whether or not anything more is said. When they are up, the box says so
+  itself, under the app's own name and icon: "Your trial has ended,
+  captions will resume in 30 minutes." and, on the line below, "Get a
+  license key at subtitles-live.com", drawn in word by word like any
+  caption, with Audio Borealis still following the sound. Click the box
+  while it shows to open the store. During the rest the status menu says
+  when captions resume and Resume opens the license window, as it did;
+  quitting does not cut a rest short, and a key entered at any point ends
+  it at once.
+
 ## 1.8.4 · 2026-09-21
 
 - The name on the box follows the words in it. Under All System Audio, when

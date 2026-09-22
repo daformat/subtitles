@@ -164,6 +164,10 @@ enum Defaults {
 /// word-sized Bool: no tearing on arm64, and a lock in the audio callback would
 /// cost far more than a missed frame at the moment of toggling.
 nonisolated(unsafe) var isPaused = false
+/// True while the box holds a last line of the app's own rather than the
+/// transcript's: the tap still feeds the glow under it, and nothing reaches
+/// the recognizer. Read by the realtime callback, like `isPaused`.
+nonisolated(unsafe) var holdingFinalCaption = false
 
 let app = NSApplication.shared
 
@@ -179,7 +183,7 @@ license.start()
 /// True while the licence, not the person, is what paused the app — so
 /// activating a key can resume it, and a pause the person chose is kept.
 var pausedByLicense = false
-if !license.entitlement.allowsTranscription {
+if !license.allowsTranscription {
     isPaused = true
     pausedByLicense = true
 }
@@ -333,7 +337,7 @@ let onAudioFrames: @convention(c) (UnsafePointer<Float>?, UInt, UnsafeMutableRaw
     // the core's ring, and its worker goes on draining what was already captured
     // for a moment afterwards. Without this the engine keeps being fed — and
     // keeps transcribing — audio from before the pause.
-    guard !isPaused, let ptr, count > 0, let fluid = fluidEngine else { return }
+    guard !isPaused, !holdingFinalCaption, let ptr, count > 0, let fluid = fluidEngine else { return }
     // Hand off to a bounded queue rather than spawning a task per callback: an
     // engine that falls behind must drop audio, not accumulate tasks.
     fluid.queue.push(UnsafeBufferPointer(start: ptr, count: Int(count)))
@@ -388,6 +392,10 @@ final class Renderer {
     /// with the audio time of every word — which is what the overlay pages on.
     func setWords(_ words: [TimedWord]) {
         lastWordCount = words.count
+        // [main-edition]
+        // An expired trial's free minutes start with the first caption.
+        if !words.isEmpty { license.noteCaptionsShown() }
+        // [/main-edition]
         onWords?(words)
         line = words.map(\.text).joined(separator: " ")
         // With translation on the overlay is driven by the pipeline instead, which
@@ -549,6 +557,7 @@ let voiceMeter = VoiceMeter()
 let tap = SystemAudioTap { samples, count in
     if isPaused { return }
     voiceMeter.feed(samples, count: count)
+    if holdingFinalCaption { return }
     subs_push_audio(engine, samples, UInt(count))
 }
 
@@ -1086,12 +1095,14 @@ func togglePause() {
     // [main-edition]
     // Resume is refused while the licence says no — the trial is over, or the
     // key was refunded — and the licence window is what opens instead. The
-    // pause itself is allowed, so the person can always stop the tap.
-    if isPaused, !license.entitlement.allowsTranscription {
+    // pause itself is allowed, so the person can always stop the tap. An
+    // expired trial resting between its free windows is refused the same way.
+    if isPaused, !license.allowsTranscription {
         license.present()
         return
     }
     pausedByLicense = false
+    holdingFinalCaption = false
     // [/main-edition]
     isPaused.toggle()
     renderer.overlay?.setPaused(isPaused)
@@ -1387,7 +1398,7 @@ if useOverlay {
         // [main-edition]
         // A licence pause says why, in the default colour: not a fault, and
         // not nothing either — the one line here that asks for something.
-        if isPaused, let blocked = license.entitlement.blockedStatusLine {
+        if isPaused, let blocked = license.blockedStatusLine {
             return (blocked, .normal)
         }
         // [/main-edition]
@@ -1574,19 +1585,52 @@ if useOverlay {
 // the icon dims and the overlay clears exactly as Pause does; the status line
 // says why, and Resume opens the licence window. Outside the overlay block:
 // --headless is gated the same way.
-license.onBlocked = {
+license.onBlocked = { freeMinutesUp in
     guard !isPaused else { return }
+    if freeMinutesUp, let overlay = renderer.overlay {
+        endFreeMinutes(on: overlay)
+        return
+    }
     togglePause()
     pausedByLicense = true
 }
 license.onUnblocked = {
+    if holdingFinalCaption {
+        holdingFinalCaption = false
+        renderer.overlay?.clearAndHide()
+    }
     guard isPaused, pausedByLicense else { return }
     pausedByLicense = false
     isPaused = false
     renderer.overlay?.setPaused(false)
     resumeCapture()
     statusMenu?.updateHealthIndicator()
-    err("resumed, licensed")
+    err(license.entitlement == .expired ? "resumed, free minutes" : "resumed, licensed")
+}
+
+/// How long the line that ends the free minutes stays up before the pause.
+let finalCaptionHold: TimeInterval = 20
+
+/// An expired trial's free window closed: the box says so, over the glow,
+/// which the tap goes on feeding while the recognizer hears nothing more;
+/// then the app pauses as the license pauses it.
+func endFreeMinutes(on overlay: OverlayController) {
+    holdingFinalCaption = true
+    renderer.discardLine()
+    if let fluid = fluidEngine { Task { await fluid.flush() } }
+    let rest = Int(LicenseRecord.freeRest / 60)
+    overlay.showFinalCaption(
+        "Your trial has ended, captions will resume in \(rest) minutes.\n"
+            + "Get a license key at subtitles-live.com",
+        link: ("subtitles-live.com", { NSWorkspace.shared.open(LicenseController.buyURL) }))
+    DispatchQueue.main.asyncAfter(deadline: .now() + finalCaptionHold) {
+        // A pause or a key in the meantime has already settled it.
+        guard holdingFinalCaption else { return }
+        holdingFinalCaption = false
+        guard !isPaused, !license.allowsTranscription else { return }
+        togglePause()
+        pausedByLicense = true
+    }
 }
 // [/main-edition]
 
@@ -1620,7 +1664,7 @@ if useOverlay {
 // Not while the licence has paused it: `resumeCapture` brings the tap up
 // once a key is entered, the same as after any pause.
 if isPaused {
-    err("\(yellow)not listening:\(reset) \(license.entitlement.blockedStatusLine ?? "paused")")
+    err("\(yellow)not listening:\(reset) \(license.blockedStatusLine ?? "paused")")
 } else {
     do {
         try tap.start()

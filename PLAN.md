@@ -1754,7 +1754,7 @@ must not pretend otherwise, and must not spend effort as if it were not.
 |---|---|---|
 | Trial length | **7 days, full features** | Enough to know, for an app that runs all day. 14 would match the refund window; not needed. |
 | When the clock starts | **First `engine ready`**, not first launch | First launch is a 633 MB download (§18); it should not eat the trial. |
-| What expiry does | **Runs, but stops transcribing** | Behaves as paused, icon dims (§21), top status line says the trial ended, Resume opens the licence window. Settings and the ⌥ stack stay reachable. No watermark, no five-minute sessions. |
+| What expiry does | **Runs, but stops transcribing** | Behaves as paused, icon dims (§21), top status line says the trial ended, Resume opens the licence window. Settings and the ⌥ stack stay reachable. No watermark. Since 1.9.0, five free minutes, then thirty of rest (see below). |
 | Seats | **Not enforced in 1.6** | Gumroad counts activations; watch the dashboard, disable a key by hand if one is clearly shared. Enforcing means users need to free a seat, which needs the seller token, which is the server. |
 | Re-verification | **Every 30 days, silent, tolerant** | `increment_uses_count=false`. Revoke only on a definitive answer: refunded, charged back, disputed, disabled. Network failure changes nothing. Catches refund-and-keep; costs one small request a month, disclosed. |
 | Offline at activation | **Provisional for 72 h** if the key has the right shape and the host is unreachable | Otherwise a paying customer with a valid key and no network at trial end is stuck. Re-verified when the network returns. |
@@ -1901,6 +1901,30 @@ Learned along the way:
   field intercepts Return itself so an activation cannot be sent twice.
 - An ad-hoc build is a new code identity every build, so the Keychain may
   prompt on a machine without the certificate; nothing depends on the answer.
+
+### Free minutes after the trial (2026-09-22)
+
+An expired trial no longer goes silent for good: it captions for five minutes,
+rests for thirty, and captions again, for as long as it runs. A taste of the
+thing and a reminder at every rest, where a wall was only a wall.
+
+- **The rule is `LicenseRecord.freeMinutes(now:)`**, one date in the record
+  (`freeWindowStart`), so a quit during a rest keeps the rest. A clock behind
+  the window's start is a rest, not a new window. Revoked keys get none.
+- **A window opens at the first caption drawn**, not at launch or at the
+  end of a rest: until words reach the box, an expired trial listens and has
+  been given nothing, so a model download or a quiet hour costs no minutes.
+  From that caption on it runs on the clock, whether anything more is said
+  or not. Only a rest refuses Resume. The trial's last hour rolls straight
+  into a due window.
+- **The close is said in the box**, as Subtitles, with its name and icon:
+  "Your trial has ended, captions will resume in 30 minutes." and, on a line
+  of its own, "Get a license key at subtitles-live.com", drawn in a word at a
+  time at a speaker's pace (syllables, a breath at the comma), with the glow
+  still fed by the tap and the recognizer fed nothing, and no pointer hole.
+  While it shows, the box takes clicks, the link is underlined and a click
+  opens /buy. Twenty seconds, then the license pause. The status line gives
+  the time captions resume.
 
 ### Not done here
 

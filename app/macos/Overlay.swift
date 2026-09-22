@@ -139,6 +139,47 @@ final class SubtitleView: NSView {
     /// Draws the dashed ring that says the box can be picked up right now. Set
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
+    /// Text in the caption drawn as a link, and what a click on the box does
+    /// while it shows. Only the app's own last line has one; the transcript
+    /// never does, and the panel passes clicks through whenever this is nil.
+    var link: (text: String, open: () -> Void)? {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    // The panel is never key, so cursor rects do not apply there: a tracking
+    // area that is always active sets the hand instead.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if !trackingAreas.contains(where: { $0.owner === self && $0.options.contains(.cursorUpdate) }) {
+            addTrackingArea(NSTrackingArea(rect: .zero,
+                                           options: [.activeAlways, .cursorUpdate, .inVisibleRect],
+                                           owner: self))
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if link != nil { NSCursor.pointingHand.set() } else { super.cursorUpdate(with: event) }
+    }
+
+    // The first click in a panel that never becomes key has to count.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { link != nil }
+
+    // A click on the link is a click, not the start of a drag.
+    override var mouseDownCanMoveWindow: Bool { link == nil }
+
+    override func mouseDown(with event: NSEvent) {
+        if link == nil { super.mouseDown(with: event) }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let link, bounds.contains(convert(event.locationInWindow, from: nil)) else {
+            super.mouseUp(with: event)
+            return
+        }
+        link.open()
+    }
 
     /// The borealis's frame to paint along the bottom of the pill; nil
     /// paints none. See AudioBorealis.
@@ -236,8 +277,15 @@ final class SubtitleView: NSView {
     /// engine survivable if the model is ever swapped.
     func attributed(committed: String, tentative: String,
                     measuring: Bool = false) -> NSAttributedString {
-        Pill.attributed(committed: committed, tentative: tentative,
-                        size: fontSize, measuring: measuring, alignment: textAlignment)
+        let text = Pill.attributed(committed: committed, tentative: tentative,
+                                   size: fontSize, measuring: measuring, alignment: textAlignment)
+        // Underlined, which changes no metric: the box measures the same.
+        guard let link, !measuring else { return text }
+        let range = (text.string as NSString).range(of: link.text)
+        guard range.location != NSNotFound else { return text }
+        let out = NSMutableAttributedString(attributedString: text)
+        out.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+        return out
     }
 
     private func metrics(committed: String, tentative: String,
@@ -613,11 +661,17 @@ final class OverlayController {
     var playingApp: String? {
         didSet {
             guard playingApp != oldValue else { return }
-            view.icon = playingApp.map { AppCatalog.shared.icon(for: $0) }
-            view.appName = playingApp.map { AppCatalog.shared.name(for: $0) }
-            // The box makes room for the icon, so whatever is on screen re-fits.
-            layout()
+            // The app's own line wears the app's own name until it goes.
+            guard !holdsFinalCaption else { return }
+            wearPlayingApp()
         }
+    }
+
+    private func wearPlayingApp() {
+        view.icon = playingApp.map { AppCatalog.shared.icon(for: $0) }
+        view.appName = playingApp.map { AppCatalog.shared.name(for: $0) }
+        // The box makes room for the icon, so whatever is on screen re-fits.
+        layout()
     }
 
     /// How loud what the app listens to is, for the glow along the box's
@@ -793,6 +847,43 @@ final class OverlayController {
     /// arriving for a beat afterwards, and each update called `show()` and put the
     /// box straight back up.
     private var isSuppressed = false
+    /// The box holds a line of the app's own rather than the transcript's —
+    /// see `showFinalCaption` — and nothing the recognizer or the translator
+    /// still has in flight may replace it or fade it.
+    private var holdsFinalCaption = false
+    /// Draws that line in a word at a time, as speech would.
+    private var finalCaptionTimer: Timer?
+
+    /// How long `word` takes to say, as the recognizer would time it: a
+    /// conversational four syllables a second, a beat between words, and a
+    /// breath at a comma or a full stop. Syllables are the word's vowel
+    /// groups, less an English silent e; a number is said as its digits'
+    /// words would be, near enough at two syllables for each pair.
+    private static func spokenDuration(of word: String) -> TimeInterval {
+        let letters = word.lowercased().filter(\.isLetter)
+        let syllables: Int
+        if letters.isEmpty {
+            syllables = max(1, word.filter(\.isNumber).count)
+        } else {
+            let vowels = Set("aeiouy")
+            var groups = 0
+            var inVowel = false
+            for c in letters {
+                let v = vowels.contains(c)
+                if v, !inVowel { groups += 1 }
+                inVowel = v
+            }
+            if letters.count > 2, letters.hasSuffix("e"), !letters.hasSuffix("le"), groups > 1 {
+                groups -= 1
+            }
+            syllables = max(1, groups)
+        }
+        var seconds = 0.08 + Double(syllables) * 0.24
+        if let last = word.last, ",;:".contains(last) { seconds += 0.35 }
+        if let last = word.last, ".!?".contains(last) { seconds += 0.5 }
+        // A brisker speaker than the figures above: 30% faster, three times.
+        return seconds / (1.3 * 1.3 * 1.3)
+    }
 
     // ── paging state ──
     // Broadcast subtitles never scroll a wall of text: they fill, clear, and
@@ -1167,7 +1258,7 @@ final class OverlayController {
             let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
-                self.panel.ignoresMouseEvents = !wantsDrag
+                self.panel.ignoresMouseEvents = !wantsDrag && self.view.link == nil
                 self.view.showsDragOutline = wantsDrag
                 // Nudge visible while it can be grabbed, so it is obvious the
                 // overlay is now catching clicks instead of passing them through.
@@ -1281,6 +1372,7 @@ final class OverlayController {
         let panelFrame = frame ?? panel.frame
         let flags = NSEvent.modifierFlags
         guard isRevealEnabled,
+              !holdsFinalCaption,
               panel.alphaValue > 0,
               !flags.contains(.shift),
               !flags.contains(.option),
@@ -1316,6 +1408,7 @@ final class OverlayController {
     }
 
     func setTentative(_ text: String) {
+        guard !holdsFinalCaption else { return }
         tentative = text
         if startFreshOnNextText, !(pendingCommit.isEmpty && text.isEmpty) {
             startFreshOnNextText = false
@@ -1598,7 +1691,7 @@ final class OverlayController {
     func showWords(_ words: [TimedWord],
                    speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                    under: Under = ("", "")) {
-        guard !isSuppressed else { return }
+        guard !isSuppressed, !holdsFinalCaption else { return }
         // A page held for reading — see `holdPage(after:)`. Its own redraw
         // comes back here when it ends.
         if let holdUntil, holdUntil > Date() { return }
@@ -1858,7 +1951,7 @@ final class OverlayController {
     }
 
     private func fadeIfTextIdle() {
-        guard !isDraggable, panel.alphaValue > 0 else { return }
+        guard !isDraggable, !holdsFinalCaption, panel.alphaValue > 0 else { return }
         guard Date().timeIntervalSince(lastTextAt) >= textIdleTimeout else { return }
 
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -1971,9 +2064,89 @@ final class OverlayController {
         }
     }
 
+    /// Put `text` in the box as the last caption of a run: the trial's free
+    /// minutes ending. Drawn like any caption, a word at a time, glow and all,
+    /// and held there against the transcript and the idle fade until
+    /// `setPaused` or `clearAndHide` takes it down.
+    func showFinalCaption(_ text: String, link: (text: String, open: () -> Void)? = nil) {
+        guard !isSuppressed else { return }
+        history.dismiss()
+        cancelHold()
+        holdsFinalCaption = true
+        // Said by Subtitles, not by the app playing: the box wears this app's
+        // name and icon for it.
+        view.icon = NSApp.applicationIconImage
+        view.appName = "Subtitles"
+        pendingCommit = ""
+        tentative = ""
+        startFreshOnNextText = true
+        view.tentative = ""
+        view.secondary = ""
+        view.secondaryTentative = ""
+        view.link = link
+        // Clicks reach the box while the link is up, and only then.
+        panel.ignoresMouseEvents = link == nil
+        // A line break in `text` stays one: the word after it opens a line.
+        var words: [String] = []
+        var opensLine: Set<Int> = []
+        for (i, part) in text.split(separator: "\n").enumerated() {
+            if i > 0 { opensLine.insert(words.count) }
+            words += part.split(separator: " ").map(String.init)
+        }
+        var shown = 0
+        var pageStart = 0
+        func joined() -> String {
+            var out = ""
+            for i in pageStart..<shown {
+                if i > pageStart { out += opensLine.contains(i) ? "\n" : " " }
+                out += words[i]
+            }
+            return out
+        }
+        func step() {
+            shown += 1
+            var line = joined()
+            // Pages like a caption: a word that would overflow the box opens
+            // the next one.
+            if shown - 1 > pageStart,
+               view.lineCount(committed: line, tentative: "", width: maxWidth) > view.maxLines {
+                pageStart = shown - 1
+                line = joined()
+            }
+            boxIsCleared = false
+            lastShownText = line
+            lastTextAt = Date()
+            page = line
+            view.committed = line
+            layout()
+            show()
+            finalCaptionTimer?.invalidate()
+            finalCaptionTimer = nil
+            guard shown < words.count else { return }
+            // The next word lands once this one has been said.
+            finalCaptionTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.spokenDuration(of: words[shown - 1]),
+                repeats: false) { [weak self] _ in
+                    guard let self, self.holdsFinalCaption else { return }
+                    step()
+                }
+        }
+        step()
+    }
+
     /// Wipe the box and fade it out, leaving it free to come back on the next
     /// word. Used when the engine underneath changes — model or source switch.
     func clearAndHide() {
+        if view.link != nil {
+            view.link = nil
+            if !isDraggable { panel.ignoresMouseEvents = true }
+        }
+        // The app's name comes back once the box is out of sight, not while
+        // the line Subtitles said is still fading under it.
+        let rewear = holdsFinalCaption
+        holdsFinalCaption = false
+        finalCaptionTimer?.invalidate()
+        finalCaptionTimer = nil
         // The history goes with it. It survives the idle fade on purpose, but a
         // pause or a model switch is the user saying this transcript is over, and
         // ⌥ offering the last thing a since-replaced model heard is a puzzle.
@@ -1994,9 +2167,12 @@ final class OverlayController {
         view.tentative = ""
         view.secondary = ""
         view.secondaryTentative = ""
-        NSAnimationContext.runAnimationGroup { ctx in
+        NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.2
             panel.animator().alphaValue = 0
-        }
+        }, completionHandler: { [weak self] in
+            guard let self, rewear, !self.holdsFinalCaption else { return }
+            self.wearPlayingApp()
+        })
     }
 }

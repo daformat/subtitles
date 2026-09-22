@@ -3,10 +3,13 @@
 // LicenseCore holds the rules; this object holds the record, keeps it saved,
 // asks Gumroad when a key needs asking about, and tells main.swift the one
 // thing it needs to know: whether transcription is allowed right now. When
-// that changes to no — the trial's seventh day, a monthly check that came
-// back "refunded" — the app pauses, by the same path the menu's Pause takes,
-// and Resume opens the licence window instead of resuming. Nothing else in
-// the pipeline knows the licence exists.
+// that changes to no — a monthly check that came back "refunded", or an
+// expired trial's free minutes running out — the app pauses, by the same path
+// the menu's Pause takes, and Resume opens the license window instead of
+// resuming. An expired trial captions five minutes, then rests thirty: its
+// window opens at the first caption drawn after a rest, runs on the clock
+// from there, and main.swift says so in the box when it closes. Nothing else
+// in the pipeline knows the license exists.
 //
 // What leaves the machine: the key and the product id, to Gumroad, once at
 // activation and once a month after. A trial sends nothing at all.
@@ -18,10 +21,11 @@ final class LicenseController {
     /// Fired on the main thread whenever the entitlement may have changed:
     /// the menu re-reads its title, About its line.
     var onChange: (() -> Void)?
-    /// Transcription is no longer allowed. main.swift pauses.
-    var onBlocked: (() -> Void)?
-    /// Allowed again — a key just activated. main.swift resumes, if the
-    /// block was what paused it.
+    /// Transcription is no longer allowed. main.swift pauses; `freeMinutesUp`
+    /// is true when an expired trial's window closed, which it says so for.
+    var onBlocked: ((_ freeMinutesUp: Bool) -> Void)?
+    /// Allowed again — a key just activated, or a free window opened.
+    /// main.swift resumes, if the block was what paused it.
     var onUnblocked: (() -> Void)?
 
     /// Where keys are checked. `--verify URL` points it elsewhere, for trying
@@ -41,12 +45,31 @@ final class LicenseController {
     private var wasAllowed = true
     /// A monthly check in flight, so the timer does not start another.
     private var checking = false
+    /// Fires when the free window running now closes, or the rest ends.
+    private var freeTimer: Timer?
 
     /// Re-read this often. Hourly rather than daily: the trial ends at an
     /// hour of the day, not at midnight, and the reading costs nothing.
     private static let tick: TimeInterval = 3_600
 
     var entitlement: Entitlement { record.entitlement(now: Date()) }
+
+    /// The one thing the pipeline asks: the entitlement, and for an expired
+    /// trial whether it is outside a rest.
+    var allowsTranscription: Bool { record.allowsCaptions(now: Date()) }
+
+    /// The status line while transcription is refused, for the menu and the
+    /// log; nil while it is allowed. A rest says when it ends.
+    var blockedStatusLine: String? {
+        let now = Date()
+        guard !record.allowsCaptions(now: now) else { return nil }
+        if record.entitlement(now: now) == .expired,
+           case .resting(let until) = record.freeMinutes(now: now) {
+            let time = until.formatted(date: .omitted, time: .shortened)
+            return "Trial ended. Captions resume at \(time), or Resume to enter a key"
+        }
+        return entitlement.blockedStatusLine
+    }
 
     /// For the licence window: the key on file, if any.
     var key: LicenseKey? { record.key }
@@ -62,8 +85,9 @@ final class LicenseController {
         record.migrate(existingPreferences: store.hasExistingPreferences)
         record.observe(now: now)
         store.save(record)
-        wasAllowed = entitlement.allowsTranscription
+        wasAllowed = allowsTranscription
         err("license: \(describe(entitlement))")
+        scheduleFreeTimer()
 
         timer = Timer.scheduledTimer(withTimeInterval: Self.tick, repeats: true) { [weak self] _ in
             self?.evaluate()
@@ -92,16 +116,56 @@ final class LicenseController {
         let before = record
         record.observe(now: now)
         if record != before { store.save(record) }
-        let allowed = entitlement.allowsTranscription
+        let allowed = allowsTranscription
+        let transition = wasAllowed != allowed
+        wasAllowed = allowed
         onChange?()
-        if wasAllowed, !allowed {
+        if transition, !allowed {
             err("license: \(describe(entitlement))")
-            onBlocked?()
-        } else if !wasAllowed, allowed {
+            let freeMinutesUp: Bool
+            if case .resting = record.freeMinutes(now: now) {
+                freeMinutesUp = record.entitlement(now: now) == .expired
+            } else {
+                freeMinutesUp = false
+            }
+            onBlocked?(freeMinutesUp)
+        } else if transition, allowed {
             onUnblocked?()
         }
-        wasAllowed = allowed
+        scheduleFreeTimer()
         reverifyIfDue()
+    }
+
+    // MARK: the free minutes
+
+    /// Captions just reached the box. For an expired trial with a window
+    /// due, that opens it, and its minutes run on the clock from here,
+    /// whether or not anything more is said. Called on every update of the
+    /// words, so it returns at once in every other state.
+    func noteCaptionsShown() {
+        let now = Date()
+        guard record.openFreeWindow(now: now) else { return }
+        store.save(record)
+        err("license: trial ended; captions for \(Int(LicenseRecord.freeWindow / 60)) minutes")
+        scheduleFreeTimer()
+    }
+
+    /// The next edge of the free minutes, to the second rather than at the
+    /// hourly tick: a window closes five minutes after it opened.
+    private func scheduleFreeTimer() {
+        freeTimer?.invalidate()
+        freeTimer = nil
+        let now = Date()
+        guard record.entitlement(now: now) == .expired else { return }
+        let edge: Date
+        switch record.freeMinutes(now: now) {
+        case .open(let until), .resting(let until): edge = until
+        case .due: return
+        }
+        freeTimer = Timer.scheduledTimer(withTimeInterval: max(1, edge.timeIntervalSince(now)),
+                                         repeats: false) { [weak self] _ in
+            self?.evaluate()
+        }
     }
 
     // MARK: activation
@@ -285,7 +349,12 @@ final class LicenseController {
     private func describe(_ e: Entitlement) -> String {
         switch e {
         case .trial(let days, let started): return started ? "trial, \(days) days left" : "trial, not started"
-        case .expired: return "trial ended"
+        case .expired:
+            switch record.freeMinutes(now: Date()) {
+            case .open(let until): return "trial ended; free minutes until \(until)"
+            case .resting(let until): return "trial ended; resting until \(until)"
+            case .due: return "trial ended; free minutes start with the next captions"
+            }
         case .licensed(let email): return "licensed" + (email.map { " to \($0)" } ?? "")
         case .provisional(let until): return "provisional until \(until)"
         case .revoked(let why): return "revoked (\(why.phrase))"
