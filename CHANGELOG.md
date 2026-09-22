@@ -6,6 +6,12 @@ and the DMG name show.
 
 ## 1.9.0 · 2026-09-22
 
+<!-- [0bsd-edition]
+- Nothing changes in this edition. The main edition gained free minutes
+  after its trial; this one has no trial, by design.
+
+[/0bsd-edition] -->
+<!-- [main-edition] -->
 - **Free minutes after the trial.** When the seven-day trial ends, the app
   no longer stops captioning for good. It captions for five minutes, then
   rests for thirty, and starts again, for as long as it runs. The five
@@ -21,6 +27,7 @@ and the DMG name show.
   quitting does not cut a rest short, and a key entered at any point ends
   it at once.
 
+<!-- [/main-edition] -->
 ## 1.8.4 · 2026-09-21
 
 - The name on the box follows the words in it. Under All System Audio, when
