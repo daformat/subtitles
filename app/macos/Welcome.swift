@@ -25,6 +25,11 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// window edge to edge.
     private static let inset: CGFloat = 28
     private static let insetH: CGFloat = 44
+    /// How far the web view reaches past the demo into the empty margins round
+    /// it, for the glow under its screen: to the window's sides, and to the
+    /// blurb above and the first help line below. demo.shell.html pads the
+    /// page by the same, so the demo itself does not move.
+    private static let demoBleed = NSEdgeInsets(top: 18, left: insetH, bottom: 16, right: insetH)
 
     /// Set once the window has been shown of its own accord, so it is not shown
     /// again on every launch. Reopening it from the menu deliberately does not
@@ -572,10 +577,23 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // A starting height in the demo's own proportions, so the window is the
         // right shape before the page has measured itself. It is corrected from
         // the page below, which is what makes this survive the demo changing.
-        let height = web.heightAnchor.constraint(equalToConstant: 477)
+        //
+        // The stack lays out a holder of the demo's own size; the web view
+        // hangs past it by `demoBleed`, drawn but not hit there, since a view
+        // takes no clicks outside its superview.
+        let holder = NSView()
+        holder.translatesAutoresizingMaskIntoConstraints = false
+        holder.clipsToBounds = false
+        holder.addSubview(web)
+        let bleed = Self.demoBleed
+        let height = holder.heightAnchor.constraint(equalToConstant: 477)
         NSLayoutConstraint.activate([
-            web.widthAnchor.constraint(equalToConstant: Self.width),
+            holder.widthAnchor.constraint(equalToConstant: Self.width),
             height,
+            web.leadingAnchor.constraint(equalTo: holder.leadingAnchor, constant: -bleed.left),
+            web.trailingAnchor.constraint(equalTo: holder.trailingAnchor, constant: bleed.right),
+            web.topAnchor.constraint(equalTo: holder.topAnchor, constant: -bleed.top),
+            web.bottomAnchor.constraint(equalTo: holder.bottomAnchor, constant: bleed.bottom),
         ])
         demoHeight = height
         webView = web
@@ -583,7 +601,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         if let url = Self.demoURL {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
-        return web
+        return holder
     }
 
     /// Asks the page how tall the demo actually is, and gives it exactly that.

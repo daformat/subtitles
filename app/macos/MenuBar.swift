@@ -841,7 +841,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let item = NSMenuItem(title: "Text Size and Alignment", action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentFontSize()
-        for (label, size) in [("Small", CGFloat(22)), ("Medium", 30), ("Large", 40), ("Huge", 52)] {
+        for (label, size) in SubtitleView.textSizes {
             let entry = NSMenuItem(title: label, action: #selector(selectSize(_:)), keyEquivalent: "")
             entry.target = self
             entry.representedObject = size

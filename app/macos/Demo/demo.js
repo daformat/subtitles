@@ -19,6 +19,12 @@ const I18N = (() => {
 // so the recorder knows where to cut; under this flag the demos also start
 // every turn from nothing, so the turn recorded is the one a visitor sees first.
 const CAPTURE = window.SUBTITLES_CAPTURE === true;
+// On film, a beat of nothing after the top of the loop before the first
+// caption fades in. The recorder cuts at the `subtitles:loop` event, and its
+// first frame comes a little after it, so a box that began fading in at the
+// event was caught mid-fade on one clip and hidden on the next; a beat of
+// quiet screen on both sides of the cut makes the loop's seam still.
+const CUT_MS = 250;
 
 // The demos seeded with the app's settings, so the box a demo draws is the
 // box the reader has. The app embeds the home demo in its windows and hands
@@ -290,6 +296,8 @@ const ringFor = (box) => {
 // Every number is the app's; the menu's Audio Borealis rows pick a look
 // (where on the hue wheel the colours sit, or white alone) and a strength
 // (the whole effect's opacity), and a page can seed both (see SETTINGS).
+// A page with no loop to run, the social card (tools/og-card.html), asks
+// for a still instead: the voice so far into a caption, painted once.
 //
 // Painted on a canvas laid inside the box under its text, in plain 2D
 // calls every engine has (gradients, clips, destination-in for the masks,
@@ -634,6 +642,10 @@ const borealis = (() => {
   // cycle's index reseeds them. `speaking` gates it: quiet otherwise.
   const CYCLE = 1.7;
   const PER_CYCLE = 8;
+  // Where a still of the voice is taken, in seconds from the caption's
+  // start: the first stressed syllable has raised the lobes and the
+  // automatic gain has settled on it.
+  const STILL_AT = 0.6;
   /// How loud the mock voice is, on the syllables as authored.
   const MOCK_GAIN = 1.2;
   const hash = (n, k) => { const x = Math.sin(n * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -702,8 +714,10 @@ const borealis = (() => {
   // The glow on one box: a canvas under its text, sized with it, stepped on
   // the mock voice while words land in it. `apply(S)` reads the demo's
   // settings, its look and strength; `speak()` marks a word landing.
+  const attached = new WeakMap();
   const attach = (box) => {
     if (!box) return null;
+    if (attached.has(box)) return attached.get(box);
     const canvas = document.createElement('canvas');
     canvas.className = 'ov-borealis';
     canvas.setAttribute('aria-hidden', 'true');
@@ -782,7 +796,7 @@ const borealis = (() => {
         frame: lastFrame }),
     };
     boxes.add(entry);
-    return {
+    const handle = {
       apply: (S) => {
         const c = drive.state.config;
         enabled = S.borealis !== 'off';
@@ -793,11 +807,34 @@ const borealis = (() => {
         wake();
       },
       speak: speak,
+      // The glow `seconds` into a caption, painted once and left: the mock
+      // voice from the caption's start, stepped at sixty a second so the
+      // followers and the automatic gain settle as they do live, and the
+      // box out of the frame loop, so nothing paints over it. The resize
+      // callback above keeps it through a resize. Off, the canvas is clear.
+      // The moment defaults to STILL_AT, so the social card and the clips'
+      // posters, which both ask for it, show the same voice.
+      still: (seconds = STILL_AT) => {
+        boxes.delete(entry);
+        drive.reset();
+        const dt = 1 / 60;
+        for (let t = 0; enabled && t < seconds; t += dt) {
+          const mock = mockVoice(t, true);
+          lastFrame = drive.step(dt, mock.loudness, mock.bands);
+        }
+        if (!enabled) lastFrame = drive.step(dt, 0, null);
+        wasBlank = lastFrame.glow <= 0.002;
+        size();
+        draw(lastFrame);
+      },
     };
+    attached.set(box, handle);
+    return handle;
   };
 
   return {
     attach: attach, defaults: defaults, LOOKS: LOOKS, STRENGTHS: STRENGTHS, mockVoice: mockVoice,
+    STILL_AT: STILL_AT,
     /** Each box's state, for a console. */
     debug: () => [...boxes].map((b) => b.debug()),
   };
@@ -1371,6 +1408,20 @@ const BOX_THEMES = {
   dark: ['0 0 0', '255 255 255', '#d2d2d3', 'rgb(210 210 211 / 0.16)'],
 };
 const BOX_TOKENS = ['--box-rgb', '--ink-rgb', '--box-name', '--pill-line'];
+// The menu's Text Size steps, and the history's size under each: a step down,
+// and 17 under Small, which has none below it, as SubtitleView.historyFontSize
+// has them in the app. A size between steps comes down to the step under it.
+const TEXT_SIZES = [22, 30, 40, 52];
+const historySize = (pt) => {
+  const steps = [17, ...TEXT_SIZES];
+  const i = steps.findLastIndex((step) => step <= pt + 0.5);
+  return i > 0 ? steps[i - 1] : Math.min(pt, 17);
+};
+// Both scales at once, since every size change moves the two together.
+const setTextSize = (screen, pt) => {
+  screen.style.setProperty('--text-scale', String(pt / 30));
+  screen.style.setProperty('--hist-scale', String(historySize(pt) / 30));
+};
 // A demo's boxes dressed to its settings. What is the box's rather than the
 // loop's goes onto the screen as custom properties, which every box on it
 // wears, the stack's and the search pill with the live one; the loop reads
@@ -1378,7 +1429,7 @@ const BOX_TOKENS = ['--box-rgb', '--ink-rgb', '--box-name', '--pill-line'];
 const dressDemo = (screen, S) => {
   if (screen) {
     const set = (name, value) => screen.style.setProperty(name, String(value));
-    set('--text-scale', S.fontSize / 30);
+    setTextSize(screen, S.fontSize);
     set('--text-align', S.textAlignment);
     set('--box-alpha', S.boxOpacity);
     set('--box-blur', S.blur + 'px');
@@ -1408,7 +1459,7 @@ const seedDemo = (screen, own) => {
 // The menu's checks for a demo's settings: the size row within half a point
 // of the size, as the app's menu checks it, and none for any other size.
 const menuChecks = (S) => {
-  const size = [22, 30, 40, 52].find((pt) => Math.abs(pt - S.fontSize) < 0.5);
+  const size = TEXT_SIZES.find((pt) => Math.abs(pt - S.fontSize) < 0.5);
   const on = (id, flag) => (flag ? id : null);
   return {
     checked: ['size-' + (size || 'none'), 'align-' + S.textAlignment,
@@ -3510,7 +3561,10 @@ const windowResize = (() => {
         }
         // The top of the loop, its switch landed and nothing said yet: where
         // tools/make-video.py cuts a recording, one turn from here to here.
-        if (index === 0) demoEl.dispatchEvent(new CustomEvent('subtitles:loop', { bubbles: true }));
+        if (index === 0) {
+          demoEl.dispatchEvent(new CustomEvent('subtitles:loop', { bubbles: true }));
+          if (CAPTURE) await step(CUT_MS);
+        }
         if (scene.app !== frontApp) {
           // Deliberately concurrent: the caption keeps running straight
           // through the app switch, which is the whole point being made.

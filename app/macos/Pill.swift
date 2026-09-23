@@ -646,6 +646,22 @@ enum Pill {
         return (NSSize(width: ceil(widest), height: ceil(height)), lines)
     }
 
+    /// The longest line a box sets, in characters: past this the eye loses its
+    /// place going back to the start of the next line.
+    static let maxLineCharacters = 84
+
+    /// The widest a box may be at `size`: `maxLineCharacters` of ordinary
+    /// prose in the boxes' face, plus the box's own margins. Measured on a
+    /// sentence rather than one glyph, so the average carries the spaces and
+    /// the narrow letters that real captions are mostly made of.
+    static func maxWidth(ofSize size: CGFloat, pad: CGFloat) -> CGFloat {
+        let sample = "Then she said that we would all meet again at the station, later on."
+        let width = (sample as NSString).size(withAttributes: [.font: font(ofSize: size)]).width
+        let perCharacter = width / CGFloat(sample.count)
+        // +2 of the same slack `fittingSize` adds, so a full line still fits.
+        return ceil(perCharacter * CGFloat(maxLineCharacters)) + 2 + (inset.width + pad) * 2
+    }
+
     /// Size a box hugging `text` needs, given a ceiling on its width.
     ///
     /// `pad` is the transparent margin the live box reserves for the ⇧ ring;

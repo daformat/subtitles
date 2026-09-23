@@ -79,6 +79,25 @@ final class SubtitleView: NSView {
     var secondaryTentative = "" { didSet { if secondaryTentative != oldValue { needsDisplay = true } } }
     var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
 
+    /// The Text Size menu's steps, smallest first.
+    static let textSizes: [(label: String, size: CGFloat)] =
+        [("Small", 22), ("Medium", 30), ("Large", 40), ("Huge", 52)]
+
+    /// Below Small, for the history at Small: not offered in the menu, only
+    /// as the step the stack comes down to.
+    static let historyFloorSize: CGFloat = 17
+
+    /// The ⌥ history's boxes, one step down from the live box's size so the
+    /// stack reads as behind it; at Small, the step is `historyFloorSize`.
+    /// A size between steps comes down to the largest step under it.
+    static func historyFontSize(for size: CGFloat) -> CGFloat {
+        let steps = [historyFloorSize] + textSizes.map(\.size)
+        guard let index = steps.lastIndex(where: { $0 <= size + 0.5 }), index > 0 else {
+            return min(size, historyFloorSize)
+        }
+        return steps[index - 1]
+    }
+
     /// The original's type against the caption's: smaller and a little
     /// lighter, so the caption stays the line being read and the original
     /// the note under it — the way dual subtitles are set.
@@ -1187,9 +1206,12 @@ final class OverlayController {
     /// layout, so an untouched overlay follows a resolution or display change.
     private var anchor: NSPoint?
 
+    /// The box's ceiling: a line of `Pill.maxLineCharacters` at the current
+    /// text size, or less of the screen on one too narrow for it.
     private var maxWidth: CGFloat {
-        guard let screen = NSScreen.main else { return 900 }
-        return min(screen.frame.width * 0.7, 1100)
+        let line = Pill.maxWidth(ofSize: view.fontSize, pad: SubtitleView.pad)
+        guard let screen = NSScreen.main else { return min(line, 900) }
+        return min(screen.frame.width * 0.75, line)
     }
 
     init(fontSize: CGFloat) {
@@ -1339,7 +1361,7 @@ final class OverlayController {
         let entries = pastPages
         if history.shown != entries {
             let style = HistoryStyle(
-                fontSize: view.fontSize,
+                fontSize: SubtitleView.historyFontSize(for: view.fontSize),
                 fill: view.backgroundOpacity * HistoryPillView.recession,
                 textOpacity: historyTextOpacity,
                 blur: backdropBlur,

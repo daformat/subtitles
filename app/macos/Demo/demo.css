@@ -242,12 +242,26 @@ kbd {
      chrome — title bar, traffic lights — is left alone, because that is where
      macOS puts the difference. */
   --content-dim: saturate(0.75) brightness(0.99);
+  /* Four lights over a pale base. The lights stop short of each other:
+     purple meeting pink over a greyish middle stop, and cyan meeting orange
+     under the caption, mixed to mauve and grey where they overlapped, so
+     each ends a little sooner, the orange sits further right of the cyan,
+     the middle stop is a cleaner pink, and each light is a shade stronger. */
   --desktop-bg:
-    radial-gradient(55% 60% at 16% 10%, rgb(112 100 255 / 0.62), transparent 64%),
-    radial-gradient(48% 55% at 86% 18%, rgb(255 110 170 / 0.5), transparent 66%),
-    radial-gradient(58% 50% at 72% 96%, rgb(255 168 100 / 0.66), transparent 66%),
-    radial-gradient(42% 46% at 12% 90%, rgb(80 196 235 / 0.5), transparent 66%),
-    linear-gradient(160deg, #c7c2ff 0%, #ead6f4 48%, #ffd8c2 100%);
+    radial-gradient(55% 60% at 16% 10%, rgb(112 100 255 / 0.72), transparent 60%),
+    radial-gradient(48% 55% at 86% 18%, rgb(255 110 170 / 0.62), transparent 62%),
+    radial-gradient(50% 50% at 78% 96%, rgb(255 160 90 / 0.76), transparent 62%),
+    radial-gradient(48% 46% at 12% 90%, rgb(75 199 240 / 0.6), transparent 62%),
+    linear-gradient(160deg, #cbc6ff 0%, #f3dafd 48%, #ffdcc8 100%);
+  /* The screen's own shadow, over the glow (.demo-frame::before): soft and
+     layered, four shadows stepping up in blur and down in weight, so the
+     edge is grounded without a hard dark rim and the glow still reads
+     through. Nothing near the weight --shadow-lg had. */
+  --demo-shadow:
+    0 1px 2px rgb(16 16 28 / 0.06),
+    0 4px 10px rgb(16 16 28 / 0.06),
+    0 12px 28px -8px rgb(16 16 28 / 0.10),
+    0 30px 60px -20px rgb(16 16 28 / 0.14);
   --scene-bg:
     radial-gradient(52% 58% at 18% 32%, rgb(150 146 255 / 0.42), transparent 70%),
     radial-gradient(38% 52% at 74% 28%, rgb(255 176 150 / 0.4), transparent 68%),
@@ -300,6 +314,11 @@ kbd {
       radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
+    --demo-shadow:
+      0 1px 2px rgb(0 0 0 / 0.4),
+      0 4px 10px rgb(0 0 0 / 0.3),
+      0 12px 28px -8px rgb(0 0 0 / 0.4),
+      0 30px 60px -20px rgb(0 0 0 / 0.5);
     --scene-bg:
       radial-gradient(62% 58% at 18% 32%, rgb(112 108 255 / 0.3), transparent 70%),
       radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
@@ -341,6 +360,11 @@ kbd {
       radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
       radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
       linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
+    --demo-shadow:
+      0 1px 2px rgb(0 0 0 / 0.4),
+      0 4px 10px rgb(0 0 0 / 0.3),
+      0 12px 28px -8px rgb(0 0 0 / 0.4),
+      0 30px 60px -20px rgb(0 0 0 / 0.5);
     --scene-bg:
       radial-gradient(62% 58% at 18% 32%, rgb(112 108 255 / 0.3), transparent 70%),
       radial-gradient(60.7% 93% at 74% 28%, rgb(255 138 106 / 0.1), transparent 68%),
@@ -796,7 +820,7 @@ kbd {
   gap: calc(1.14 * var(--u));
   padding: calc(2.05 * var(--u)) calc(1.48 * var(--u));
   background: var(--recess-deep);
-  border-right: 1px solid rgb(var(--ink) / calc(0.06 * var(--sep)));
+  border-inline-end: 1px solid rgb(var(--ink) / calc(0.06 * var(--sep)));
 }
 .pod-nav,
 .pod-item {
@@ -1376,11 +1400,13 @@ kbd {
      carrying it towards an edge squeezed that space and the caption re-wrapped
      under the cursor. max-content asks the text how wide it wants to be instead,
      and the cap is a share of the screen in cqw, which does not care where the
-     box sits: 80.3cqw, or 704px on the widest screens, which is the 73cqw and
-     640px it had plus a tenth. The history pills below cap the same way. */
+     box sits. The app's cap: a line of 84 characters of its own
+     text (Pill.maxLineCharacters, at the face's 0.433em a character) plus the
+     insets, or 75% of the screen where that is narrower. The history pills
+     below cap the same way, in their own smaller em. */
   width: max-content;
   min-width: 4.67em;
-  max-width: min(80.3cqw, 704px);
+  max-width: min(75cqw, calc(84 * 0.433em + 1.46em));
   padding: 0.47em 0.73em;
   border-radius: 0.533em;
   /* The app's defaultBackgroundOpacity and Pill.backdropBlur, as the seed
@@ -1551,7 +1577,9 @@ kbd {
   padding-block: 1px;
   margin-block: -1px;
   transform: translateX(-50%);
-  font-size: calc(clamp(14px, 2.61cqw, 23px) * var(--text-scale, 1));
+  /* A size down from the live box's, as the app's historyFontSize steps it:
+     --hist-scale is set beside --text-scale (dressDemo in script.js). */
+  font-size: calc(clamp(14px, 2.61cqw, 23px) * var(--hist-scale, 0.7333));
   overflow-y: auto;
   overscroll-behavior: contain;
   /* The browser must not correct the scroll on its own here.
@@ -1628,7 +1656,7 @@ kbd {
      gives a history pill the app's 140pt minimum too, so a three-word line is a
      pill rather than a chip. */
   min-width: 4.67em;
-  max-width: min(80.3cqw, 704px);
+  max-width: min(75cqw, calc(84 * 0.433em + 1.46em));
   padding: 0.47em 0.73em;
   border-radius: 0.533em;
   background: rgb(var(--box-rgb, 0 0 0) / calc(var(--box-alpha, 0.72) * 0.92));
@@ -2119,10 +2147,14 @@ kbd {
   height: 100%;
   background: var(--text-dim);
   transform: scaleX(0);
+  /* From the start of the line, which on a right-to-left page is its right
+     end: transform-origin has no logical keyword, so the page's direction
+     picks it below. */
   transform-origin: left;
   transition-property: transform;
   transition-timing-function: linear;
 }
+[dir="rtl"] .scene-fill { transform-origin: right; }
 .scene-label {
   font-size: 14px;
   color: var(--text-faint);
@@ -2343,12 +2375,50 @@ kbd {
    box around it changed, and the og card, which draws its own composition
    from the same markup, never carries this class. */
 .demo-frame {
+  position: relative;
   max-width: 1000px;
   margin-inline: auto;
 }
-/* The screen keeps its own corners, hairline and shadow; the scene bar and
-   the help lines sit under it in the open, as they always did. */
-.demo-frame .demo-screen { max-width: none; }
+/* The screen keeps its own corners and hairline; the scene bar and the help
+   lines sit under it in the open, as they always did. Its shadow is not
+   black any more: it is the desktop's own light, the wallpaper painted
+   again under the screen and blurred, falling near where --shadow-lg fell
+   (18px down rather than its 30, drawn in by a twentieth, a blur of 52px
+   against the box-shadow's 80, which was 40), so each part of the glow
+   carries the colour of the desktop above
+   it, cyan under the left, orange under the right, violet and pink where
+   those are, and none of it mixes to grey the way flat layers of colour
+   laid over each other did. Saturated past the wallpaper, since a blur
+   thins colour. The pseudo-element rather than a shadow because a shadow
+   has one colour. It sits at z-index -1 in the page's own stacking
+   context, under everything in flow, the labels below the screen
+   included; not in one of the frame's own: an isolation on the frame,
+   tried first, changed what the windows' backdrop filters sample in
+   Chrome's compositor, and the wallpaper showed through every pane and
+   tile as a tint. So nothing between the frame and the page may form a
+   stacking context or paint an opaque background over this. The screen
+   keeps a soft shadow of its own over the glow, --demo-shadow. */
+.demo-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  aspect-ratio: 16 / 9;
+  border-radius: clamp(8px, 2.3vw, var(--radius-lg));
+  background: var(--desktop-bg);
+  transform: translateY(18px) scale(0.945);
+  filter: blur(52px) saturate(1.6);
+  opacity: var(--demo-glow, 0.9);
+  pointer-events: none;
+}
+.demo-frame .demo-screen { max-width: none; box-shadow: var(--demo-shadow); }
+/* Lighter on the dark page: the same glow on near-black reads brighter than
+   on white, and it should be a haze off the screen, not a second wallpaper
+   round it. Twice, as the dark palette is stated everywhere here. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .demo-frame { --demo-glow: 0.7; }
+}
+:root[data-theme="dark"] .demo-frame { --demo-glow: 0.7; }
 
 /* ── Notes ───────────────────────────────────────────────────
    Apple's, drawn as it is: the toolbar in the title bar, then three
@@ -2557,7 +2627,8 @@ kbd {
 .nt-side,
 .notes-side,
 .pod-side {
-  margin: calc(0.55 * var(--u)) 0 calc(0.55 * var(--u)) calc(0.55 * var(--u));
+  margin-block: calc(0.55 * var(--u));
+  margin-inline: calc(0.55 * var(--u)) 0;
   border: 1px solid var(--pane-line);
   /* The window's radius less the inset, so the two curves are concentric. */
   border-radius: calc(1.85 * var(--u));
@@ -2577,12 +2648,18 @@ kbd {
 .nt::before, .pod::before {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
+  inset-block: 0;
+  inset-inline: 0 auto;
   /* A backdrop filter gets a compositing layer of its own, and that layer
      does not take the window's rounded clip: a square of blurred desktop
      showed past the corner. The region rounds its own outer corners to the
-     window's radius instead. */
-  border-radius: calc(2.4 * var(--u)) 0 0 calc(2.4 * var(--u));
+     window's radius instead. Logical, with the inset above and the pane's
+     margin: on a right-to-left page the flex row puts the pane on the
+     right, and the glass has to be under it there, not where it was. */
+  border-start-start-radius: calc(2.4 * var(--u));
+  border-end-start-radius: calc(2.4 * var(--u));
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
   width: calc(21.12% + 0.55 * var(--u));
   background: var(--vibrant-bg);
   backdrop-filter: blur(24px) saturate(140%);

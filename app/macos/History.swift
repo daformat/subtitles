@@ -1122,7 +1122,11 @@ final class HistoryController {
         // the ⇧ ring margin, and these have no ring, so the same sentence must be
         // measured against a correspondingly narrower box or the stack would sit
         // a few points wider than the box it belongs to.
-        ceiling = maxWidth - SubtitleView.pad * 2
+        //
+        // And each box holds lines of `Pill.maxLineCharacters` at its own size,
+        // which is smaller than the live box's, so it is narrower as well.
+        ceiling = min(maxWidth - SubtitleView.pad * 2,
+                      Pill.maxWidth(ofSize: style.fontSize, pad: 0))
         search.apply(style: style)
         shown = entries
 

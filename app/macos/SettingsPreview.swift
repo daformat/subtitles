@@ -1117,7 +1117,10 @@ final class SettingsPreview: NSView {
 
     // MARK: layout
 
-    private var ceiling: CGFloat { max(120, stage.bounds.width - Self.margin * 2) }
+    private var ceiling: CGFloat {
+        min(max(120, stage.bounds.width - Self.margin * 2),
+            Pill.maxWidth(ofSize: style.fontSize, pad: SubtitleView.pad))
+    }
 
     private func relayout() {
         box.fontSize = style.fontSize
@@ -1175,7 +1178,7 @@ final class SettingsPreview: NSView {
         let visible = Array(closed.suffix(depth).reversed())
 
         let pillStyle = HistoryStyle(
-            fontSize: style.fontSize,
+            fontSize: SubtitleView.historyFontSize(for: style.fontSize),
             // Stepped back from the live box exactly as the overlay steps it, so
             // dragging Background moves both and keeps the stack behind it.
             fill: style.boxOpacity * HistoryPillView.recession,
@@ -1224,12 +1227,16 @@ final class SettingsPreview: NSView {
         laidOut = []
         var fresh: [HistoryPillView] = []
 
+        // As the overlay's stack measures: the live box's ceiling without its
+        // ring margin, and lines of the stack's own smaller size.
+        let historyCeiling = min(ceiling - SubtitleView.pad * 2,
+                                 Pill.maxWidth(ofSize: pillStyle.fontSize, pad: 0))
         var sizes: [NSSize] = []
         for text in visible {
             let pill = HistoryPillView(entry: HistoryEntry(text: text, icon: Self.callIcon,
                                                            name: Self.callName),
                                        style: pillStyle)
-            sizes.append(pill.fittingSize(maxWidth: ceiling))
+            sizes.append(pill.fittingSize(maxWidth: historyCeiling))
             pills.append(pill)
             laidOut.append(text)
             if !carried.contains(text) { fresh.append(pill) }
@@ -1443,7 +1450,7 @@ final class SettingsPreview: NSView {
     /// two thirds of the preview.
     private static var stageWidth: CGFloat {
         guard let screen = NSScreen.main else { return 900 }
-        return min(screen.frame.width * 0.7, 1100)
+        return min(screen.frame.width * 0.75, 1100)
     }
 
     override func layout() {

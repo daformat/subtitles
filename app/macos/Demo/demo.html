@@ -49,6 +49,27 @@
      stretches in a minute, none in Chrome. A window that renders to its own
      layer cannot be painted into by another. */
   .demo-window { will-change: transform; }
+
+  /* The web view is wider and taller than the demo, out into the empty
+     margins round it (Welcome.swift's demoBleed: to the window's sides, and
+     to the lines above and below), so the glow under the screen has room to
+     fade instead of being cut at the screen's own edges. The padding puts the
+     demo back where it was, 734 wide. */
+  body { padding: 18px 44px 16px; }
+
+  /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
+     until the padding widened it: held at what that gave. */
+  .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+
+  /* The site's glow reaches about 100px past the screen, with a blur of 52px.
+     The window has 44 at the sides and 18 above, so here it is tightened to
+     fade out inside that: a 28px blur has all but gone (under 1%) 65px out,
+     and pushed down a little further, so the top clears the 18 above as the
+     bottom has the scene bar's room to fall into. */
+  .demo-frame::before {
+    transform: translateY(27px) scale(0.945);
+    filter: blur(28px) saturate(1.6);
+  }
 </style>
 </head>
 <body>
