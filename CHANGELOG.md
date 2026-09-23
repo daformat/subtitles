@@ -4,6 +4,22 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.10.1 · 2026-09-23
+
+- **The ⌥ history steps back a text size.** Its boxes are set one size
+  below the live box: 17 points under Small, 22 under Medium, 30 under
+  Large and 40 under Huge. The stack reads as behind the caption rather
+  than beside it, and holds more of what was said in the same room. The
+  search field and the Settings preview follow.
+- **Lines stop at 84 characters.** Every box now sets lines of at most 84
+  characters at its own text size, and the live box takes at most three
+  quarters of the screen's width, in place of 70% of it or 1,100 points.
+  At Small the lines are shorter than they were, at Large and Huge longer
+  on a wide display, and the history's boxes, at their smaller size, are
+  narrower than the live box.
+- The welcome window's demo glows with its desktop's light, as the site's
+  does, fading out into the window's margins.
+
 ## 1.10.0 · 2026-09-23
 
 - **The new speaker's first words go in their own box.** With **New box on
