@@ -36,6 +36,18 @@ public struct PageAnchor {
 
     private var freshNext = false
 
+    /// Where new speakers began, in audio time, oldest first, for changes not
+    /// applied yet. The diarizer names a change a second or two after it
+    /// happens, so the words it is about are usually on screen already, and
+    /// sometimes in a box that has closed. A change waits here until this
+    /// stream has a word at or after it, and until that word is settled.
+    private var speakerChanges: [TimeInterval] = []
+
+    /// The last call's words, for placing a change still waiting on them when
+    /// the clock they are timed on restarts.
+    private var lastInput: (words: [TimedWord], chunkStarts: [TimeInterval],
+                            speculativeFrom: TimeInterval)?
+
     /// Nothing from before this moment is ever shown again.
     ///
     /// A fade closes the box, and the words in it are gone as far as the reader is
@@ -55,11 +67,103 @@ public struct PageAnchor {
     public struct Page {
         /// The page as it should now appear.
         public let visible: [TimedWord]
+        /// What happened to the boxes during this call, in order.
+        public let events: [Event]
+
         /// Pages that closed during this call, oldest first, each already trimmed
         /// to what it added: a carried clause belongs to the box that carries it.
-        public let closed: [[TimedWord]]
+        public var closed: [[TimedWord]] {
+            events.compactMap { if case .closed(let words) = $0 { return words } else { return nil } }
+        }
 
         public var brokePage: Bool { !closed.isEmpty }
+    }
+
+    public enum Event: Equatable {
+        /// A page left the screen.
+        case closed([TimedWord])
+        /// A new speaker began at `from`, before the page on screen, so the
+        /// closed boxes hand back their words from there on. `before` is where
+        /// the page on screen began until now: the boxes that end after it are
+        /// from an earlier run of the recognizer's clock and are left alone.
+        /// With `ownBox`, the words become a box of their own, there being no
+        /// page on screen to take them; otherwise that page now begins with them.
+        case reclaimed(from: TimeInterval, before: TimeInterval, ownBox: Bool)
+    }
+
+    /// A new speaker began at `time`. Their words start a page of their own,
+    /// including any already drawn on the outgoing speaker's page or already
+    /// closed with it.
+    public mutating func markSpeakerChange(at time: TimeInterval) {
+        speakerChanges.append(time)
+        speakerChanges.sort()
+    }
+
+    /// How far a change may move to reach the start of a settled clause, in a
+    /// stream that has clauses: splitting a translated sentence in two leaves
+    /// half a sentence in each box, when the translator put both speakers in
+    /// one sentence at all.
+    static let clauseReach: TimeInterval = 0.75
+
+    /// How far either side of the diarizer's time the break may move to find
+    /// the pause the speakers left between them. Its segment boundary and the
+    /// recognizer's word times disagree by up to half a second either way on
+    /// real speech: measured on a call, a change named at 38.56 s belonged
+    /// before "I" at 38.08, and one at 93.36 s after "degree" at 93.28.
+    static let turnReach: TimeInterval = 0.8
+
+    /// The shortest gap between words that reads as the pause at a turn.
+    /// Words inside a phrase touch, or nearly.
+    static let turnPause: TimeInterval = 0.12
+
+    /// How much speech past the change to wait for before choosing, so the
+    /// pause after it is in reach as well as the one before.
+    static let turnLookahead: TimeInterval = 0.4
+
+    /// Where a change at `time` breaks `words`. The end of a sentence within
+    /// `turnReach` of it, the nearest if there are several; else the widest
+    /// pause between two words there, the nearest of those if several are
+    /// about as wide; with neither, the first word mostly spoken after it. A
+    /// clause close to it wins over all three. Nil while the words past the
+    /// change have not arrived, unless `final`: the words will get no further.
+    ///
+    /// A sentence's end before the gap, because the recognizer's word ends are
+    /// the weaker of its two times: "Friday." was given an end well short of
+    /// the pause after it, which made the gap before it look the wider.
+    static func cut(at time: TimeInterval, in words: [TimedWord],
+                    chunkStarts: [TimeInterval], final: Bool = false) -> TimeInterval? {
+        guard let first = words.first(where: { ($0.start + $0.end) / 2 >= time }),
+              let newest = words.last, final || newest.end >= time + turnLookahead
+        else { return nil }
+        if let clause = chunkStarts.min(by: { abs($0 - time) < abs($1 - time) }),
+           abs(clause - time) <= clauseReach {
+            return clause
+        }
+        let inReach = words.indices.dropFirst().filter { abs(words[$0].start - time) <= turnReach }
+        if let sentence = inReach
+            .filter({ Self.endsSentence(words[$0 - 1].text) })
+            .min(by: { abs(words[$0].start - time) < abs(words[$1].start - time) }) {
+            return words[sentence].start
+        }
+        var best: (gap: TimeInterval, distance: TimeInterval, start: TimeInterval)?
+        for index in inReach {
+            let start = words[index].start
+            let distance = abs(start - time)
+            let gap = start - words[index - 1].end
+            guard gap >= turnPause else { continue }
+            if let current = best {
+                let wider = gap > current.gap + 0.04
+                let asWide = abs(gap - current.gap) <= 0.04
+                guard wider || (asWide && distance < current.distance) else { continue }
+            }
+            best = (gap, distance, start)
+        }
+        return best?.start ?? first.start
+    }
+
+    private static func endsSentence(_ word: String) -> Bool {
+        guard let last = word.last else { return false }
+        return ".?!…。？！".contains(last)
     }
 
     /// The next words start a page of their own: a pause, an endpoint, or a box
@@ -101,6 +205,8 @@ public struct PageAnchor {
         barrier = -.greatestFiniteMagnitude
         lastCarried = -.greatestFiniteMagnitude
         freshNext = false
+        speakerChanges.removeAll()
+        lastInput = nil
         currentWords = []
     }
 
@@ -130,31 +236,45 @@ public struct PageAnchor {
                               allowCarry: Bool,
                               speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                               fits: ([TimedWord]) -> Int) -> Page {
-        guard let newest = words.last else { return Page(visible: currentWords, closed: []) }
+        guard let newest = words.last else { return Page(visible: currentWords, events: []) }
 
         // Time running backwards means the recogniser restarted its transcript,
         // so the old anchor points into audio that no longer exists. `lastCarried`
         // goes with it: measured against the old timeline it sits far in the
         // future of the new one, and would refuse every carry from here on.
+        var events: [Event] = []
+        defer { lastInput = (words, chunkStarts, speculativeFrom) }
         if newest.end < latest {
+            // Changes still waiting for words past them are placed on the
+            // words there are, before the clock they are timed on goes: an
+            // endpoint straight after a turn otherwise dropped the change, and
+            // the new speaker's first words stayed in the outgoing box.
+            if let last = lastInput, !speakerChanges.isEmpty {
+                applySpeakerChanges(last.words, chunkStarts: last.chunkStarts,
+                                    speculativeFrom: last.speculativeFrom, final: true,
+                                    into: &events)
+            }
             start = 0
             latest = 0
             previousEnd = -.greatestFiniteMagnitude
             barrier = -.greatestFiniteMagnitude
             lastCarried = -.greatestFiniteMagnitude
+            // A change timed on the old clock points anywhere on the new one.
+            speakerChanges.removeAll()
         }
 
-        var closed: [[TimedWord]] = []
         if freshNext {
             freshNext = false
             let banked = currentWords.filter { $0.start >= previousEnd }
-            if !banked.isEmpty { closed.append(banked) }
+            if !banked.isEmpty { events.append(.closed(banked)) }
             start = latest
             previousEnd = latest
             barrier = latest
             lastCarried = -.greatestFiniteMagnitude
         }
         latest = max(latest, newest.end)
+        applySpeakerChanges(words, chunkStarts: chunkStarts, speculativeFrom: speculativeFrom,
+                            into: &events)
 
         var visible = words.filter { $0.start >= start }
         // A tail that began before the barrier belongs to a box that has gone.
@@ -165,7 +285,7 @@ public struct PageAnchor {
         }
         guard !visible.isEmpty else {
             currentWords = []
-            return Page(visible: [], closed: closed)
+            return Page(visible: [], events: events)
         }
 
         while true {
@@ -186,7 +306,7 @@ public struct PageAnchor {
             guard nextAnchor > start else { break }
 
             let leaving = visible.filter { $0.start >= previousEnd && $0.start < nextAnchor }
-            if !leaving.isEmpty { closed.append(leaving) }
+            if !leaving.isEmpty { events.append(.closed(leaving)) }
 
             if let carried { lastCarried = carried }
             previousEnd = nextAnchor
@@ -194,6 +314,50 @@ public struct PageAnchor {
             visible = visible.filter { $0.start >= start }
         }
         currentWords = visible
-        return Page(visible: visible, closed: closed)
+        return Page(visible: visible, events: events)
+    }
+
+    /// Break the page where each new speaker began, as far as the words allow.
+    ///
+    /// Inside the page on screen, the words before the change close and the
+    /// page begins at it, so the new speaker's first words open the box that
+    /// follows instead of ending the one before. Before it, the change reaches
+    /// into boxes already closed and takes those words back.
+    ///
+    /// Only on settled words: a tail's times are synthesized and move on every
+    /// update, and a break inside it would not hold — see `page`.
+    ///
+    /// `final` places every change the words reach and drops the rest, for
+    /// words about to be replaced by a new clock's.
+    private mutating func applySpeakerChanges(_ words: [TimedWord], chunkStarts: [TimeInterval],
+                                              speculativeFrom: TimeInterval, final: Bool = false,
+                                              into events: inout [Event]) {
+        while let time = speakerChanges.first {
+            guard let cut = Self.cut(at: time, in: words, chunkStarts: chunkStarts, final: final),
+                  cut <= speculativeFrom
+            else {
+                if final { speakerChanges.removeFirst(); continue }
+                break
+            }
+            speakerChanges.removeFirst()
+            if cut >= start {
+                let leaving = words.filter {
+                    $0.start >= start && $0.start >= previousEnd && $0.start < cut
+                }
+                if !leaving.isEmpty { events.append(.closed(leaving)) }
+                barrier = max(barrier, cut)
+            } else {
+                let live = words.contains { $0.start >= start }
+                events.append(.reclaimed(from: cut, before: start, ownBox: !live))
+                guard live else { continue }
+                barrier = cut
+            }
+            start = cut
+            previousEnd = cut
+            lastCarried = -.greatestFiniteMagnitude
+            // What a page closing next, before these words are paged, would
+            // bank: the new speaker's, not the outgoing speaker's again.
+            currentWords = words.filter { $0.start >= cut }
+        }
     }
 }

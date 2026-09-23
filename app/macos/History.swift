@@ -917,10 +917,18 @@ final class HistoryController {
     /// opens, or on a click — and cleared by everything that takes it away.
     private var searchFocused = false
 
-    /// Set around the panel leaving the screen for a reason of its own — a
+    /// Set around the panel being parked for a reason of its own — a
     /// layout with no room for it — so the resign-key that follows is not
     /// taken for the user clicking elsewhere and clearing the search.
     private var isStarving = false
+
+    /// Hidden by fading out and letting clicks through, never by leaving the
+    /// screen. A panel that joins all Spaces follows the user from one to the
+    /// next only while it is on screen: ordered out on one Space and back in on
+    /// another, it came back on the first, and ⌥ raised the stack on a desktop
+    /// the user had left. The live box has always stayed on screen, which is
+    /// why it followed and the stack did not.
+    private var isParked = true
 
     /// The document no longer matches the query: the search was cleared by an
     /// unpin, and the filtered boxes were left in place for the fade that
@@ -1045,6 +1053,27 @@ final class HistoryController {
         }
 
         panel.alphaValue = 0
+        panel.ignoresMouseEvents = true
+        panel.orderFrontRegardless()
+    }
+
+    /// Off the screen as far as anyone can see or click, while staying on it
+    /// for Spaces — see `isParked`. The keyboard goes: out and straight back
+    /// in, within one turn of the run loop, is what gives up key status.
+    private func park() {
+        if panel.isKeyWindow {
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
+        }
+        panel.alphaValue = 0
+        panel.ignoresMouseEvents = true
+        isParked = true
+    }
+
+    private func unpark() {
+        isParked = false
+        panel.ignoresMouseEvents = false
+        panel.orderFrontRegardless()
     }
 
     deinit {
@@ -1102,7 +1131,7 @@ final class HistoryController {
         if !isVisible {
             isVisible = true
             guard fits else { return }
-            panel.orderFrontRegardless()
+            unpark()
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.12
                 panel.animator().alphaValue = 1
@@ -1268,7 +1297,7 @@ final class HistoryController {
             // on the next page, and the stack should still be there when it does.
             // The search goes with it, keyboard included, and comes back with it.
             isStarving = true
-            panel.orderOut(nil)
+            park()
             isStarving = false
             return false
         }
@@ -1300,7 +1329,7 @@ final class HistoryController {
         // Sprung towards the target while the stack is up; straight there when
         // it is arriving, since there is nowhere for it to be coming from.
         let placedOrigin: NSPoint
-        if isVisible, panel.isVisible {
+        if isVisible, !isParked {
             centreXSpring.animate(to: targetCentre)
             originYSpring.animate(to: target.y)
             placedOrigin = NSPoint(
@@ -1342,7 +1371,7 @@ final class HistoryController {
             : min(stackWidth, search.compactWidth.rounded())
         searchY = placedAbove ? Self.gap : height - Self.gap - searchHeight
         self.searchHeight = searchHeight
-        if isVisible, panel.isVisible,
+        if isVisible, !isParked,
            searchWidthSpring.isAnimating || abs(searchWidth - search.frame.width) > 0.5 {
             searchWidthSpring.animate(to: searchWidth)
             laySearch(width: searchWidthSpring.value)
@@ -1352,11 +1381,11 @@ final class HistoryController {
         }
         placedHeight = scrollHeight
 
-        // Back from a starved layout. Leaving the screen cost the panel its key
+        // Back from a starved layout. Parking cost the panel its key
         // status; a field that still counts as focused gets it back.
-        if isVisible, !panel.isVisible {
+        if isVisible, isParked {
             panel.alphaValue = 1
-            panel.orderFrontRegardless()
+            unpark()
             if searchFocused { panel.makeKey() }
         }
 
@@ -1425,7 +1454,7 @@ final class HistoryController {
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             guard let self, !self.isVisible else { return }
-            self.panel.orderOut(nil)
+            self.park()
             self.document.subviews.forEach { $0.removeFromSuperview() }
         })
     }
@@ -1434,7 +1463,7 @@ final class HistoryController {
 
     /// ⌥F: hand the field the keyboard, as a click on it would.
     func focusSearch() {
-        guard !searchFocused, panel.isVisible else { return }
+        guard !searchFocused, !isParked else { return }
         // Not `makeKey()`: from an app that is not active — and this one never
         // is; it lives in the menu bar — that does nothing. This is the route
         // by which a non-activating panel takes the keyboard without bringing

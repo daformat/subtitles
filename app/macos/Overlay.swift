@@ -977,6 +977,11 @@ final class OverlayController {
         /// the restart overlapped one after it in time and took its words.
         let start: TimeInterval
         let end: TimeInterval
+        /// The pager box it was taken from: its stream and its place in that
+        /// stream's count, by which a box revised after it closed is found
+        /// again — see `reviseStack`.
+        let stream: CaptionStreams.Stream
+        let ordinal: Int
     }
 
     private var stack: [StackBox] = []
@@ -1006,12 +1011,14 @@ final class OverlayController {
             recorded[stream] = total
             guard stream == historyStream, unseen > 0 else { continue }
             let boxes = streams.boxes(stream)
-            for box in boxes.suffix(min(unseen, boxes.count)) {
+            let fresh = boxes.suffix(min(unseen, boxes.count))
+            for (offset, box) in fresh.enumerated() {
                 stack.append(StackBox(text: box.text, under: "", app: box.app,
-                                      below: stream == .source, start: box.start, end: box.end))
+                                      below: stream == .source, start: box.start, end: box.end,
+                                      stream: stream, ordinal: total - fresh.count + offset))
                 if Self.debugPaging {
                     FileHandle.standardError.write(
-                        "[stack] + \(stream) \"\(box.text.prefix(40))\"\n".data(using: .utf8)!)
+                        "[stack] + \(stream) \"\(box.text)\"\n".data(using: .utf8)!)
                 }
             }
         }
@@ -1019,6 +1026,19 @@ final class OverlayController {
             stack.removeFirst(stack.count - effectiveHistoryDepth)
         }
         pairHistory()
+    }
+
+    /// A change of speaker found late took words back out of boxes that had
+    /// already closed, from `ordinal` on. The stack's copies of those go, and
+    /// are taken again as they are now — the outgoing speaker's box without the
+    /// new speaker's first words, and those words where they went.
+    private func reviseStack(_ stream: CaptionStreams.Stream, from ordinal: Int) {
+        stack.removeAll { $0.stream == stream && $0.ordinal >= ordinal }
+        if let seen = recorded[stream], seen > ordinal { recorded[stream] = ordinal }
+        if Self.debugPaging {
+            FileHandle.standardError.write("[stack] revise \(stream) from #\(ordinal)\n"
+                .data(using: .utf8)!)
+        }
     }
 
     /// The other language under each box in the stack, from the words on
@@ -1483,6 +1503,11 @@ final class OverlayController {
             translatedFreshDeferred = false
             streams.markFresh(.translated)
         }
+        pageTranslated(transcript)
+    }
+
+    /// Page the translation and draw it, or the caption it goes under.
+    private func pageTranslated(_ transcript: TranslatedTranscript) {
         let visible = page(.translated, transcript.words, chunkStarts: transcript.chunkStarts,
                            speculativeFrom: transcript.speculativeFrom)
         pairHistory()
@@ -1597,14 +1622,15 @@ final class OverlayController {
                                    speculativeFrom: speculativeFrom, app: playingApp) { candidates in
             longestFittingPrefix(candidates, pairedWith: paired)
         }
+        if let revised = paged.revisedFrom { reviseStack(stream, from: revised) }
         if paged.brokePage {
             pageShownAt = Date()
             if onScreen {
                 pendingPageChange = true
                 holdPage(caption: captionBefore, under: underBefore)
             }
-            recordClosedBoxes()
         }
+        if paged.brokePage || paged.revisedFrom != nil { recordClosedBoxes() }
         pageStartTime = streams.start(stream)
         return paged.visible
     }
@@ -1786,6 +1812,39 @@ final class OverlayController {
         if !pendingCommit.isEmpty { setTentative("") }
         startFreshOnNextText = true
         markPagersFreshAtUtteranceEnd()
+    }
+
+    /// Someone else started speaking at `time`, in audio time. Their words
+    /// start a box of their own, from the first of them: the diarizer names a
+    /// change a second or two late, when those words are already drawn at the
+    /// end of the outgoing speaker's box, or have closed with it into the
+    /// stack, and they are taken back from there.
+    ///
+    /// The spoken words are paged again at once, having everything the break
+    /// needs; the translation breaks as its words before the change settle.
+    func markSpeakerChange(at time: TimeInterval) {
+        if Self.debugPaging {
+            let near = sourceWords.filter { abs($0.start - time) < 2 }
+                .map { String(format: "%@@%.2f", $0.text, $0.start) }.joined(separator: " ")
+            FileHandle.standardError.write(String(
+                format: "[page] speaker change at %.2fs, page from %.2fs: %@\n",
+                time, streams.start(.source), near).data(using: .utf8)!)
+        }
+        streams.markSpeakerChange(at: time)
+        guard !holdsFinalCaption else { return }
+        if !sourceWords.isEmpty {
+            let visible = page(.source, sourceWords, chunkStarts: [])
+            if primaryStream == .source, !boxIsCleared { showWords(visible, under: underCaption) }
+            if Self.debugPaging {
+                FileHandle.standardError.write(String(
+                    format: "[page] after change: page from %.2fs \"%@\", last box \"%@\"\n",
+                    streams.start(.source), visible.map(\.text).joined(separator: " "),
+                    streams.boxes(.source).last?.text ?? "").data(using: .utf8)!)
+            }
+        }
+        if let translatedWords, !boxIsCleared {
+            pageTranslated(translatedWords)
+        }
     }
 
     /// Utterance finished: keep it on screen briefly, then fade. The next words

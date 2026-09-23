@@ -31,6 +31,9 @@ public struct CaptionStreams {
     public struct Page {
         public let visible: [TimedWord]
         public let brokePage: Bool
+        /// The ordinal of the first closed box this call changed — see
+        /// `StreamPager.revisedFrom`.
+        public let revisedFrom: Int?
     }
 
     // MARK: reading
@@ -85,6 +88,13 @@ public struct CaptionStreams {
         }
     }
 
+    /// A new speaker began at `time`, in both languages. Each stream breaks
+    /// once it has the words to break — see `PageAnchor.markSpeakerChange`.
+    public mutating func markSpeakerChange(at time: TimeInterval) {
+        sourcePager.markSpeakerChange(at: time)
+        translatedPager.markSpeakerChange(at: time)
+    }
+
     public mutating func clear() {
         sourcePager.clear()
         translatedPager.clear()
@@ -127,7 +137,6 @@ public struct CaptionStreams {
                                 speculativeFrom: TimeInterval = .greatestFiniteMagnitude,
                                 app: String? = nil,
                                 fits: ([TimedWord]) -> Int) -> Page {
-        let before = closed(stream).count
         let visible: [TimedWord]
         switch stream {
         case .source:
@@ -140,6 +149,7 @@ public struct CaptionStreams {
                                              speculativeFrom: speculativeFrom, app: app,
                                              fits: fits)
         }
-        return Page(visible: visible, brokePage: closed(stream).count != before)
+        let pager = pager(stream)
+        return Page(visible: visible, brokePage: pager.turnedPage, revisedFrom: pager.revisedFrom)
     }
 }

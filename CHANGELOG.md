@@ -4,6 +4,26 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.10.0 · 2026-09-23
+
+- **The new speaker's first words go in their own box.** With **New box on
+  speaker change** turned on in Settings, the diarization model only knows
+  someone else is talking a second or two after they start, so their first
+  words used to end the outgoing speaker's box, on screen and in the ⌥
+  history. The change now carries the moment the new voice began, according
+  to the diarization, and the break goes there: at the end of a
+  sentence or the pause between the two voices, whichever is nearest. Words
+  already on screen move to the new box; words in a box that had already
+  closed are taken back out of it in the history, and join the box on
+  screen or, if the box had faded, become a box of their own. A voice has
+  to hold for half a second before it counts as a new speaker, so a cough
+  or a quick "mm" no longer breaks the page. With translation on, the
+  translated box breaks at the same point once its words there have
+  settled.
+- The ⌥ history follows you across Spaces. Stop the audio on one desktop,
+  move to another and hold ⌥: the history now opens there, as the live box
+  always did, rather than on the desktop where it was last shown.
+
 ## 1.9.0 · 2026-09-22
 
 <!-- [0bsd-edition]

@@ -397,7 +397,11 @@ makes a *revising* engine survivable if the model is ever swapped.
 - `.nonactivatingPanel` + `canBecomeKey/Main = false` + `.accessory` activation
   policy together are what prevent focus theft. All three are needed.
 - `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]` so the
-  overlay follows the user across Spaces.
+  overlay follows the user across Spaces. Only while it is on screen: a panel
+  ordered out on one Space and back in on another returns to the first. The live
+  box is ordered in once and only ever faded; the ⌥ stack used to be ordered out
+  when dismissed and came back on the Space it left, so it now parks the same way,
+  at alpha 0 and ignoring the mouse (1.10.0).
 - Text draws **bottom-aligned** when it overflows `maxLines`, so the newest line
   stays put and older text slides up — how real subtitles behave.
 - The endpoint flush emits COMMITTED then ENDPOINT with no TENTATIVE between, and
@@ -978,6 +982,28 @@ reports on a ~0.5 s cadence, so the change is detected *after* the new speaker
 starts and a word or two of theirs can land on the outgoing page. The alternative —
 holding text until the speaker is known — would delay every subtitle by the
 diarizer's cadence, which is the wrong trade for a latency-first app.
+
+**Placed where it began, after the fact (2026-09-23, 1.10.0).** The limitation
+above is now repaired rather than accepted. `SpeakerTracker` reports the change
+with the start of the new speaker's segment, on the recognizer's clock: both
+models get the same slices and reset at the same calls, and an offline run of the
+two on a two-voice clip put the segment starts within 0.3 s of the right word
+boundary. `PageAnchor.markSpeakerChange` keeps the time until the stream has 0.4 s
+of settled speech past it, then breaks at the nearest sentence end within 0.8 s,
+else the widest pause between words there, else the first word mostly after it.
+Real speech needed all of that: on a call the segment start and the word times
+disagreed by up to half a second either way ("I" at 38.08 s against a change at
+38.56 s; "degree" at 93.28 s against 93.36 s), and the recognizer's word ends run
+short, so a sentence end beats a wider-looking gap. Inside the page on screen the
+words before the break close and the page begins at it. Before it, the closed
+boxes hand the words back (`StreamPager.reclaim`): to the page on screen, or as a
+box of their own when the box has faded. The walk back stops at the first box
+that does not end where the next begins, which keeps it off boxes from before a
+clock restart; a change still waiting when the clock restarts is placed on the
+last words first. The overlay's ⌥ stack keeps each box's ordinal and takes the
+revised boxes again. A new voice must hold 0.5 s to count, and the tracker reads
+the segment reaching furthest into the audio, finalized or not: preferring the
+last finalized one read the outgoing speaker's older segment as a change back.
 
 ---
 

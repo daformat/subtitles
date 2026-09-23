@@ -726,10 +726,10 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 
     let tracker: SpeakerTracker? = speakerBreaksEnabled
         ? SpeakerTracker(
-            onChange: {
-                // Same treatment as a pause: the words already shown stay put and
-                // the next ones start a fresh box.
-                DispatchQueue.main.async { renderer.overlay?.markPause() }
+            onChange: { time in
+                // The new speaker's words start a box of their own, including
+                // those already drawn in the outgoing speaker's box.
+                DispatchQueue.main.async { renderer.overlay?.markSpeakerChange(at: time) }
             },
             onStatus: { message in DispatchQueue.main.async { err(message) } })
         : nil

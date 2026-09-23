@@ -23,13 +23,17 @@ public struct StreamPager {
         /// word's end: what the other language is matched to it by.
         public let start: TimeInterval
         public let end: TimeInterval
+        /// The words themselves, by which a change of speaker found late can
+        /// take its own back out of the box.
+        public let words: [TimedWord]
 
         public init(text: String, app: String? = nil, start: TimeInterval = 0,
-                    end: TimeInterval = 0) {
+                    end: TimeInterval = 0, words: [TimedWord] = []) {
             self.text = text
             self.app = app
             self.start = start
             self.end = end
+            self.words = words
         }
     }
 
@@ -38,8 +42,23 @@ public struct StreamPager {
     /// Boxes that have left the screen, oldest first.
     public private(set) var boxes: [Box] = []
     /// How many have ever left, trimming included: what a reader of `boxes`
-    /// keeps to know which of them it has not seen yet.
+    /// keeps to know which of them it has not seen yet. A box's ordinal is its
+    /// place in that count. It can go down: a change of speaker found late
+    /// takes words back out of the boxes it reaches — see `revisedFrom`.
     public private(set) var closedCount = 0
+
+    /// The ordinal of the first box the last call changed after it had closed,
+    /// or nil when it changed none. A reader that has taken boxes from there on
+    /// drops them and takes them again.
+    public private(set) var revisedFrom: Int?
+
+    /// Whether the last call turned the page on screen.
+    public private(set) var turnedPage = false
+
+    /// How far a box may end past the start of the one after it and still be
+    /// taken for its neighbour on the same clock. Word times touch, and can
+    /// overlap by a token.
+    private static let clockSlack: TimeInterval = 0.3
 
     /// The same boxes, as text.
     public var closed: [String] { boxes.map(\.text) }
@@ -61,6 +80,11 @@ public struct StreamPager {
     public mutating func markFresh() { anchor.markFresh() }
 
     public mutating func rewind() { anchor.rewind() }
+
+    /// A new speaker began at `time` — see `PageAnchor.markSpeakerChange`.
+    public mutating func markSpeakerChange(at time: TimeInterval) {
+        anchor.markSpeakerChange(at: time)
+    }
 
     /// Close the page on screen into the stack now — see `PageAnchor.close`.
     public mutating func close(depth: Int) {
@@ -103,26 +127,78 @@ public struct StreamPager {
                                 fits: ([TimedWord]) -> Int) -> [TimedWord] {
         let page = anchor.page(words, chunkStarts: chunkStarts, allowCarry: allowCarry,
                                speculativeFrom: speculativeFrom, fits: fits)
+        revisedFrom = nil
+        turnedPage = false
         // Only the first box to close was on screen before this call; any
         // after it are pages of the words arriving now.
-        for (index, box) in page.closed.enumerated() {
-            append(box, app: index == 0 ? currentApp ?? app : app, depth: depth)
+        var onScreen = true
+        for event in page.events {
+            switch event {
+            case .closed(let box):
+                if append(box, app: onScreen ? currentApp ?? app : app, depth: depth) {
+                    turnedPage = true
+                }
+                onScreen = false
+            case .reclaimed(let from, let before, let ownBox):
+                reclaim(from: from, before: before, ownBox: ownBox, depth: depth)
+            }
         }
         currentApp = app
         return page.visible
     }
 
-    private mutating func append(_ words: [TimedWord], app: String?, depth: Int) {
-        guard depth > 0 else { return }
+    /// Take the words from `cut` on back out of the boxes that closed with
+    /// them: a new speaker's, closed with the outgoing speaker's page before
+    /// the change was known. A box wholly after the cut goes; the one it falls
+    /// in keeps what came before it. With `ownBox` the words taken become a box
+    /// of their own; otherwise the page on screen has them now.
+    ///
+    /// Walks back only while each box ends where the next begins, starting from
+    /// `before`, where the page on screen began: the recognizer's clock restarts
+    /// at an endpoint, and a box from the run before can sit anywhere on the
+    /// new one.
+    private mutating func reclaim(from cut: TimeInterval, before: TimeInterval, ownBox: Bool,
+                                  depth: Int) {
+        var taken: [TimedWord] = []
+        var app: String?
+        var bound = before
+        while let last = boxes.last, last.end > cut, last.end <= bound + Self.clockSlack,
+              last.words.contains(where: { $0.start >= cut }) {
+            boxes.removeLast()
+            closedCount -= 1
+            revisedFrom = closedCount
+            taken = last.words.filter { $0.start >= cut } + taken
+            app = last.app
+            bound = last.start
+            let kept = last.words.filter { $0.start < cut }
+            if !kept.isEmpty {
+                store(kept, app: last.app, depth: depth)
+                break
+            }
+        }
+        if ownBox, !taken.isEmpty { store(taken, app: app, depth: depth) }
+    }
+
+    @discardableResult
+    private mutating func append(_ words: [TimedWord], app: String?, depth: Int) -> Bool {
         let text = words.map(\.text).joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // A page can close by more than one route in the same beat, an overflow
         // straight after a pause say, and two identical boxes in the stack read
         // as a stutter rather than as history.
-        guard !text.isEmpty, text != boxes.last?.text,
-              let first = words.first, let last = words.last else { return }
-        boxes.append(Box(text: text, app: app, start: first.start, end: last.end))
+        guard text != boxes.last?.text else { return false }
+        return store(words, app: app, depth: depth)
+    }
+
+    @discardableResult
+    private mutating func store(_ words: [TimedWord], app: String?, depth: Int) -> Bool {
+        guard depth > 0 else { return false }
+        let text = words.map(\.text).joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let first = words.first, let last = words.last else { return false }
+        boxes.append(Box(text: text, app: app, start: first.start, end: last.end, words: words))
         closedCount += 1
         trim(to: depth)
+        return true
     }
 }

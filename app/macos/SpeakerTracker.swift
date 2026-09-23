@@ -6,10 +6,13 @@
 // wrong speaker index costs a page break rather than a wrong name on screen.
 //
 // Diarization is inherently retrospective: Sortformer needs ~1 s of warmup and
-// reports on a ~0.48 s cadence, so the change is detected slightly *after* the
-// new speaker starts. A word or two of theirs can therefore land on the outgoing
-// page before it clears. Waiting for the label instead would delay every subtitle
-// by the diarizer's cadence, which is a far worse trade for a latency-first app.
+// reports on a ~0.48 s cadence, so the change is detected a second or two
+// *after* the new speaker starts. Waiting for the label instead would delay
+// every subtitle by the diarizer's cadence, which is a far worse trade for a
+// latency-first app. So the change is reported with the time the new speaker's
+// segment began, on the same clock as the recognizer's words (both are fed the
+// same slices and reset together), and the overlay moves the words they had
+// already said out of the outgoing speaker's box and into theirs.
 
 import CoreML
 import FluidAudio
@@ -20,14 +23,27 @@ actor SpeakerTracker {
     private var loaded = false
     private var currentSpeaker: Int?
 
-    private let onChange: @Sendable () -> Void
+    private let onChange: @Sendable (TimeInterval) -> Void
     private let onStatus: @Sendable (String) -> Void
+
+    /// How long a new speaker must have been talking before it counts. A
+    /// cough, a laugh or a one-frame flicker between labels otherwise breaks
+    /// the page, and now takes a word or two with it.
+    static let minimumTurn: Float = 0.5
+
+    /// How far back a change may reach from the newest audio. The diarizer
+    /// names a change well within this; a segment that seems to start further
+    /// back is a relabelling of speech long since paged, and moving words that
+    /// old would rewrite boxes the reader has finished with.
+    static let maximumReach: Float = 4
+
+    private static let debug = ProcessInfo.processInfo.environment["SUBS_DEBUG_PAGING"] != nil
 
     /// Seconds of compute, for folding into the engine's RTF report — a second
     /// model on the ANE is not free and should be visible in the health signal.
     private(set) var computeSeconds = 0.0
 
-    init(onChange: @escaping @Sendable () -> Void,
+    init(onChange: @escaping @Sendable (TimeInterval) -> Void,
          onStatus: @escaping @Sendable (String) -> Void) {
         self.onChange = onChange
         self.onStatus = onStatus
@@ -54,15 +70,33 @@ actor SpeakerTracker {
         diarizer.addAudio(samples)
         do {
             guard let update = try diarizer.process() else { return }
-            // Prefer a finalized segment; fall back to the tentative frontier so a
-            // change is noticed as early as the model allows.
-            let latest = update.finalizedSegments.last ?? update.tentativeSegments.last
+            // The segment reaching furthest into the audio, finalized or not, so a
+            // change is noticed as early as the model allows. Not the last
+            // finalized one first: finalizing lags the frontier, and preferring it
+            // read the outgoing speaker's older segment as a change back to them.
+            let latest = (update.finalizedSegments + update.tentativeSegments)
+                .max { ($0.endFrame, $0.startFrame) < ($1.endFrame, $1.startFrame) }
             guard let latest else { return }
 
             if let current = currentSpeaker, current != latest.speakerIndex {
-                onChange()
+                // Too short to count yet: the same segment is reported again
+                // as it grows, and counts once it is long enough.
+                if latest.duration >= Self.minimumTurn {
+                    let heard = Float(diarizer.numFramesProcessed)
+                        * diarizer.config.frameDurationSeconds
+                    let time = max(latest.startTime, heard - Self.maximumReach)
+                    if Self.debug {
+                        FileHandle.standardError.write(String(
+                            format: "[speaker] %d → %d, segment %.2f–%.2f s, heard %.2f s\n",
+                            current, latest.speakerIndex, latest.startTime, latest.endTime, heard)
+                            .data(using: .utf8)!)
+                    }
+                    onChange(TimeInterval(time))
+                    currentSpeaker = latest.speakerIndex
+                }
+            } else {
+                currentSpeaker = latest.speakerIndex
             }
-            currentSpeaker = latest.speakerIndex
         } catch {
             onStatus("speaker detection error: \(error.localizedDescription)")
         }

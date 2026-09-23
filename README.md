@@ -378,9 +378,11 @@ Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
 - Singing is speech as far as the VAD is concerned, so vocal music will be
   transcribed as lyrics.
 - Speaker-change breaks are **retrospective**: diarization needs ~1 s of warmup and
-  reports on a ~0.5 s cadence, so a word or two of the new speaker can land on the
-  outgoing box before it clears. Waiting for the label instead would delay every
-  subtitle by the diarizer's cadence.
+  reports on a ~0.5 s cadence, so the change is known a second or two late. The
+  break is placed where the new voice began, at the nearest sentence end or pause,
+  and the words already drawn, or already closed into the ⌥ history, move to the
+  new speaker's box. Until then they sit in the outgoing box, and a turn without a
+  pause or a sentence end between the voices can still split a word early or late.
 - First launch downloads ~633 MB, which takes minutes. Switching model downloads
   that variant too — 215 MB for an EOU tier, ~600 MB for the others; each entry
   shows its size. Anything already fetched is kept and skipped, and changing
