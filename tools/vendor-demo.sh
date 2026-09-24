@@ -25,11 +25,18 @@ for f in index.html styles.css script.js; do
   [ -f "$SITE/$f" ] || { echo "!! no $f in $SITE — pass the site checkout as \$1" >&2; exit 1; }
 done
 
-# Line ranges, not markers: the site's files have no extraction markers in them
-# and adding some would be a change to that repo for this one's benefit. The
-# guards below are what catches them going stale.
+# Line ranges pick the slices, and the guards below are what catches them going
+# stale (tools/vendor-demo-ranges.py re-pins them). Inside a slice, the site
+# marks what only the site wants — the demos' voice, the analytics events, the
+# hints over the demo — between vendor:skip-start and vendor:skip-end comments,
+# and slice() cuts each such pair down to a line saying what was skipped
+# (tools/vendor_markers.py). A slice whose range ends inside a pair is an
+# error rather than half the site's code.
 extract() { # file first last
   awk -v a="$2" -v b="$3" 'NR >= a && NR <= b' "$SITE/$1"
+}
+slice() { # file first last: the lines, the site-only pairs cut
+  extract "$@" | python3 "$(dirname "$0")/vendor_markers.py"
 }
 
 expect() { # description text pattern
@@ -46,7 +53,7 @@ mkdir -p "$OUT"
 # The caption is a paragraph of page copy, and the welcome window draws its own
 # ⇧ line in AppKit instead: text rendered by a web view inside a native window
 # is text that does not match anything around it.
-HTML=$(extract index.html 392 652)
+HTML=$(slice index.html 392 673)
 expect "the demo markup" "$HTML" '<div class="demo[^"]*" id="demo">'
 expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 # And what the range stops short of. Every check above looks at the start of a
@@ -54,7 +61,7 @@ expect "the scene buttons" "$HTML" 'class="demo-scenes"'
 # so the vendor succeeds with the demo's newest half missing. Twice now the
 # ranges have gone stale that way. The lines just past each range say whether
 # it still ends where the section does.
-expect "the end of the demo markup" "$(extract index.html 653 658)" 'demo-caption'
+expect "the end of the demo markup" "$(extract index.html 674 679)" 'demo-caption'
 # The ⌘-tab switcher wears the apps' icons, which the site keeps as files under
 # /assets and the markup names by absolute path. The webview loads a file URL,
 # so an absolute path would resolve against the root of the disk: the icons the
@@ -97,14 +104,20 @@ fi
   echo "$HTML"
   echo "      </div>"
 } > "$OUT/demo.html.part"
+for leak in 'demo-hint' '^ *<!-- vendor:skip-'; do
+  if grep -q -- "$leak" "$OUT/demo.html.part"; then
+    echo "!! the demo markup still has $leak in it: the site's vendor:skip markers miss some of it" >&2
+    exit 1
+  fi
+done
 
 # ── styles: the palettes, the page's base, then the demo section ──
 # The palettes come along because every colour in the demo is a var() into them,
 # and the two dark blocks because the webview follows the system appearance.
-CSS_ROOT=$(extract styles.css 1 96)
+CSS_ROOT=$(slice styles.css 1 99)
 expect "the light palette" "$CSS_ROOT" -- '--desktop-bg\|:root {'
 expect "the dark palette" "$CSS_ROOT" 'prefers-color-scheme: dark'
-expect "the end of the palettes" "$(extract styles.css 97 98)" 'base'
+expect "the end of the palettes" "$(extract styles.css 100 101)" 'base'
 # The page's base: the border-box reset, the body's type, margins off
 # paragraphs, SVGs as blocks, the focus ring, and the plain keycap. The demo's
 # rules were written on top of it and lean on it in ways they do not say —
@@ -113,48 +126,48 @@ expect "the end of the palettes" "$(extract styles.css 97 98)" 'base'
 # it the app's copy drew a keycap half again as wide as the site's. What the
 # body rule says about the page (its background, its overflow) the shell
 # overrides after this file.
-CSS_BASE=$(extract styles.css 98 176)
+CSS_BASE=$(slice styles.css 101 179)
 expect "the page's base" "$CSS_BASE" '^/\* .* base '
 expect "the border-box reset" "$CSS_BASE" 'box-sizing: border-box'
 expect "the plain keycap" "$CSS_BASE" '^kbd {'
-expect "the end of the page's base" "$(extract styles.css 177 178)" '^\.wrap {'
-CSS_DEMO=$(extract styles.css 770 2813)
+expect "the end of the page's base" "$(extract styles.css 180 181)" '^\.wrap {'
+CSS_DEMO=$(slice styles.css 773 3118)
 expect "the demo styles" "$CSS_DEMO" '^\.demo {'
 expect "the scene buttons' styles" "$CSS_DEMO" '^\.demo-scenes {'
-expect "the end of the demo styles" "$(extract styles.css 2814 2818)" 'sections'
+expect "the end of the demo styles" "$(extract styles.css 3119 3123)" 'sections'
 # The app's menu, dropped from the status item in the demo's first scene, is
 # styled with the landing pages' windows rather than in the demo section,
 # because those pages drop the same menu. Vendored without it the menu is a
 # bare list of ticks and words.
-CSS_MENU=$(extract styles.css 4196 4344)
+CSS_MENU=$(slice styles.css 4544 4706)
 expect "the menu's styles" "$CSS_MENU" '^\.mn-root {'
-expect "the end of the menu's styles" "$(extract styles.css 4345 4345)" 'landing pages'
+expect "the end of the menu's styles" "$(extract styles.css 4707 4707)" 'landing pages'
 # The frame is the redesign's box around the screen and lives with the hero's
 # styles, a long way past the demo section. It changes nothing at this window's
 # width, but it is the demo's own rule and belongs with the rest.
-CSS_FRAME=$(extract styles.css 3647 3694)
+CSS_FRAME=$(slice styles.css 3966 4013)
 expect "the demo frame" "$CSS_FRAME" '^\.demo-frame {'
-expect "the end of the demo frame" "$(extract styles.css 3695 3697)" 'works with'
+expect "the end of the demo frame" "$(extract styles.css 4014 4016)" 'works with'
 # The Notes window is drawn as Notes: the toolbar in its title bar, the three
 # columns under it. Those styles sit with the landing pages' windows, further
 # past the demo section again, because the landing demos draw the same window.
-CSS_NOTES=$(extract styles.css 4653 4774)
+CSS_NOTES=$(slice styles.css 5038 5159)
 expect "the Notes window's styles" "$CSS_NOTES" '^/\* ── Notes'
 expect "the Notes window's columns" "$CSS_NOTES" '^\.nt-side {'
-expect "the end of the Notes window's styles" "$(extract styles.css 4775 4777)" 'Visual Studio Code'
+expect "the end of the Notes window's styles" "$(extract styles.css 5160 5162)" 'Visual Studio Code'
 # The Tahoe pass: the windows drawn the way macOS 26 draws them — rounder
 # frames with a rim, sidebars as glass panes with the traffic lights in them,
 # the call's controls as a capsule over the tiles, the menu on the same glass.
 # It restyles the demo's windows from the end of the stylesheet, after every
 # page's own rules, and without it the windows are the old squarer ones under
 # the new markup.
-CSS_TAHOE=$(extract styles.css 5126 5377)
+CSS_TAHOE=$(slice styles.css 5511 5762)
 expect "the Tahoe styles" "$CSS_TAHOE" '^/\* .* Tahoe '
 expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
 # It is the last thing in the file, so what says it still ends where it did is
 # that nothing follows it: a section added after it would move the end, and
 # so would rules added to it.
-[ -z "$(extract styles.css 5378 100273)" ] || {
+[ -z "$(extract styles.css 5763 100658)" ] || {
   echo "!! styles.css no longer ends with the Tahoe styles — the site's line numbers have moved." >&2
   echo "   Re-check the ranges in $0 against $SITE." >&2
   exit 1
@@ -175,6 +188,12 @@ expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
   echo
   echo "$CSS_TAHOE"
 } > "$OUT/demo.css"
+for leak in '\.demo-hint' '\.scene-sound' '^ */\* vendor:skip-'; do
+  if grep -q -- "$leak" "$OUT/demo.css"; then
+    echo "!! the demo styles still have $leak in them: the site's vendor:skip markers miss some of it" >&2
+    exit 1
+  fi
+done
 
 # ── behaviour: the menu bar clock and the demo itself ──
 # The other IIFEs in the site's script — theme toggle, sticky header, language
@@ -184,7 +203,7 @@ expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
 # I18N comes along because the demo's own copy goes through it. On the site it
 # reads the translations out of a <template> in the page; there is no template
 # here, so every call falls back to the English literal it was given.
-JS_I18N=$(extract script.js 8 20)
+JS_I18N=$(slice script.js 18 30)
 # The recording flag, declared just past the i18n helper, and under it the
 # settings seed: SETTINGS reads window.SUBTITLES_SETTINGS, which the welcome
 # window sets from the app's own settings before this runs (Welcome.swift),
@@ -194,20 +213,20 @@ JS_I18N=$(extract script.js 8 20)
 # reads the flag only for a line with a source — the translation scene's —
 # and without it that line threw after its last word and left the box up for
 # good.
-JS_CAPTURE=$(extract script.js 48 137)
-JS_WAVE=$(extract script.js 316 340)
-JS_SEARCH=$(extract script.js 347 2778)
-JS_WRITE=$(extract script.js 3874 4017)
-JS=$(extract script.js 4194 5832)
+JS_CAPTURE=$(slice script.js 58 147)
+JS_WAVE=$(slice script.js 328 352)
+JS_SEARCH=$(slice script.js 359 3026)
+JS_WRITE=$(slice script.js 4233 4376)
+JS=$(slice script.js 4687 6443)
 expect "the i18n helper" "$JS_I18N" 'const I18N = '
 expect "the recording flag" "$JS_CAPTURE" '^const CAPTURE = '
 expect "the settings seed" "$JS_CAPTURE" '^const SETTINGS = '
-expect "the end of the settings seed" "$(extract script.js 138 139)" 'function theme'
+expect "the end of the settings seed" "$(extract script.js 148 149)" 'function theme'
 # waveFit sits among the page's IIFEs but is the demo's: it fits the podcast
 # window's waveform to whole device pixels, and the stylesheet's layout of the
 # bars is only what stands in until it runs.
 expect "the waveform fitter" "$JS_WAVE" 'function waveFit'
-expect "the end of the waveform fitter" "$(extract script.js 340 340)" '^})();$'
+expect "the end of the waveform fitter" "$(extract script.js 352 352)" '^})();$'
 # Everything the caption demo shares with the landing pages' demos, from the
 # stack's helpers to the window resizing: the boxes' icon rows, the keycaps,
 # the ⇧ ring, the name tab, the settings seed's defaults and what dresses a
@@ -218,19 +237,22 @@ expect "the stack search" "$JS_SEARCH" '^const stackSearch = '
 expect "the settings seed's defaults" "$JS_SEARCH" '^const DEMO_DEFAULTS = '
 expect "the app's menu" "$JS_SEARCH" '^const statusMenu = '
 expect "the window resizing" "$JS_SEARCH" '^const windowResize = '
-expect "the end of the stack search" "$(extract script.js 2779 2794)" 'function liteDemo'
+# It runs on through the demos' voice, which sits between it and the landing
+# pages' demo and is the site's alone: the markers cut it to one line.
+expect "the demos' voice, cut" "$JS_SEARCH" 'vendor:skipped audio'
+expect "the end of the stack search" "$(extract script.js 3027 3042)" 'function liteDemo'
 # liveWriting moves the caret in every window that is a document, the demo's
 # notes window among them. It lives with the landing pages' scripts because
 # theirs have documents too, but the home demo's notes are what it was drawn for.
 expect "the writing animation" "$JS_WRITE" 'function liveWriting'
-expect "the end of the writing animation" "$(extract script.js 4018 4020)" 'function navFit'
+expect "the end of the writing animation" "$(extract script.js 4377 4379)" 'function navFit'
 expect "the menu bar clock" "$JS" 'function menuBarClock'
 expect "the caption demo" "$JS" 'function captionDemo'
 # The demo used to be the last thing in the site's script, and its range ended
 # at the end of the file. The changelog page's release filter follows it now,
 # and that is the page's, not the demo's: the lines just past the range say
 # whether the demo still ends where it did.
-expect "the end of the caption demo" "$(extract script.js 5833 5836)" 'changelog'
+expect "the end of the caption demo" "$(extract script.js 6444 6447)" 'changelog'
 ALLJS=$(
   echo "// Generated by tools/vendor-demo.sh from the site's script.js. Do not edit."
   echo "$JS_I18N"
@@ -255,6 +277,14 @@ if grep -q "['\"]/assets/" <<<"$ALLJS"; then
   grep -o "['\"]/assets/[^'\"]*" <<<"$ALLJS" >&2
   exit 1
 fi
+# What the markers are there to keep out: the voice, the analytics, the hints.
+# Something of theirs left in a slice is a marker the site forgot.
+for leak in 'sa_event' 'const demoVoice' 'demoHints' '^ *// vendor:skip-'; do
+  if grep -q -- "$leak" <<<"$ALLJS"; then
+    echo "!! the demo script still has $leak in it: the site's vendor:skip markers miss some of it" >&2
+    exit 1
+  fi
+done
 printf '%s\n' "$ALLJS" > "$OUT/demo.js"
 # The microphone as a box's source, from the demo's Listen To: its icon is
 # named by the script alone — `MIC = { icon: 'microphone', … }`, resolved to

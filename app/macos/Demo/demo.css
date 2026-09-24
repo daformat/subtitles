@@ -3,6 +3,9 @@
    Subtitles — site styles
    Light palette on :root, dark under both the media query and
    an explicit [data-theme] so the toggle wins in either direction.
+
+   vendor:skip-start / vendor:skip-end pairs mark what the app's copy
+   of the demo leaves out; see the head of script.js.
    ============================================================ */
 
 :root {
@@ -248,10 +251,10 @@ kbd {
      each ends a little sooner, the orange sits further right of the cyan,
      the middle stop is a cleaner pink, and each light is a shade stronger. */
   --desktop-bg:
-    radial-gradient(55% 60% at 16% 10%, rgb(112 100 255 / 0.72), transparent 60%),
-    radial-gradient(48% 55% at 86% 18%, rgb(255 110 170 / 0.62), transparent 62%),
-    radial-gradient(50% 50% at 78% 96%, rgb(255 160 90 / 0.76), transparent 62%),
-    radial-gradient(48% 46% at 12% 90%, rgb(75 199 240 / 0.6), transparent 62%),
+    radial-gradient(66% 72% at 16% 10%, rgb(112 100 255 / 0.72) 15%, transparent 60%),
+    radial-gradient(57.6% 66% at 86% 18%, rgb(255 110 170 / 0.62) 15%, transparent 62%),
+    radial-gradient(60% 60% at 78% 96%, rgb(255 160 90 / 0.76) 15%, transparent 62%),
+    radial-gradient(57.6% 55.2% at 12% 90%, rgb(75 199 240 / 0.6) 15%, transparent 62%),
     linear-gradient(160deg, #cbc6ff 0%, #f3dafd 48%, #ffdcc8 100%);
   /* The screen's own shadow, over the glow (.demo-frame::before): soft and
      layered, four shadows stepping up in blur and down in weight, so the
@@ -309,11 +312,11 @@ kbd {
     --tok-s: #ce9178; --tok-n: #b5cea8; --tok-c: #6a9955;
     --content-dim: brightness(0.86);
     --desktop-bg:
-      radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
-      radial-gradient(48% 55% at 86% 18%, rgb(225 70 150 / 0.36), transparent 66%),
-      radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
-      radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
-      linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
+      radial-gradient(66% 72% at 16% 10%, rgb(110 92 255 / 0.62) 15%, transparent 64%),
+      radial-gradient(57.6% 66% at 86% 18%, rgb(235 74 158 / 0.46) 15%, transparent 66%),
+      radial-gradient(69.6% 60% at 72% 96%, rgb(255 142 78 / 0.46) 15%, transparent 66%),
+      radial-gradient(50.4% 55.2% at 12% 90%, rgb(44 170 238 / 0.42) 15%, transparent 66%),
+      linear-gradient(160deg, #1c1839 0%, #33204c 50%, #452434 100%);
     --demo-shadow:
       0 1px 2px rgb(0 0 0 / 0.4),
       0 4px 10px rgb(0 0 0 / 0.3),
@@ -355,11 +358,11 @@ kbd {
     --tok-p: #9cdcfe; --tok-k: #569cd6; --tok-t: #4ec9b0; --tok-f: #dcdcaa;
     --tok-s: #ce9178; --tok-n: #b5cea8; --tok-c: #6a9955;
     --desktop-bg:
-      radial-gradient(55% 60% at 16% 10%, rgb(104 88 255 / 0.5), transparent 64%),
-      radial-gradient(48% 55% at 86% 18%, rgb(225 70 150 / 0.36), transparent 66%),
-      radial-gradient(58% 50% at 72% 96%, rgb(255 138 76 / 0.36), transparent 66%),
-      radial-gradient(42% 46% at 12% 90%, rgb(40 160 225 / 0.32), transparent 66%),
-      linear-gradient(160deg, #17142f 0%, #2b1b40 50%, #3a1e2b 100%);
+      radial-gradient(66% 72% at 16% 10%, rgb(110 92 255 / 0.62) 15%, transparent 64%),
+      radial-gradient(57.6% 66% at 86% 18%, rgb(235 74 158 / 0.46) 15%, transparent 66%),
+      radial-gradient(69.6% 60% at 72% 96%, rgb(255 142 78 / 0.46) 15%, transparent 66%),
+      radial-gradient(50.4% 55.2% at 12% 90%, rgb(44 170 238 / 0.42) 15%, transparent 66%),
+      linear-gradient(160deg, #1c1839 0%, #33204c 50%, #452434 100%);
     --demo-shadow:
       0 1px 2px rgb(0 0 0 / 0.4),
       0 4px 10px rgb(0 0 0 / 0.3),
@@ -411,8 +414,19 @@ kbd {
      clears the mark's box with the arc to spare. */
   border-radius: clamp(8px, 2.3vw, var(--radius-lg));
   overflow: hidden;
-  background: var(--desktop-bg);
   box-shadow: var(--shadow-lg);
+}
+/* The wallpaper, on a layer of its own so it can be blurred, grown past the
+   screen on every side so the blur has colour to pull in at the edges rather
+   than fading to the page. First in paint order with no z-index, so the menu
+   bar and the stage, both positioned, draw over it. */
+.demo-screen::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  background: var(--desktop-bg);
+  filter: blur(70px);
+  pointer-events: none;
 }
 /* The frame, as a layer over everything rather than a border around it. A border
    sits outside the padding box, and the wallpaper is painted on this element, so
@@ -2176,6 +2190,9 @@ kbd {
    progress. */
 .scene-button:hover .scene-label,
 .scene-button[aria-current="true"] .scene-label { color: var(--text); }
+/* vendor:skipped audio, 136 lines */
+
+/* vendor:skipped hints, 154 lines */
 
 .demo-caption {
   margin-top: 16px;
@@ -2366,6 +2383,20 @@ kbd {
   88%      { transform: translateX(1px); }
 }
 .mn-row.is-refused { animation: mn-refuse 0.36s ease-out; }
+
+/* On a phone the tag sits on the first row and the sentence and its chevron
+   on the second, both centered. */
+@media (max-width: 480px) {
+  .eyebrow {
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    justify-content: center;
+    justify-items: center;
+    column-gap: 6px;
+    padding: 6px 14px 8px;
+  }
+  .eyebrow-tag { grid-column: 1 / -1; }
+}
 @media (prefers-reduced-motion: reduce) {
   /* No shake, but the refusal still has to be visible: the row blinks. */
   .mn-row.is-refused { animation: none; background: rgb(var(--ink) / 0.12); }

@@ -13,6 +13,13 @@ found after it, so a slice that grew a new tail is caught by the script's own
 end guard rather than silently cut short. A slice whose tail is gone falls back
 on the anchor the guard names, one line before it.
 
+The site's vendor:skip pairs (tools/vendor_markers.py) are cut from the slices
+as they are vendored, each leaving a line that says how many lines it stood
+for; so the site's files are looked at the same way, each pair as its one
+line, and what is found is mapped back to the site's own line numbers. Slices
+vendored before the site had the markers have no such lines, and are looked
+for with the pairs cut outright.
+
 Stdlib only, like the vendor script's Python. It rewrites nothing unless asked.
 """
 
@@ -21,6 +28,9 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vendor_markers import span, view  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "tools" / "vendor-demo.sh"
@@ -49,7 +59,7 @@ SLICES = [
 def current_ranges(script: str) -> dict:
     """{name: (first, last)} as the script has them now."""
     found = {}
-    for m in re.finditer(r"^(\w+)=\$\(extract (\S+) (\d+) (\d+)\)", script, re.M):
+    for m in re.finditer(r"^(\w+)=\$\(slice (\S+) (\d+) (\d+)\)", script, re.M):
         found[m.group(1)] = (int(m.group(3)), int(m.group(4)))
     return found
 
@@ -66,9 +76,16 @@ def old_slices(ranges: dict) -> dict:
         for name in names:
             if name != names[0]:
                 at += 1
-            length = ranges[name][1] - ranges[name][0] + 1
-            out[name] = lines[file][at:at + length]
-            at += length
+            # As many vendored lines as it takes to stand for the range: a
+            # skipped pair's line stands for all of the pair's.
+            budget = ranges[name][1] - ranges[name][0] + 1
+            start = at
+            while budget > 0:
+                budget -= span(lines[file][at])
+                at += 1
+            if budget < 0:
+                sys.exit(f"!! {name}: the vendored slice does not add up to its range")
+            out[name] = lines[file][start:at]
     # HTML: between the shell's two halves, minus the comment and the closing
     # div the script adds.
     shell = (OUT / "demo.shell.html").read_text()
@@ -92,7 +109,7 @@ def locate(name: str, old: list, new: list, anchor: str | None) -> tuple:
             start = h[0] + 1
             break
     if start is None:
-        sys.exit(f"!! {name}: its first lines are not in the site's file once — re-pin it by hand")
+        raise LookupError(f"!! {name}: its first lines are not in the site's file once — re-pin it by hand")
 
     end = None
     for n in (12, 8, 5, 3):
@@ -104,11 +121,11 @@ def locate(name: str, old: list, new: list, anchor: str | None) -> tuple:
             break
     if end is None:
         if anchor is None:
-            sys.exit(f"!! {name}: its last lines are gone and it has no anchor — re-pin it by hand")
+            raise LookupError(f"!! {name}: its last lines are gone and it has no anchor — re-pin it by hand")
         rx = re.compile(anchor)
         a = next((i for i in range(start, len(new)) if rx.search(new[i])), None)
         if a is None:
-            sys.exit(f"!! {name}: neither its last lines nor its anchor are in the site's file")
+            raise LookupError(f"!! {name}: neither its last lines nor its anchor are in the site's file")
         end = a
         while end > start and new[end - 1].strip() == "":
             end -= 1
@@ -123,10 +140,24 @@ def main() -> None:
     ranges = current_ranges(script)
     olds = old_slices(ranges)
     files = {f: (site / f).read_text().split("\n") for f in ("index.html", "styles.css", "script.js")}
+    # Each file as the vendored slices see it, pairs as their lines, then with
+    # the pairs cut outright; and where each line of those is in the file.
+    views = {f: [view(lines, True), view(lines, False)] for f, lines in files.items()}
 
     changed = []
     for name, file, _, anchor in SLICES:
-        start, end = locate(name, olds[name], files[file], anchor)
+        found = None
+        for lines, where in views[file]:
+            try:
+                a, b = locate(name, olds[name], lines, anchor)
+            except LookupError as e:
+                error = e
+                continue
+            found = (where[a - 1][0], where[b - 1][1])
+            break
+        if found is None:
+            sys.exit(str(error))
+        start, end = found
         was = ranges[name]
         mark = "" if (start, end) == was else "  ← moved"
         print(f"{name:11} {file:11} {was[0]:>5}-{was[1]:<5} → {start:>5}-{end:<5}{mark}")
@@ -139,7 +170,7 @@ def main() -> None:
         return
     for name, file, (a, b), (c, d) in changed:
         # The slice, and the guard window just past it, which keeps its width.
-        script = script.replace(f"{name}=$(extract {file} {a} {b})", f"{name}=$(extract {file} {c} {d})")
+        script = script.replace(f"{name}=$(slice {file} {a} {b})", f"{name}=$(slice {file} {c} {d})")
         def shift(m):
             lo, hi = int(m.group(1)), int(m.group(2))
             return f"$(extract {file} {lo - b + d} {hi - b + d})"

@@ -726,6 +726,9 @@ const borealis = (() => {
     const drive = driver(defaults());
     let enabled = true;
     let spokeAt = -1e9;
+    // Real sound, when the page has some: a function returning the levels
+    // playing now, or null for the mock voice.
+    let listening = null;
     // When the caption being spoken began: the mock voice starts over
     // there, so every caption is said the same way, to the same peak.
     let captionStart = 0;
@@ -780,14 +783,17 @@ const borealis = (() => {
       const speaking = enabled && box.classList.contains('is-visible') && ts - spokeAt < 450;
       if (speaking && !wasSpeaking) captionStart = ts;
       wasSpeaking = speaking;
-      const mock = mockVoice((ts - captionStart) / 1000, speaking);
-      const frame = drive.step(dt, enabled ? mock.loudness : 0, enabled ? mock.bands : null);
+      const heard = enabled && listening && box.classList.contains('is-visible') ? listening() : null;
+      const levels = heard || mockVoice((ts - captionStart) / 1000, speaking);
+      const frame = drive.step(dt, enabled ? levels.loudness : 0, enabled ? levels.bands : null);
       lastFrame = frame;
       const blank = frame.glow <= 0.002;
-      if (blank && wasBlank) return false;
+      // Heard sound keeps the loop running through its quiet stretches,
+      // since nothing else would wake it when the voice comes back.
+      if (blank && wasBlank) return !!heard;
       wasBlank = blank;
       draw(frame);
-      return !blank;
+      return !blank || !!heard;
     };
     const entry = {
       tick: tick,
@@ -807,6 +813,7 @@ const borealis = (() => {
         wake();
       },
       speak: speak,
+      listen: (fn) => { listening = fn; wake(); },
       // The glow `seconds` into a caption, painted once and left: the mock
       // voice from the caption's start, stepped at sixty a second so the
       // followers and the automatic gain settle as they do live, and the
@@ -1782,6 +1789,7 @@ const statusMenu = {
       place(sub, row);
       return sub;
     };
+    // vendor:skipped tracking, 8 lines
     const open = (byHand) => {
       root.classList.add('is-open');
       fit(root, false);
@@ -1789,6 +1797,7 @@ const statusMenu = {
       manual = true;
       root.classList.add('is-manual');
       if (glyph) glyph.classList.add('is-menu');
+      // vendor:skipped tracking, 6 lines
     };
     const close = () => {
       manual = false;
@@ -1978,6 +1987,7 @@ const statusMenu = {
       if (subFor(row)) { openSub(row); return; }
       if (!enabled(row)) { refuse(row); return; }
       act(row);
+      // vendor:skipped tracking, 7 lines
       close();
     });
     if (glyph) glyph.addEventListener('click', (e) => {
@@ -2563,6 +2573,8 @@ const windowResize = (() => {
   return { attach: attach, pin: pin };
 })();
 
+// vendor:skipped audio, 207 lines
+
 // Writing, in every window that is a document. While such a window is in
 // front the caret moves: a notes page or a Word, Docs or Granola document
 // grows a line under the last one, the code editor adds tokens to a new line,
@@ -2771,6 +2783,24 @@ const windowResize = (() => {
     paint();
   }, 1000);
 })();
+
+// Whether a demo's screen is all on screen, under the sticky header; for a
+// screen taller than the room, whether it fills the room. And the scroll
+// that makes it so, centred in the room, or its top under the header where
+// it does not fit.
+function roomTop() {
+  const header = document.querySelector('.site-header');
+  return header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+}
+// `slack` lets it be short of that by as many pixels, at either edge.
+function fullyInView(el, slack = 0) {
+  const r = el.getBoundingClientRect();
+  const top = roomTop();
+  const give = 1 + slack;
+  if (r.height > innerHeight - top) return r.top <= top + give && r.bottom >= innerHeight - give;
+  return r.top >= top - give && r.bottom <= innerHeight + give;
+}
+// vendor:skipped audio, 11 lines
 
 (function captionDemo() {
   const box = document.getElementById('caption-box');
@@ -3029,19 +3059,19 @@ const windowResize = (() => {
   // Translate To and this page's language; a second sentence in that other
   // language, shown in this one, with ⌃ giving back what was said. Then the
   // menu again, for Show Both Languages under the same Translate To, and a
-  // third sentence that says so, its original under it — and the podcast's
-  // last line, which follows, is said in the other language too and shown
-  // the same way. The other language is Spanish on the English page and
-  // English everywhere else, so what the visitor hears turn into their own
-  // is the one they most often have to follow, and it is the one other
-  // language from the first of these lines to the last.
+  // third sentence that says so, its original under it. The podcast's last
+  // line, which follows, is said in this page's language again, and shown
+  // as it was said, with nothing under it: translation is still on, and a
+  // line already in the reader's language goes through it untouched. The
+  // other language is Spanish on the English page and English everywhere
+  // else, so what the visitor hears turn into their own is the one they
+  // most often have to follow.
   const TRANSLATE = {
     first: I18N('line.translate1', '¿Y cuando es en otro idioma?'),
     source: I18N('line.translate2-src', 'La traducción se hace en tiempo real para ti: pulsa ⌃ para ver el original.'),
     shown: I18N('line.translate2', 'The translation runs live for you: press ⌃ to reveal the original.'),
     bothSource: I18N('line.translate3-src', 'O muestra los dos a la vez: el original se queda debajo de la traducción.'),
     both: I18N('line.translate3', 'Or show both at once: the original stays under the translation.'),
-    lastSource: I18N('line.player2-src', 'Y nada de eso sale del Mac: se ejecuta en el Neural Engine, en el dispositivo. Totalmente local y privado.'),
   };
   const LANG = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase();
 
@@ -3086,7 +3116,40 @@ const windowResize = (() => {
   // copy on top of the first and the two raced the caption text.
   let onScreen = true;
   let paused = false;
-  const sync = () => { paused = !onScreen || document.hidden; };
+  const sync = () => {
+    paused = !onScreen || document.hidden;
+    if (voice) voice.hold(paused);
+  };
+
+  const voice = typeof demoVoice !== 'function' ? null : demoVoice(demoEl, screen, {
+    paused: () => paused,
+    texts: [
+      ...SCENES.flatMap((scene) => scene.lines),
+      TRANSLATE.first, TRANSLATE.source, TRANSLATE.bothSource,
+      ...(EPILOGUE || []),
+    ],
+  });
+
+  // The sound turned on: heard at once rather than at the next line. A line
+  // being typed is joined where it has got to, in say(); a line holding,
+  // already typed in silence, lets go early so the next arrives heard.
+  // And the glow listens to the voice while a line is heard, reading the
+  // real sound in place of the mock voice the page otherwise has, to the
+  // end of the line's hold, so it falls as the voice does; everywhere
+  // else, and from the moment the sound is turned off, it is the mock
+  // voice, as it always was.
+  if (voice) {
+    // Only a line not sounding lets go: one voiced a moment ago and cut
+    // off by the sound going off is not heard either. Set on any silent
+    // line, typing or held, since a press on its last word is in neither
+    // for long: the typing, if it goes on, joins the voice and clears it.
+    voice.onChange((on) => {
+      if (!cur) return;
+      if (on) cur.cut = true;
+      else cur.voiced = false;
+    });
+    if (glow) glow.listen(() => (cur && cur.voiced && voice.on() ? voice.levels() : null));
+  }
 
   // Set by a click on a scene button or on one of the windows; the loop unwinds
   // at its next beat and picks that scene up from the top. `direct` is the
@@ -3224,9 +3287,36 @@ const windowResize = (() => {
   };
   async function say(line, from, to, source, wears) {
     const words = line.split(' ');
-    const hold = holdFor(words.length);
-    const typing = words.length * (WORD_MS + JITTER / 2);
+    // What was said, heard when the sound is on: the source when the line
+    // is its translation. Its words start at the voice's, one for one when
+    // the caption is what was said, and at the same fraction of the line
+    // when it is a translation of it, as ⌃ maps one onto the other. A line
+    // that was heard needs less holding, since it was listened to as well
+    // as read.
+    const said = source || line;
+    let heard = voice && voice.clip(said);
+    const wordAt = (k) => {
+      if (k >= words.length) return heard.ms;
+      const t = heard.t;
+      return t.length === words.length ? t[k] : t[Math.min(t.length - 1, Math.floor((k / words.length) * t.length))];
+    };
+    let hold = heard ? 1100 : holdFor(words.length);
+    const typing = heard ? heard.ms : words.length * (WORD_MS + JITTER / 2);
     const typed = from + (to - from) * (typing / (typing + hold + GAP_MS));
+    let voiced = null;
+    // The voice joining the line where the typing has got to: the sound
+    // turned on mid-line, or the line's clip decoded after it began. From
+    // the start of the word on screen, so it is heard from a word's edge.
+    const join = (i) => {
+      heard = voice.clip(said);
+      if (!heard) return;
+      const at = wordAt(i);
+      voiced = voice.play(heard, at);
+      cur.voiced = true;
+      cur.cut = false;
+      hold = 1100;
+      progress(typed, Math.max(0, heard.ms - at));
+    };
 
     // The box wears the app its words arrive under, and keeps it when it
     // closes into the stack, whatever is playing by then.
@@ -3242,6 +3332,7 @@ const windowResize = (() => {
     progress(typed, typing);
 
     try {
+      if (heard) { voiced = voice.play(heard); cur.voiced = true; }
       for (let i = 0; i < words.length; i++) {
         if (jump) throw JUMPED;
         cur.i = i;
@@ -3259,6 +3350,15 @@ const windowResize = (() => {
           drawLive();
         }
         spoke();
+        // Not sounding, whether it never was or the sound went off and on
+        // again since: joined where the typing is. Off, the typing keeps
+        // the pace of the voice it had.
+        if (voice && voice.on() && !(voiced && voiced.playing())) join(i);
+        if (voiced) {
+          // The next word when the voice gets to it.
+          await step(Math.max(0, wordAt(i + 1) - voiced.at()));
+          continue;
+        }
         // A comma or full stop gets a beat, the way speech does.
         const punctuated = /[,.;:—]$/.test(words[i]);
         await step(WORD_MS + Math.random() * JITTER + (punctuated ? 180 : 0));
@@ -3280,10 +3380,17 @@ const windowResize = (() => {
         redraw();
         await step(hold * 0.55);
       } else {
-        await step(hold);
+        // In slices, so the sound turned on while a silent line holds can
+        // cut the hold short and the next line, heard, comes at once.
+        const until = performance.now() + hold;
+        while (!cur.cut && performance.now() < until) {
+          await step(Math.min(100, until - performance.now()));
+        }
       }
       closing = boxApp();
     } finally {
+      // A jump cuts the voice off with the line.
+      if (voiced) voiced.stop();
       cur = null;
       ctrlBeat = false;
     }
@@ -3575,17 +3682,14 @@ const windowResize = (() => {
 
         for (let j = 1; j < scene.lines.length; j++) {
           // Before the last line of the last scene, so that line closes the
-          // loop, with the stack fading under it on film. That line is then
-          // said in the other language, as the epilogue's were, and shown
-          // in this one with the original under it — when there was a menu
-          // to switch any of it on.
+          // loop, with the stack fading under it on film. That line is said
+          // in this page's language, as the podcast's first was, so it
+          // shows as said, with nothing under it.
           let from = j * slice;
-          let source = null;
           if (index === SCENES.length - 1 && j === scene.lines.length - 1) {
             from = await epilogue(from, (j + 1) * slice);
-            if (menu) source = TRANSLATE.lastSource;
           }
-          await say(scene.lines[j], from, (j + 1) * slice, source, wears);
+          await say(scene.lines[j], from, (j + 1) * slice, null, wears);
         }
 
         index = (index + 1) % SCENES.length;
@@ -4342,8 +4446,24 @@ const windowResize = (() => {
   // throttled to about one a second, which would wreck the pacing.
   document.addEventListener('visibilitychange', sync);
 
-  // A beat after the page is up before anything is said: the screen is
-  // seen empty first, and the first caption arrives as every one after it
-  // does, rather than being there when the page opens.
-  setTimeout(loop, START_MS);
+  // A beat after the screen is all in view, or within 40px of it, before
+  // anything is said, so the first caption is on its way as it gets there: the
+  // screen is seen empty first, and the first caption arrives as every one
+  // after it does, rather than having started half off screen or before
+  // anybody has scrolled to it. The call goes on in the meantime, fronted
+  // and talking above. Only the first start waits for this; after it, the
+  // loop parks and picks up on the 15% above. A recording starts at once.
+  const begin = () => setTimeout(loop, START_MS);
+  const NEAR = 40;
+  if (CAPTURE || fullyInView(screen, NEAR)) begin();
+  else {
+    const check = () => {
+      if (!fullyInView(screen, NEAR)) return;
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+      begin();
+    };
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+  }
 })();
