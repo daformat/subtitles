@@ -8,8 +8,8 @@
 // own AppleLanguages. Bundle.main reads that at launch. A choice made while
 // the app runs takes effect at once: the lookups move to that language's
 // .lproj, the menu is rebuilt the next time it opens as it always is, and
-// every window that is open is rebuilt in place. What macOS draws for the app
-// (a text field's context menu, Sparkle's own messages, date formats) went
+// every window that is open is rebuilt in place. What macOS and the frameworks
+// draw for the app (a text field's context menu, date formats) went
 // by the launch language and follows at the next launch.
 
 import AppKit

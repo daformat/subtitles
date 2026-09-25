@@ -13,8 +13,10 @@
 // same English means two things another language says differently; the part
 // after the bar is the English shown.
 //
+// [main-edition]
 // LicenseCore has its own copy of these (it cannot see this module), and
 // tools/strings.py reads both.
+// [/main-edition]
 
 import Foundation
 
