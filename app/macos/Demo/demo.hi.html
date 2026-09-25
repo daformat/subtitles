@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -324,8 +327,7 @@
         </div>
         <div class="demo-scenes">
           <button type="button" class="scene-button" data-scene="0" aria-current="true" data-i18n="home.top.button1">
-            <span class="scene-track"><span class="scene-fill"></span></span>
-            <span class="scene-label">वह कॉल</span>
+            <span class="scene-track"><span class="scene-fill"></span></span> <span class="scene-label">कॉल</span>
           </button>
           <button type="button" class="scene-button" data-scene="1" data-i18n="home.top.button2">
             <span class="scene-track"><span class="scene-fill"></span></span>
@@ -358,11 +360,11 @@
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">और पढ़ें</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">कम दिखाएँ</span>
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">किसी भी ऐप के लिए यूनिवर्सल सबटाइटल, आपके Mac पर लाइव।</span>
-  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">मीटिंग में, दूसरी भाषा हो या न हो, एक शब्द छूटने की क़ीमत अगले तीन शब्द होते हैं।</span>
-  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">यानी कैप्शन लाइव चलते हैं, कॉल के ऊपर, जब लोग बोल रहे होते हैं।</span>
+  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">मीटिंग में, भाषा अपनी हो या दूसरी, एक शब्द छूटा तो अगले तीन भी हाथ से निकल जाते हैं।</span>
+  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">इसलिए लोग जब बोल रहे होते हैं, कैप्शन उसी वक़्त कॉल के ऊपर चलते रहते हैं।</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">अपने नोट्स पर जाइए और मीटिंग चलती रहती है, बिना आपके उस पर नज़र रखे।</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">ओवरले हर विंडो के ऊपर बना रहता है, इसलिए सिरा आपके हाथ में रहता है।</span>
-  <span data-js="line.player1" data-i18n="home.js.line.player1">वही किसी पॉडकास्ट, लेक्चर या वीडियो के लिए।</span>
+  <span data-js="line.player1" data-i18n="home.js.line.player1">पॉडकास्ट, लेक्चर या वीडियो के साथ भी यही।</span>
   <span data-js="line.player2" data-i18n="home.js.line.player2">और इसमें से कुछ भी Mac से बाहर नहीं जाता: यह Neural Engine पर, डिवाइस पर ही चलता है। पूरी तरह लोकल और निजी।</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">कोई लाइन छूट गई? ⌥ दबाए रखिए और ख़त्म हो चुके सारे बॉक्स फिर से जमा हो जाते हैं।</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F दबाकर टाइप कीजिए: ढेर सिमटकर सिर्फ़ मेल खाते बॉक्स रह जाते हैं।</span>
@@ -371,7 +373,7 @@
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">अनुवाद आपके लिए रीयल-टाइम में होता है: मूल देखने के लिए ⌃ दबाइए।</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">अनुवाद आपके लिए साथ-साथ होता रहता है: मूल देखने के लिए ⌃ दबाइए।</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">या दोनों एक साथ दिखाइए: मूल पाठ अनुवाद के नीचे बना रहता है।</span>
   <span data-js="play" data-i18n="home.js.play">चलाएँ</span>

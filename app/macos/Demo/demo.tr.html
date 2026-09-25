@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -332,8 +335,7 @@
             <span class="scene-label">Notlarınız</span>
           </button>
           <button type="button" class="scene-button" data-scene="2" data-i18n="home.top.button3">
-            <span class="scene-track"><span class="scene-fill"></span></span>
-            <span class="scene-label">Podcast, anlık çeviri</span>
+            <span class="scene-track"><span class="scene-fill"></span></span> <span class="scene-label">Podcast, canlı çeviri</span>
           </button>
         </div>
       </div>
@@ -344,10 +346,10 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Dene</span>
   <span data-js="updated" data-i18n="home.js.updated">{date} tarihinde güncellendi</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">31 Ekim'e kadar tek seferlik 9 $, sonra 19 $</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Mac'inizin çaldığı her şey için gizli ve çevrimdışı altyazı: toplantılar ve görüşmeler, videolar, podcast'ler ve dersler; uygulama değiştirirken görünür kalan, her zaman en üstte bir kaplama olarak işlenir. Yazıya dökme yerelde, Apple Neural Engine üzerinde çalışır; hiçbir ses makineden çıkmaz.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Mac'inizin çaldığı her şey için size özel, çevrimdışı altyazı: toplantılar ve görüşmeler, videolar, podcast'ler ve dersler; uygulama değiştirirken de görünür kalan, her zaman en üstte bir kaplamada. Yazıya dökme yerel olarak, Apple Neural Engine üzerinde yapılır; hiçbir ses Mac'ten çıkmaz.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Toplantılar ve görüntülü görüşmeler için canlı altyazı</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">Uygulama değiştirirken yerinde kalan, her zaman en üstte bir kaplama</span>
-  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Gizli, çevrimdışı, cihaz üzerinde yazıya dökme: dışarı gönderim yok, hesap yok, telemetri yok</span>
+  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Size özel, çevrimdışı, cihaz üzerinde yazıya dökme: dışarı gönderim yok, hesap yok, telemetri yok</span>
   <span data-js="app.feature4" data-i18n="home.js.app.feature4">Otomatik dil algılamayla on altı dil</span>
   <span data-js="app.feature5" data-i18n="home.js.app.feature5">Müziği ve konuşma dışı sesleri atlar</span>
   <span data-js="app.feature6" data-i18n="home.js.app.feature6">Konuşmacı değişiminde isteğe bağlı yeni altyazı kutusu</span>
@@ -358,14 +360,14 @@
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">Devamını oku</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">Daha az göster</span>
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">Mac'inizde canlı, her uygulama için evrensel altyazı.</span>
-  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">Bir toplantıda, ikinci dil olsun olmasın, kaçırdığınız tek kelime size sonraki üçüne mal olur.</span>
+  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">Bir toplantıda, ikinci dilde olsun olmasın, kaçırdığınız tek bir kelime yüzünden ardından gelen üçünü de kaçırırsınız.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Yani altyazılar, insanlar konuşurken, görüşmenin üzerinde canlı akar.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Notlarınıza geçin, toplantı siz gözünüzü ayırsanız da devam etsin.</span>
-  <span data-js="line.notes2" data-i18n="home.js.line.notes2">Kaplama her pencerenin üstünde kalır, yani ipin ucunu bırakmazsınız.</span>
+  <span data-js="line.notes2" data-i18n="home.js.line.notes2">Kaplama her pencerenin üstünde kalır, böylece konuşmadan kopmazsınız.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">Bir podcast, bir ders ya da bir video için de aynısı.</span>
-  <span data-js="line.player2" data-i18n="home.js.line.player2">Ve hiçbiri Mac'ten çıkmaz: Neural Engine üzerinde, cihaz üzerinde çalışır. Tamamen yerel ve gizli.</span>
+  <span data-js="line.player2" data-i18n="home.js.line.player2">Ve hiçbiri Mac'ten çıkmaz: her şey Mac'in içinde, Neural Engine üzerinde çalışır. Tamamen yerel ve size özel.</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Bir satırı mı kaçırdınız? ⌥ tuşunu basılı tutun, biten kutular yeniden üst üste dizilir.</span>
-  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F'ye basıp yazın: yığın yalnızca eşleşen kutulara iner.</span>
+  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F'ye basıp yazın: yığında yalnızca eşleşen kutular kalır.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">toplantı</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">Ara</span>
   <!-- vendor:skipped audio, 3 lines -->

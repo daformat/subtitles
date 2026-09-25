@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -344,7 +347,7 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Provalo</span>
   <span data-js="updated" data-i18n="home.js.updated">Aggiornato il {date}</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">Pagamento unico di 9 $ fino al 31 ottobre, poi 19 $</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Sottotitoli privati e offline per tutto ciò che il tuo Mac riproduce: riunioni e chiamate, video, podcast e lezioni, resi come overlay sempre in primo piano che resta visibile mentre cambi app. La trascrizione gira in locale sull'Apple Neural Engine; nessun audio lascia la macchina.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Sottotitoli privati e offline per tutto ciò che il tuo Mac riproduce: riunioni e chiamate, video, podcast e lezioni, mostrati in un overlay sempre in primo piano che resta visibile mentre cambi app. La trascrizione gira in locale sull'Apple Neural Engine; l'audio non esce mai dal Mac.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Sottotitoli in tempo reale per riunioni e videochiamate</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">Overlay sempre in primo piano che resta al suo posto mentre cambi app</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">Trascrizione privata, offline e sul dispositivo: nessun caricamento, nessun account, nessuna telemetria</span>
@@ -358,20 +361,20 @@
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">Leggi tutto</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">Mostra meno</span>
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">Sottotitoli universali per qualsiasi app, in tempo reale sul tuo Mac.</span>
-  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">In riunione, seconda lingua o meno, una parola persa te ne costa altre tre.</span>
+  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">In riunione, nella tua lingua o in un'altra, una parola persa ti fa perdere anche le tre dopo.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Per questo i sottotitoli scorrono in diretta, sopra la chiamata, mentre le persone parlano.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Passa ai tuoi appunti e la riunione va avanti senza che tu debba seguirla con gli occhi.</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">L'overlay resta sopra ogni finestra, così non perdi il filo.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">Lo stesso vale per un podcast, una lezione o un video.</span>
-  <span data-js="line.player2" data-i18n="home.js.line.player2">E niente di tutto ciò lascia il Mac: gira sul Neural Engine, sul dispositivo. Tutto in locale, tutto privato.</span>
-  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Ti sei perso una riga? Tieni premuto ⌥ e tutti i riquadri chiusi si rimpilano.</span>
+  <span data-js="line.player2" data-i18n="home.js.line.player2">E niente di tutto questo esce dal Mac: gira sul Neural Engine, sul dispositivo. Tutto in locale, tutto privato.</span>
+  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Ti sei perso una riga? Tieni premuto ⌥ per tornare indietro: tutti i sottotitoli passati tornano in pila.</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">Premi ⌥F e scrivi: la pila si restringe ai riquadri che corrispondono.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">riunione</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">Cerca</span>
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">La traduzione avviene in tempo reale per te: premi ⌃ per vedere l'originale.</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">La traduzione arriva in tempo reale: premi ⌃ per vedere l'originale.</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">Oppure mostra entrambe le lingue insieme: l'originale resta sotto la traduzione.</span>
   <span data-js="play" data-i18n="home.js.play">Riproduci</span>

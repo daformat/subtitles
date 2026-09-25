@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -344,10 +347,10 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Testen</span>
   <span data-js="updated" data-i18n="home.js.updated">Aktualisiert am {date}</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">Einmalig 9 $ bis zum 31. Oktober, danach 19 $</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Private, offline erzeugte Untertitel für alles, was dein Mac abspielt: Meetings und Anrufe, Videos, Podcasts und Vorlesungen, gezeichnet als Overlay, das immer oben liegt und sichtbar bleibt, während du die App wechselst. Die Transkription läuft lokal auf der Apple Neural Engine; kein Ton verlässt den Rechner.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Private, offline erzeugte Untertitel für alles, was dein Mac abspielt: Meetings und Anrufe, Videos, Podcasts und Vorlesungen, angezeigt in einem Overlay, das immer im Vordergrund bleibt, auch wenn du die App wechselst. Die Transkription läuft lokal auf der Apple Neural Engine; kein Ton verlässt den Rechner.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Live-Untertitel für Meetings und Videoanrufe</span>
-  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Overlay, das immer oben liegt und an seinem Platz bleibt, während du die App wechselst</span>
-  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Private, offline Transkription auf dem Gerät: kein Upload, kein Konto, keine Telemetrie</span>
+  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Overlay, das immer im Vordergrund und an seinem Platz bleibt, während du die App wechselst</span>
+  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Private Offline-Transkription direkt auf dem Mac: kein Upload, kein Konto, keine Telemetrie</span>
   <span data-js="app.feature4" data-i18n="home.js.app.feature4">Sechzehn Sprachen, und es erkennt automatisch, welche gesprochen wird</span>
   <span data-js="app.feature5" data-i18n="home.js.app.feature5">Überspringt Musik und Ton, der keine Sprache ist</span>
   <span data-js="app.feature6" data-i18n="home.js.app.feature6">Optional ein neues Untertitelfeld beim Sprecherwechsel</span>
@@ -363,7 +366,7 @@
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Wechsle zu deinen Notizen, und das Meeting läuft weiter, ohne dass du aktiv hinsiehst.</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">Das Overlay bleibt über jedem Fenster, damit du den Faden behältst.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">Genauso bei einem Podcast, einer Vorlesung oder einem Video.</span>
-  <span data-js="line.player2" data-i18n="home.js.line.player2">Und nichts davon verlässt den Mac: Es läuft auf der Neural Engine, direkt auf dem Gerät. Komplett lokal und privat.</span>
+  <span data-js="line.player2" data-i18n="home.js.line.player2">Und nichts davon verlässt den Mac: Die App läuft auf der Neural Engine, direkt auf dem Gerät. Komplett lokal und privat.</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Eine Zeile verpasst? Halte ⌥ gedrückt, und alle fertigen Felder stapeln sich wieder auf.</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">Drücke ⌥F und tipp los: Der Stapel schrumpft auf die Felder, die passen.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">Meeting</span>

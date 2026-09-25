@@ -131,43 +131,43 @@ expect "the page's base" "$CSS_BASE" '^/\* .* base '
 expect "the border-box reset" "$CSS_BASE" 'box-sizing: border-box'
 expect "the plain keycap" "$CSS_BASE" '^kbd {'
 expect "the end of the page's base" "$(extract styles.css 180 181)" '^\.wrap {'
-CSS_DEMO=$(slice styles.css 773 3199)
+CSS_DEMO=$(slice styles.css 773 3207)
 expect "the demo styles" "$CSS_DEMO" '^\.demo {'
 expect "the scene buttons' styles" "$CSS_DEMO" '^\.demo-scenes {'
-expect "the end of the demo styles" "$(extract styles.css 3200 3204)" 'sections'
+expect "the end of the demo styles" "$(extract styles.css 3208 3212)" 'sections'
 # The app's menu, dropped from the status item in the demo's first scene, is
 # styled with the landing pages' windows rather than in the demo section,
 # because those pages drop the same menu. Vendored without it the menu is a
 # bare list of ticks and words.
-CSS_MENU=$(slice styles.css 4641 4803)
+CSS_MENU=$(slice styles.css 4651 4813)
 expect "the menu's styles" "$CSS_MENU" '^\.mn-root {'
-expect "the end of the menu's styles" "$(extract styles.css 4804 4804)" 'landing pages'
+expect "the end of the menu's styles" "$(extract styles.css 4814 4814)" 'landing pages'
 # The frame is the redesign's box around the screen and lives with the hero's
 # styles, a long way past the demo section. It changes nothing at this window's
 # width, but it is the demo's own rule and belongs with the rest.
-CSS_FRAME=$(slice styles.css 4047 4110)
+CSS_FRAME=$(slice styles.css 4055 4120)
 expect "the demo frame" "$CSS_FRAME" '^\.demo-frame {'
-expect "the end of the demo frame" "$(extract styles.css 4111 4113)" 'works with'
+expect "the end of the demo frame" "$(extract styles.css 4121 4123)" 'works with'
 # The Notes window is drawn as Notes: the toolbar in its title bar, the three
 # columns under it. Those styles sit with the landing pages' windows, further
 # past the demo section again, because the landing demos draw the same window.
-CSS_NOTES=$(slice styles.css 5135 5256)
+CSS_NOTES=$(slice styles.css 5145 5266)
 expect "the Notes window's styles" "$CSS_NOTES" '^/\* ── Notes'
 expect "the Notes window's columns" "$CSS_NOTES" '^\.nt-side {'
-expect "the end of the Notes window's styles" "$(extract styles.css 5257 5259)" 'Visual Studio Code'
+expect "the end of the Notes window's styles" "$(extract styles.css 5267 5269)" 'Visual Studio Code'
 # The Tahoe pass: the windows drawn the way macOS 26 draws them — rounder
 # frames with a rim, sidebars as glass panes with the traffic lights in them,
 # the call's controls as a capsule over the tiles, the menu on the same glass.
 # It restyles the demo's windows from the end of the stylesheet, after every
 # page's own rules, and without it the windows are the old squarer ones under
 # the new markup.
-CSS_TAHOE=$(slice styles.css 5608 5859)
+CSS_TAHOE=$(slice styles.css 5618 5869)
 expect "the Tahoe styles" "$CSS_TAHOE" '^/\* .* Tahoe '
 expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
 # It is the last thing in the file, so what says it still ends where it did is
 # that nothing follows it: a section added after it would move the end, and
 # so would rules added to it.
-[ -z "$(extract styles.css 5860 100755)" ] || {
+[ -z "$(extract styles.css 5870 100765)" ] || {
   echo "!! styles.css no longer ends with the Tahoe styles — the site's line numbers have moved." >&2
   echo "   Re-check the ranges in $0 against $SITE." >&2
   exit 1
@@ -188,7 +188,7 @@ expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
   echo
   echo "$CSS_TAHOE"
 } > "$OUT/demo.css"
-for leak in '\.demo-hint' '\.scene-sound' '^ */\* vendor:skip-'; do
+for leak in '\.demo-hint' '\.scene-sound' 'demo-room' '^ */\* vendor:skip-'; do
   if grep -q -- "$leak" "$OUT/demo.css"; then
     echo "!! the demo styles still have $leak in them: the site's vendor:skip markers miss some of it" >&2
     exit 1

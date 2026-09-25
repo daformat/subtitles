@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -332,8 +335,7 @@
             <span class="scene-label">Ваші нотатки</span>
           </button>
           <button type="button" class="scene-button" data-scene="2" data-i18n="home.top.button3">
-            <span class="scene-track"><span class="scene-fill"></span></span>
-            <span class="scene-label">Подкаст, живий переклад</span>
+            <span class="scene-track"><span class="scene-fill"></span></span> <span class="scene-label">Подкаст, переклад наживо</span>
           </button>
         </div>
       </div>
@@ -344,7 +346,7 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Спробуйте</span>
   <span data-js="updated" data-i18n="home.js.updated">Оновлено {date}</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">$9 одноразово до 31 жовтня, потім $19</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Приватні офлайн-субтитри до всього, що відтворює ваш Mac: зустрічей і дзвінків, відео, подкастів і лекцій, показані оверлеєм поверх усіх вікон, який лишається видимим, коли ви перемикаєте програми. Транскрипція працює локально на Apple Neural Engine; жоден звук не покидає комп'ютер.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Приватні офлайн-субтитри до всього, що відтворює ваш Mac (зустрічі й дзвінки, відео, подкасти й лекції), в оверлеї поверх усіх вікон, який лишається видимим, коли ви перемикаєте програми. Транскрипція працює локально на Apple Neural Engine; жоден звук не покидає комп'ютер.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Живі субтитри для зустрічей і відеодзвінків</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">Оверлей поверх усіх вікон, який лишається на місці, коли ви перемикаєте програми</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">Приватна офлайн-транскрипція на пристрої: нічого нікуди не надсилається, без акаунта, без телеметрії</span>
@@ -371,7 +373,7 @@
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Переклад іде для вас у реальному часі: натисніть ⌃, щоб побачити оригінал.</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Переклад з'являється в реальному часі: натисніть ⌃, щоб побачити оригінал.</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">Або показуйте обидві мови одразу: оригінал залишається під перекладом.</span>
   <span data-js="play" data-i18n="home.js.play">Відтворити</span>

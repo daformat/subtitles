@@ -4,6 +4,26 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.11.0 · 2026-09-25
+
+- **Subtitles in your language.** The menu, Settings, the welcome window,
+  every other window and dialog, and the status line at the top of the
+  menu are now in sixteen languages: English, Spanish, French, Italian,
+  Brazilian Portuguese, German, Dutch, Turkish, Russian, Arabic, Hindi,
+  Japanese, Korean, Vietnamese, Ukrainian and Simplified Chinese. Each was
+  written for its language rather than translated word for word, with the
+  words the site already uses. The app follows the Mac's language, and
+  English is used where the Mac's language is none of these.
+- **Settings ▸ Language.** A new pane to choose the app's language:
+  System Language, or any of the sixteen. The menu and any open window
+  switch at once, with no restart. The choice is the same one System
+  Settings keeps for each app, and the parts macOS draws itself follow at
+  the next launch.
+- The welcome window's demo is in the app's language too, as it is on the
+  site, and can be paused and restarted. The lines under it sit closer.
+- Clearer wording in Settings: the Pointer Reveal slider is now called
+  Fade, and the ⌥ stack's settings say what they do in either color theme.
+
 ## 1.10.1 · 2026-09-23
 
 - **The ⌥ history steps back a text size.** Its boxes are set one size

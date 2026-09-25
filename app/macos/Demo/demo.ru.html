@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -358,22 +361,22 @@
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">Читать дальше</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">Свернуть</span>
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">Универсальные субтитры для любого приложения, вживую на вашем Mac.</span>
-  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">На встрече, родной язык или второй, одно пропущенное слово стоит вам трёх следующих.</span>
+  <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">На встрече, на родном языке или нет, пропустишь одно слово, и следующие три тоже мимо.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Поэтому субтитры идут вживую, поверх звонка, пока люди говорят.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Переключитесь на заметки, и встреча пойдёт дальше, даже если вы за ней не следите.</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">Оверлей остаётся поверх всех окон, поэтому нить не теряется.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">То же самое для подкаста, лекции или видео.</span>
   <span data-js="line.player2" data-i18n="home.js.line.player2">И ничего из этого не покидает Mac: всё работает на Neural Engine, на устройстве. Полностью локально и приватно.</span>
-  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Пропустили строку? Удержите ⌥, и все закрытые блоки снова соберутся стопкой.</span>
+  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Пропустили строку? Удерживайте ⌥: все закрытые блоки снова соберутся стопкой.</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">Нажмите ⌥F и начните печатать: стопка сузится до подходящих блоков.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">встреч</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">Поиск</span>
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Перевод идёт для вас в реальном времени: нажмите ⌃, чтобы увидеть оригинал.</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Перевод идёт прямо на ходу: нажмите ⌃, чтобы увидеть оригинал.</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
-  <span data-js="line.translate3" data-i18n="home.js.line.translate3">Или показывайте оба сразу: оригинал остаётся под переводом.</span>
+  <span data-js="line.translate3" data-i18n="home.js.line.translate3">Или показывайте оба языка сразу: оригинал остаётся под переводом.</span>
   <span data-js="play" data-i18n="home.js.play">Воспроизвести</span>
   <span data-js="pause" data-i18n="home.js.pause">Пауза</span>
   <span data-js="restart" data-i18n="home.js.restart">Сначала</span>

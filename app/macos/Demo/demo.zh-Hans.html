@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -341,7 +344,7 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">试试</span>
   <span data-js="updated" data-i18n="home.js.updated">{date}更新</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">10 月 31 日前一次性 $9，之后 $19</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">为你的 Mac 播放的一切提供私密、离线的字幕：会议和通话、视频、播客和讲座，以始终置顶的浮层呈现，切换 app 时依然看得见。转写在本地的 Apple Neural Engine 上完成，音频不会离开这台机器。</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">为 Mac 播放的一切配上私密、离线的字幕：会议和通话、视频、播客和讲座，显示在始终置顶的浮层里，切换 app 时依然看得见。转写在本地的 Apple Neural Engine 上完成，音频不会离开这台 Mac。</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">会议和视频通话的实时字幕</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">始终置顶的浮层，切换 app 时留在原处</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">私密、离线、在本机完成的转写：不上传、不用账号、无遥测</span>
@@ -354,9 +357,9 @@
   <span data-js="app.player" data-i18n="home.js.app.player">Spotify</span>
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">展开全文</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">收起</span>
-  <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">任何 app 都能有字幕，实时，就在你的 Mac 上。</span>
+  <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">任何 app 都能实时配上字幕，就在你的 Mac 上。</span>
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">会议上，不管是不是第二语言，漏掉一个词，接下来三个也跟着没了。</span>
-  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">所以字幕是实时的，浮在通话上面，别人说着话它就出来了。</span>
+  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">所以字幕实时出现在通话上方，别人一边说，字幕一边出。</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">切到备忘录，会议照开，不用你专门盯着它。</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">浮层一直在所有窗口之上，所以你不会跟丢。</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">播客、讲座、视频，也都一样。</span>
@@ -368,7 +371,7 @@
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">翻译为你实时进行：按 ⌃ 可以查看原文。</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">译文实时出来：按 ⌃ 就能看原文。</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">也可以两种语言同时显示：原文就在译文下方。</span>
   <span data-js="play" data-i18n="home.js.play">播放</span>

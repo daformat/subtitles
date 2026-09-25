@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -344,9 +347,9 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Thử</span>
   <span data-js="updated" data-i18n="home.js.updated">Cập nhật {date}</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">$9 một lần đến hết 31 tháng 10, sau đó là $19</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Phụ đề riêng tư, ngoại tuyến cho mọi thứ máy Mac của bạn phát: cuộc họp và cuộc gọi, video, podcast và bài giảng, hiển thị dưới dạng một overlay luôn nổi trên cùng và vẫn thấy được khi bạn chuyển app. Việc bóc lời chạy cục bộ trên Apple Neural Engine; không có âm thanh nào rời khỏi máy.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Phụ đề riêng tư, ngoại tuyến cho mọi thứ máy Mac của bạn phát: cuộc họp và cuộc gọi, video, podcast và bài giảng, hiển thị dưới dạng một lớp phụ đề luôn nổi trên cùng và vẫn thấy được khi bạn chuyển app. Việc bóc lời chạy cục bộ trên Apple Neural Engine; không có âm thanh nào rời khỏi máy.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Phụ đề trực tiếp cho cuộc họp và cuộc gọi video</span>
-  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Overlay luôn nổi trên cùng, nằm yên khi bạn chuyển app</span>
+  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Lớp phụ đề luôn nổi trên cùng, nằm yên khi bạn chuyển app</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">Bóc lời riêng tư, ngoại tuyến, ngay trên máy: không tải lên, không tài khoản, không thu thập dữ liệu</span>
   <span data-js="app.feature4" data-i18n="home.js.app.feature4">Mười sáu ngôn ngữ với tính năng tự nhận diện ngôn ngữ</span>
   <span data-js="app.feature5" data-i18n="home.js.app.feature5">Bỏ qua nhạc và âm thanh không phải lời nói</span>
@@ -359,9 +362,9 @@
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">Thu gọn</span>
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">Phụ đề cho mọi app, trực tiếp trên máy Mac của bạn.</span>
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">Trong một cuộc họp, dù là ngoại ngữ hay không, lỡ một từ là mất luôn ba từ kế tiếp.</span>
-  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Nên phụ đề chạy trực tiếp, chồng lên cuộc gọi, trong lúc người ta đang nói.</span>
+  <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Nên phụ đề chạy ngay trên cuộc gọi, trong lúc mọi người đang nói.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Chuyển sang phần ghi chú thì cuộc họp vẫn chạy tiếp dù bạn không chăm chú theo dõi.</span>
-  <span data-js="line.notes2" data-i18n="home.js.line.notes2">Overlay luôn nổi trên mọi cửa sổ, nên bạn giữ được mạch.</span>
+  <span data-js="line.notes2" data-i18n="home.js.line.notes2">Lớp phụ đề luôn nổi trên mọi cửa sổ, nên bạn giữ được mạch.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">Với một podcast, một bài giảng hay một video cũng vậy.</span>
   <span data-js="line.player2" data-i18n="home.js.line.player2">Và không gì trong đó rời khỏi máy Mac: nó chạy trên Neural Engine, ngay trên máy. Hoàn toàn cục bộ và riêng tư.</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">Lỡ mất một dòng? Giữ ⌥ và mọi khung đã đóng sẽ xếp chồng trở lại.</span>
@@ -371,7 +374,7 @@
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Bản dịch chạy trực tiếp cho bạn: nhấn ⌃ để xem bản gốc.</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">Bản dịch hiện ra ngay cho bạn: nhấn ⌃ để xem bản gốc.</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">Hoặc hiện cả hai cùng lúc: bản gốc nằm ngay dưới bản dịch.</span>
   <span data-js="play" data-i18n="home.js.play">Phát</span>

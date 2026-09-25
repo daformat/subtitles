@@ -57,7 +57,7 @@
   "About %@": "حول %@",
   "Changelog": "سجل التغييرات",
   "Acknowledgements": "شكر وتقدير",
-  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "تسميات توضيحية مباشرة لكل ما يشغّله الـ Mac، أو عبر الميكروفون لمحادثة تُترجم مباشرة.",
+  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "تسميات توضيحية فورية لكل ما يشغّله الـ Mac، أو عبر الميكروفون لمحادثة تُترجم مباشرة.",
   "Nothing is recorded; no audio ever leaves the machine.": "لا يُسجَّل شيء، ولا يغادر أي صوت هذا الجهاز أبدًا.",
   "Version %@ (%@)": "الإصدار %@ (%@)",
   "What Subtitles is built on, and the terms it comes with.": "ما بُني عليه Subtitles، والشروط التي ترافق كل مكوّن.",
@@ -365,7 +365,7 @@
   "Once a day, asks subtitles-live.com for a newer version": "مرة في اليوم، يسأل subtitles-live.com عن إصدار أحدث",
   "All set, close": "كل شيء جاهز، إغلاق",
   "Welcome to Subtitles": "مرحبًا بك في Subtitles",
-  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "تسميات توضيحية مباشرة لكل ما يشغّله الـ Mac، أو عبر الميكروفون لمحادثة تُترجم مباشرة.",
+  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "تسميات توضيحية فورية لكل ما يشغّله الـ Mac، أو عبر الميكروفون لمحادثة تُترجم مباشرة.",
   "Point at the captions and they dissolve under you.": "أشر إلى التسميات التوضيحية فتذوب تحت المؤشر.",
   "Hold %@ and drag the captions to move them.": "اضغط %@ مطوّلًا واسحب التسميات التوضيحية لتحريكها.",
   "Hold %@ to stack the last few back up.": "اضغط %@ مطوّلًا لتعود آخر المربعات مكدَّسة.",
@@ -391,8 +391,8 @@
     "many": "تمتد فترتك التجريبية المجانية %lld يومًا، وتبدأ مع أول تسميات توضيحية.",
     "other": "تمتد فترتك التجريبية المجانية %lld يوم، وتبدأ مع أول تسميات توضيحية."
   },
-  "InfoPlist|NSAudioCaptureUsageDescription": "يحوّل Subtitles الصوت الذي يشغّله الـ Mac إلى نص ليعرض تسميات توضيحية مباشرة.",
-  "InfoPlist|NSMicrophoneUsageDescription": "يحوّل Subtitles ما يسمعه الميكروفون إلى نص حين تختاره مصدرًا للصوت، ليعرض تسميات توضيحية مباشرة.",
+  "InfoPlist|NSAudioCaptureUsageDescription": "يحوّل Subtitles الصوت الذي يشغّله الـ Mac إلى نص ليعرض تسميات توضيحية فورية.",
+  "InfoPlist|NSMicrophoneUsageDescription": "يحوّل Subtitles ما يسمعه الميكروفون إلى نص حين تختاره مصدرًا للصوت، ليعرض تسميات توضيحية فورية.",
   "Nemotron · %lld ms": "Nemotron · %lld مللي ثانية",
   "Parakeet EOU · %lld ms": "Parakeet EOU · %lld مللي ثانية"
 }

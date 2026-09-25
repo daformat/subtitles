@@ -49,7 +49,7 @@
   "About %@": "Über %@",
   "Changelog": "Versionshinweise",
   "Acknowledgements": "Danksagungen",
-  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "Live-Untertitel für alles, was dein Mac abspielt, oder übers Mikrofon für ein live übersetztes Gespräch.",
+  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "Echtzeit-Untertitel für alles, was dein Mac abspielt, oder übers Mikrofon für ein live übersetztes Gespräch.",
   "Nothing is recorded; no audio ever leaves the machine.": "Nichts wird aufgezeichnet, und kein Ton verlässt je den Mac.",
   "Version %@ (%@)": "Version %@ (%@)",
   "What Subtitles is built on, and the terms it comes with.": "Worauf Subtitles aufbaut, und unter welchen Bedingungen.",
@@ -315,7 +315,7 @@
   "Once a day, asks subtitles-live.com for a newer version": "Fragt einmal am Tag bei subtitles-live.com nach einer neueren Version",
   "All set, close": "Fertig, schließen",
   "Welcome to Subtitles": "Willkommen bei Subtitles",
-  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "Live-Untertitel für alles, was dein Mac abspielt, oder übers Mikrofon für ein live übersetztes Gespräch.",
+  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "Echtzeit-Untertitel für alles, was dein Mac abspielt, oder übers Mikrofon für ein live übersetztes Gespräch.",
   "Point at the captions and they dissolve under you.": "Zeig auf die Untertitel, und sie lösen sich unter dem Zeiger auf.",
   "Hold %@ and drag the captions to move them.": "Halte %@ gedrückt, um die Untertitel zu verschieben.",
   "Hold %@ to stack the last few back up.": "Halte %@ gedrückt: Die letzten Felder kommen zurück.",
@@ -333,6 +333,6 @@
     "one": "Deine kostenlose Testphase dauert %lld Tag und beginnt mit den ersten Untertiteln.",
     "other": "Deine kostenlose Testphase dauert %lld Tage und beginnt mit den ersten Untertiteln."
   },
-  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transkribiert den Ton, den dein Mac abspielt, um Live-Untertitel anzuzeigen.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkribiert, was das Mikrofon hört, wenn du es als Quelle wählst, um Live-Untertitel anzuzeigen."
+  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transkribiert den Ton, den dein Mac abspielt, um Echtzeit-Untertitel anzuzeigen.",
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkribiert, was das Mikrofon hört, wenn du es als Quelle wählst, um Echtzeit-Untertitel anzuzeigen."
 }

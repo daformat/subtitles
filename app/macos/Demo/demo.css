@@ -415,7 +415,8 @@ kbd {
      up, so the screen's width is available to everything it contains and not
      to the screen. It bottoms out at 8px, two units at the floor, which
      clears the mark's box with the arc to spare. */
-  border-radius: clamp(8px, 2.3vw, var(--radius-lg));
+  --screen-radius: clamp(8px, 2.3vw, var(--radius-lg));
+  border-radius: var(--screen-radius);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
@@ -429,6 +430,13 @@ kbd {
   inset: -15%;
   background: var(--desktop-bg);
   filter: blur(70px);
+  /* Clipped to the screen's rounded box here as well as by the screen.
+     WebKit composites a filtered layer apart and then leaves it out of its
+     parent's rounded overflow clip, so in Safari (and the app's welcome
+     window) the blurred wallpaper ran square past the corners. clip-path
+     applies after the filter, in every engine; 11.5385% is the 15% grown
+     past the screen on each side, as a share of this layer's own 130%. */
+  clip-path: inset(11.5385% round var(--screen-radius));
   pointer-events: none;
 }
 /* The frame, as a layer over everything rather than a border around it. A border
@@ -2477,22 +2485,7 @@ kbd {
   max-width: 1000px;
   margin-inline: auto;
 }
-/* The screen, the hint over it and the scene bar and captions under it fit
-   the window together, so a laptop with its Dock up (1470 by about 760 in the
-   browser) sees the whole demo at once: the screen is 16:9, so its width is
-   the window's height less what it does not use, times 16/9. That is the
-   site header's 61, which sticks at the top, the Try it here arrow's 40
-   above the screen (the sound arrow sits beside it), the bar and captions
-   below, and a little air: 316px on the home page and 359px on the landing
-   pages, whose captions run longer. At 1470 by 760 that leaves about 28px
-   under the English and a few under German on the home page, the longest.
-   Never under 560px, so a short window still gets a demo worth watching,
-   and on a phone the column, as ever. */
-.demo-frame { --demo-room: 316px; }
-.demo-lite { --demo-room: 359px; }
-@media (min-width: 621px) {
-  .demo-frame { max-width: min(1000px, max(560px, calc((100vh - var(--demo-room)) * 16 / 9))); }
-}
+/* vendor:skipped fit, 18 lines */
 /* The screen keeps its own corners and hairline; the scene bar and the help
    lines sit under it in the open, as they always did. Its shadow is not
    black any more: it is the desktop's own light, the wallpaper painted

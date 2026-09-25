@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -344,14 +347,14 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">Pruébalo</span>
   <span data-js="updated" data-i18n="home.js.updated">Actualizado el {date}</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">Pago único de 9 $ hasta el 31 de octubre, después 19 $</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Subtítulos privados y sin conexión para todo lo que reproduzca tu Mac: reuniones y llamadas, vídeos, pódcasts y clases, dibujados como un overlay siempre visible que se queda en su sitio mientras cambias de aplicación. La transcripción se ejecuta en local en el Apple Neural Engine; ningún audio sale de la máquina.</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Subtítulos privados y sin conexión para todo lo que reproduzca tu Mac: reuniones y llamadas, vídeos, pódcasts y clases, en una capa siempre visible que se queda en su sitio mientras cambias de aplicación. La transcripción funciona en local en el Apple Neural Engine; ningún audio sale del Mac.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">Subtítulos en directo para reuniones y videollamadas</span>
-  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Overlay siempre visible que se queda en su sitio mientras cambias de aplicación</span>
-  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Transcripción privada, sin conexión y en el dispositivo: sin subidas, sin cuenta, sin telemetría</span>
+  <span data-js="app.feature2" data-i18n="home.js.app.feature2">Subtítulos siempre visibles que no se mueven mientras cambias de aplicación</span>
+  <span data-js="app.feature3" data-i18n="home.js.app.feature3">Transcripción privada, sin conexión y en tu propio Mac: sin subir nada, sin cuenta, sin telemetría</span>
   <span data-js="app.feature4" data-i18n="home.js.app.feature4">Dieciséis idiomas con detección automática del idioma</span>
-  <span data-js="app.feature5" data-i18n="home.js.app.feature5">Se salta la música y el audio que no es habla</span>
+  <span data-js="app.feature5" data-i18n="home.js.app.feature5">Ignora la música y todo lo que no sea voz</span>
   <span data-js="app.feature6" data-i18n="home.js.app.feature6">Recuadro de subtítulo nuevo al cambiar de interlocutor, opcional</span>
-  <span data-js="app.feature7" data-i18n="home.js.app.feature7">Traducción en directo de cualquiera de los dieciséis idiomas a cualquier otro, en el dispositivo</span>
+  <span data-js="app.feature7" data-i18n="home.js.app.feature7">Traducción en directo de cualquiera de los dieciséis idiomas a cualquier otro, en tu propio Mac</span>
   <span data-js="app.meeting" data-i18n="home.js.app.meeting">zoom.us</span>
   <span data-js="app.notes" data-i18n="home.js.app.notes">Notas</span>
   <span data-js="app.player" data-i18n="home.js.app.player">Spotify</span>
@@ -361,9 +364,9 @@
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">En una reunión, en tu idioma o no, una palabra que se te escapa te cuesta las tres siguientes.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">Por eso los subtítulos van en directo, sobre la llamada, mientras la gente habla.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">Cambia a tus notas y la reunión continúa sin que tengas que estar pendiente de ella.</span>
-  <span data-js="line.notes2" data-i18n="home.js.line.notes2">El overlay se queda por encima de todas las ventanas, así que no pierdes el hilo.</span>
+  <span data-js="line.notes2" data-i18n="home.js.line.notes2">Los subtítulos se quedan por encima de todas las ventanas, así que no pierdes el hilo.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">Lo mismo con un pódcast, una clase o un vídeo.</span>
-  <span data-js="line.player2" data-i18n="home.js.line.player2">Y nada de eso sale del Mac: se ejecuta en el Neural Engine, en el dispositivo. Totalmente local y privado.</span>
+  <span data-js="line.player2" data-i18n="home.js.line.player2">Y nada de eso sale del Mac: funciona en el Neural Engine, en tu propio equipo. Totalmente local y privado.</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">¿Se te escapó una línea? Mantén ⌥ y todos los recuadros terminados vuelven a apilarse.</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">Pulsa ⌥F y escribe: la pila se reduce a los recuadros que coinciden.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">reunión</span>

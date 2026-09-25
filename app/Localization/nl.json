@@ -49,7 +49,7 @@
   "About %@": "Over %@",
   "Changelog": "Wijzigingen",
   "Acknowledgements": "Dankbetuigingen",
-  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "Live ondertiteling voor alles wat je Mac afspeelt, of via de microfoon voor een gesprek dat live vertaald wordt.",
+  "Live captions for whatever your Mac is playing, or the microphone for a conversation translated live.": "Realtime ondertiteling voor alles wat je Mac afspeelt, of via de microfoon voor een gesprek dat live vertaald wordt.",
   "Nothing is recorded; no audio ever leaves the machine.": "Er wordt niets opgenomen; geen geluid verlaat ooit je Mac.",
   "Version %@ (%@)": "Versie %@ (%@)",
   "What Subtitles is built on, and the terms it comes with.": "Waar Subtitles op gebouwd is, en onder welke voorwaarden.",
@@ -315,7 +315,7 @@
   "Once a day, asks subtitles-live.com for a newer version": "Vraagt subtitles-live.com één keer per dag of er een nieuwere versie is",
   "All set, close": "Klaar, sluiten",
   "Welcome to Subtitles": "Welkom bij Subtitles",
-  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "Live ondertiteling voor alles wat je Mac afspeelt, of via de microfoon voor een gesprek, live vertaald.",
+  "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.": "Realtime ondertiteling voor alles wat je Mac afspeelt, of via de microfoon voor een gesprek, live vertaald.",
   "Point at the captions and they dissolve under you.": "Wijs de ondertitels aan en ze lossen op onder je aanwijzer.",
   "Hold %@ and drag the captions to move them.": "Houd %@ ingedrukt om de ondertitels te verslepen.",
   "Hold %@ to stack the last few back up.": "Houd %@ ingedrukt voor de laatste vakken.",
@@ -333,6 +333,6 @@
     "one": "Je gratis proefperiode duurt %lld dag en gaat in zodra de ondertiteling begint.",
     "other": "Je gratis proefperiode duurt %lld dagen en gaat in zodra de ondertiteling begint."
   },
-  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles zet het geluid dat je Mac afspeelt om in tekst, zodat het live ondertiteling kan tonen.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles zet wat de microfoon hoort om in tekst als je de microfoon als bron kiest, zodat het live ondertiteling kan tonen."
+  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles zet het geluid dat je Mac afspeelt om in tekst, zodat het realtime ondertiteling kan tonen.",
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles zet wat de microfoon hoort om in tekst als je de microfoon als bron kiest, zodat het realtime ondertiteling kan tonen."
 }

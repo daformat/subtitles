@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -344,14 +347,14 @@
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">試す</span>
   <span data-js="updated" data-i18n="home.js.updated">{date}更新</span>
   <span data-js="promoTerms" data-i18n="home.js.promoTerms">10 月 31 日までは買い切り $9、そのあとは $19</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Mac が再生するあらゆる音に、プライベートでオフラインの字幕を。会議や通話、動画、ポッドキャスト、講義に対応し、常に最前面のオーバーレイとして描かれるので、アプリを切り替えても字幕は見えたままです。文字起こしは Apple Neural Engine 上でローカルに実行され、音声が端末の外に出ることはありません。</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Mac が再生するあらゆる音声に、オフラインで字幕を。会議や通話、動画、ポッドキャスト、講義に対応し、常に最前面のオーバーレイに表示されるので、アプリを切り替えても字幕は見えたままです。文字起こしは Apple Neural Engine 上でローカルに実行され、音声が端末の外に出ることはありません。</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">会議やビデオ通話のリアルタイム字幕</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">アプリを切り替えてもその場に残る、常に最前面のオーバーレイ</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">プライベート・オフライン・端末内での文字起こし：アップロードもアカウントもテレメトリもなし</span>
   <span data-js="app.feature4" data-i18n="home.js.app.feature4">16 言語対応、話している言語は自動で判別</span>
   <span data-js="app.feature5" data-i18n="home.js.app.feature5">音楽や発話以外の音はスキップ</span>
   <span data-js="app.feature6" data-i18n="home.js.app.feature6">話者が変わったら新しい字幕ボックス（オプション）</span>
-  <span data-js="app.feature7" data-i18n="home.js.app.feature7">16 言語のうち任意の 2 言語間を、デバイス上でリアルタイム翻訳</span>
+  <span data-js="app.feature7" data-i18n="home.js.app.feature7">16 言語のうち任意の 2 言語間を、端末内でリアルタイム翻訳</span>
   <span data-js="app.meeting" data-i18n="home.js.app.meeting">zoom.us</span>
   <span data-js="app.notes" data-i18n="home.js.app.notes">メモ</span>
   <span data-js="app.player" data-i18n="home.js.app.player">Spotify</span>
@@ -360,18 +363,18 @@
   <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">どんなアプリにも字幕を、Mac の上でリアルタイムに。</span>
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">母語でもそうでなくても、会議で一語聞き逃すと、次の三語まで持っていかれます。</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">だから字幕は通話の上に、みんなが話している最中に出てきます。</span>
-  <span data-js="line.notes1" data-i18n="home.js.line.notes1">メモに切り替えても、会議はじっと見ていなくても進んでいきます。</span>
+  <span data-js="line.notes1" data-i18n="home.js.line.notes1">メモに切り替えて会議から目を離しても、話は字幕で追えます。</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">オーバーレイはどのウインドウより前面に残るので、話の流れを見失いません。</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">ポッドキャストでも、講義でも、動画でも同じです。</span>
   <span data-js="line.player2" data-i18n="home.js.line.player2">そして何ひとつ Mac の外には出ません。Neural Engine の上、端末の中で動きます。完全にローカルで、プライベートです。</span>
-  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">聞き逃しましたか？⌥ を押しながらにすると、閉じたボックスがすべて積み直されます。</span>
+  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">聞き逃しましたか？⌥ を押し続けると巻き戻せて、終わった字幕がすべて積み重なって戻ります。</span>
   <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F を押して入力すると、積み上がったボックスは一致するものだけに絞られます。</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">会議</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">検索</span>
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">翻訳はあなたのためにリアルタイムで進みます。⌃ を押すと原文が見られます。</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">翻訳はリアルタイムで表示されます。⌃ を押すと原文が見られます。</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">両方を同時に表示することもできます。原文は訳文のすぐ下に並びます。</span>
   <span data-js="play" data-i18n="home.js.play">再生</span>

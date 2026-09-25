@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -343,8 +346,8 @@
   <span data-js="mic">마이크</span>
   <span data-js="menu.demo" data-i18n="home.js.menu.demo">해보기</span>
   <span data-js="updated" data-i18n="home.js.updated">{date} 업데이트</span>
-  <span data-js="promoTerms" data-i18n="home.js.promoTerms">10월 31일까지 한 번 $9, 이후 $19</span>
-  <span data-js="app.description" data-i18n="home.js.app.description">Mac에서 재생되는 모든 소리에 붙는 오프라인 자막. 회의와 통화, 영상, 팟캐스트, 강의까지, 앱을 전환해도 계속 보이는 항상 맨 위의 오버레이로 보여 줍니다. 음성 인식은 Apple Neural Engine에서 기기 안에서만 돌아가고, 오디오는 Mac을 벗어나지 않습니다.</span>
+  <span data-js="promoTerms" data-i18n="home.js.promoTerms">10월 31일까지 $9 1회 결제, 이후 $19</span>
+  <span data-js="app.description" data-i18n="home.js.app.description">Mac에서 재생되는 모든 소리에 붙는 비공개 오프라인 캡션. 회의와 통화, 영상, 팟캐스트, 강의를 앱을 전환해도 계속 보이는, 항상 맨 위에 뜨는 오버레이로 보여 줍니다. 음성 인식은 Apple Neural Engine으로 기기 안에서만 처리되고, 소리는 Mac 밖으로 나가지 않습니다.</span>
   <span data-js="app.feature1" data-i18n="home.js.app.feature1">회의와 화상 통화 실시간 캡션</span>
   <span data-js="app.feature2" data-i18n="home.js.app.feature2">앱을 바꿔도 자리를 지키는, 항상 맨 위의 오버레이</span>
   <span data-js="app.feature3" data-i18n="home.js.app.feature3">오프라인 온디바이스 음성 인식. 업로드도, 계정도, 사용 정보 수집도 없습니다</span>
@@ -357,21 +360,21 @@
   <span data-js="app.player" data-i18n="home.js.app.player">Spotify</span>
   <span data-js="reviews.more" data-i18n="home.js.reviews.more">더 보기</span>
   <span data-js="reviews.less" data-i18n="home.js.reviews.less">접기</span>
-  <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">어떤 앱이든, Mac에서 실시간으로 쓰는 범용 자막.</span>
+  <span data-js="line.meeting1" data-i18n="home.js.line.meeting1">어떤 앱에든 붙는 범용 자막을, Mac에서 실시간으로.</span>
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">회의에서는 외국어든 아니든, 단어 하나를 놓치면 다음 세 단어까지 잃습니다.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">그래서 캡션은 사람들이 말하는 동안, 통화 위에서 실시간으로 흐릅니다.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">메모로 넘어가면 회의는 내가 눈여겨보지 않아도 계속 흘러갑니다.</span>
   <span data-js="line.notes2" data-i18n="home.js.line.notes2">오버레이가 모든 창 위에 남아 있어서 흐름을 놓치지 않습니다.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">팟캐스트도, 강의도, 영상도 마찬가지입니다.</span>
-  <span data-js="line.player2" data-i18n="home.js.line.player2">그리고 어느 것도 Mac을 벗어나지 않아요. Neural Engine에서, 온디바이스로 돕니다. 완전히 로컬이고, 비공개예요.</span>
-  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">한 줄 놓치셨나요? ⌥를 누르고 있으면 끝난 상자들이 모두 다시 쌓입니다.</span>
-  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F를 누르고 입력하면, 쌓인 상자는 일치하는 것만 남고 좁혀집니다.</span>
+  <span data-js="line.player2" data-i18n="home.js.line.player2">그리고 어느 것도 Mac 밖으로 나가지 않아요. 기기 안의 Neural Engine에서 처리하니까요. 완전히 로컬이라 아무 데도 공유되지 않아요.</span>
+  <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">한 줄 놓치셨나요? ⌥ 키를 누르고 있으면 끝난 캡션이 모두 다시 쌓입니다.</span>
+  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">⌥F를 누르고 입력하면, 쌓인 상자 중 일치하는 것만 남습니다.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">회의</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">검색</span>
   <!-- vendor:skipped audio, 3 lines -->
   <span data-js="line.translate1" data-i18n="home.js.line.translate1">And when it's in another language?</span>
   <span data-js="line.translate2-src" data-i18n="home.js.line.translate2-src">The translation runs live for you: press ⌃ to reveal the original.</span>
-  <span data-js="line.translate2" data-i18n="home.js.line.translate2">번역은 실시간으로 이루어집니다. ⌃를 누르면 원문이 보입니다.</span>
+  <span data-js="line.translate2" data-i18n="home.js.line.translate2">번역은 실시간으로 이루어집니다. ⌃ 키를 누르면 원문이 보입니다.</span>
   <span data-js="line.translate3-src" data-i18n="home.js.line.translate3-src">Or show both at once: the original stays under the translation.</span>
   <span data-js="line.translate3" data-i18n="home.js.line.translate3">두 언어를 한꺼번에 보여줄 수도 있습니다. 원문은 번역 바로 아래에 남습니다.</span>
   <span data-js="play" data-i18n="home.js.play">재생</span>

@@ -60,6 +60,9 @@
   /* The screen's corner is 2.3vw on the site, which was 734 of viewport here
      until the padding widened it: held at what that gave. */
   .demo-screen, .demo-frame::before { border-radius: 16.88px; }
+  /* And the wallpaper's clip with it (demo.css rounds it at the screen's
+     own radius, which WebKit needs: see .demo-screen::before). */
+  .demo-screen { --screen-radius: 16.88px; }
 
   /* The site's glow reaches about 100px past the screen, with a blur of 52px.
      The window has 44 at the sides and 18 above, so here it is tightened to
@@ -358,11 +361,11 @@
   <span data-js="line.meeting2" data-i18n="home.js.line.meeting2">في اجتماع، بلغتك الأم أو بغيرها، كلمة واحدة تفوتك تكلّفك الكلمات الثلاث التالية.</span>
   <span data-js="line.meeting3" data-i18n="home.js.line.meeting3">فتعمل التسميات التوضيحية مباشرة، فوق المكالمة، والناس يتحدثون.</span>
   <span data-js="line.notes1" data-i18n="home.js.line.notes1">انتقل إلى ملاحظاتك فيمضي الاجتماع دون أن تتابعه بعينيك.</span>
-  <span data-js="line.notes2" data-i18n="home.js.line.notes2">الطبقة تبقى فوق كل النوافذ، فتمسك بالخيط.</span>
+  <span data-js="line.notes2" data-i18n="home.js.line.notes2">الطبقة العائمة تبقى فوق كل النوافذ، فلا يفلت منك خيط الحديث.</span>
   <span data-js="line.player1" data-i18n="home.js.line.player1">والأمر نفسه مع بودكاست أو محاضرة أو فيديو.</span>
   <span data-js="line.player2" data-i18n="home.js.line.player2">ولا شيء من ذلك يغادر الـ Mac: كله يعمل على الـ Neural Engine، على الجهاز نفسه. محلي وخاص بالكامل.</span>
   <span data-js="line.epilogue1" data-i18n="home.js.line.epilogue1">فاتك سطر؟ اضغط ⌥ مطوّلًا فتعود كل المربعات المنتهية لتتراكم من جديد.</span>
-  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">اضغط ⌥F واكتب: تضيق الكومة إلى المربعات المطابقة وحدها.</span>
+  <span data-js="line.epilogue2" data-i18n="home.js.line.epilogue2">اضغط ⌥F واكتب: فلا يبقى في المكدّس إلا المربعات المطابقة.</span>
   <span data-js="epilogue.query" data-i18n="home.js.epilogue.query">اجتماع</span>
   <span data-js="search.placeholder" data-i18n="home.js.search.placeholder">بحث</span>
   <!-- vendor:skipped audio, 3 lines -->
