@@ -62,11 +62,11 @@ public enum Entitlement: Equatable {
     public var menuTitle: String {
         switch self {
         case .trial(let days, _):
-            return "Trial: \(days) \(days == 1 ? "day" : "days") left"
+            return LP("Trial: %lld days left", one: "Trial: %lld day left", days)
         case .expired, .revoked:
-            return "Enter License Key…"
+            return L("Enter License Key…", "Menu item that opens the license window")
         case .licensed, .provisional, .grandfathered:
-            return "Licensed"
+            return L("Licensed", "Menu item and window headline: this copy of the app has a valid license key")
         }
     }
 
@@ -74,13 +74,13 @@ public enum Entitlement: Equatable {
     /// say — a trial in progress says so in the menu, not there.
     public var aboutLine: String? {
         switch self {
-        case .licensed(let email?): return "Licensed to \(email)"
-        case .licensed(nil), .grandfathered: return "Licensed"
-        case .provisional: return "Licensed · to be confirmed"
-        case .revoked(let why): return "License \(why.phrase)"
-        case .trial(let days, true): return "Trial · \(days) \(days == 1 ? "day" : "days") left"
-        case .trial(_, false): return "Trial · starts when captions do"
-        case .expired: return "Trial ended"
+        case .licensed(let email?): return LF("Licensed to %@", email)
+        case .licensed(nil), .grandfathered: return L("Licensed")
+        case .provisional: return L("Licensed · to be confirmed", "About window: the key was accepted offline and will be checked with Gumroad later")
+        case .revoked(let why): return why.aboutLine
+        case .trial(let days, true): return LP("Trial · %lld days left", one: "Trial · %lld day left", days)
+        case .trial(_, false): return L("Trial · starts when captions do", "About window: the free trial has not started; it starts the first time captions run")
+        case .expired: return L("Trial ended")
         }
     }
 
@@ -88,8 +88,8 @@ public enum Entitlement: Equatable {
     /// is refused; nil in every state where it is not.
     public var blockedStatusLine: String? {
         switch self {
-        case .expired: return "Trial ended. Resume to enter a license key"
-        case .revoked(let why): return "License \(why.phrase). Resume to enter another key"
+        case .expired: return L("Trial ended. Resume to enter a license key", "Menu status line while paused by the license; Resume is the menu item Resume Subtitles")
+        case .revoked(let why): return why.blockedStatusLine
         default: return nil
         }
     }

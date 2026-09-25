@@ -30,13 +30,15 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
         case found(version: String, current: String, size: String?, notes: ReleaseNotes?,
                    critical: Bool, install: () -> Void, later: () -> Void, skip: (() -> Void)?)
         /// Downloading; progress arrives through `progress(fraction:detail:)`.
-        case downloading(version: String, cancel: () -> Void)
+        /// The version is nil on the rare update Sparkle has not named, which
+        /// gets sentences of its own rather than a word in the number's place.
+        case downloading(version: String?, cancel: () -> Void)
         /// Unpacking, after the download; same progress path.
-        case extracting(version: String)
-        case ready(version: String, install: () -> Void, later: () -> Void)
+        case extracting(version: String?)
+        case ready(version: String?, install: () -> Void, later: () -> Void)
         /// The app is quitting so the update can be swapped in. `retry` is
         /// offered when it did not quit.
-        case installing(version: String, retry: (() -> Void)?)
+        case installing(version: String?, retry: (() -> Void)?)
         case upToDate(version: String, dismiss: () -> Void)
         case failed(title: String, message: String, retry: (() -> Void)?, dismiss: () -> Void)
 
@@ -100,6 +102,13 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
         if let text { detail?.stringValue = text }
     }
 
+    /// Redrawn in the language just chosen, if it is up.
+    func relocalize() {
+        guard let window, window.isVisible, let state else { return }
+        window.title = L("Subtitles Update")
+        show(state)
+    }
+
     func close() {
         guard let window else { return }
         closingProgrammatically = true
@@ -123,7 +132,7 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
     // MARK: building
 
     private func build() -> NSWindow {
-        Dialog.window(title: "Subtitles Update", delegate: self)
+        Dialog.window(title: L("Subtitles Update", "Update window title"), delegate: self)
     }
 
     private func contentView(for state: State) -> NSView {
@@ -137,28 +146,38 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
 
         switch state {
         case .permission(let allow, let decline):
-            Dialog.add(stack, headline: "Check for updates automatically?",
-                blurb: "Once a day, Subtitles would ask subtitles-live.com whether there is a "
+            Dialog.add(stack, headline: L("Check for updates automatically?"),
+                blurb: L("Once a day, Subtitles would ask subtitles-live.com whether there is a "
                     + "newer version. The request carries the app's version and nothing else: "
                     + "no audio, no captions, nothing about you. It is the only request the app "
-                    + "ever makes on its own, and the menu bar can turn it off later.")
-            Dialog.addButtons(stack, [Dialog.button("Don't Check", decline),
-                               Dialog.button("Check Automatically", allow, default: true)])
+                    + "ever makes on its own, and the menu bar can turn it off later."))
+            Dialog.addButtons(stack, [Dialog.button(L("Don't Check"), decline),
+                               Dialog.button(L("Check Automatically"), allow, default: true)])
 
         case .checking(let cancel):
-            Dialog.add(stack, headline: "Checking for updates…", blurb: nil)
+            Dialog.add(stack, headline: L("Checking for updates…"), blurb: nil)
             let bar = Dialog.progressBar(indeterminate: true)
             stack.addArrangedSubview(bar)
             stack.setCustomSpacing(14, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
             self.bar = bar
-            Dialog.addButtons(stack, [Dialog.button("Cancel", cancel)])
+            Dialog.addButtons(stack, [Dialog.button(L("Cancel"), cancel)])
 
         case .found(let version, let current, let size, let notes, let critical, let install, let later, let skip):
-            let what = size.map { "The update is \($0) and installs in place" } ?? "It installs in place"
-            Dialog.add(stack, headline: "Subtitles \(version) is available",
-                blurb: critical
-                    ? "You have \(current). This one fixes something that matters. \(what), so the audio permission stays."
-                    : "You have \(current). \(what), so the audio permission stays.")
+            let blurb: String
+            switch (critical, size) {
+            case (true, let size?):
+                blurb = LF("You have %1$@. This one fixes something that matters. The update is %2$@ "
+                           + "and installs in place, so the audio permission stays.", current, size)
+            case (true, nil):
+                blurb = LF("You have %@. This one fixes something that matters. It installs in place, "
+                           + "so the audio permission stays.", current)
+            case (false, let size?):
+                blurb = LF("You have %1$@. The update is %2$@ and installs in place, "
+                           + "so the audio permission stays.", current, size)
+            case (false, nil):
+                blurb = LF("You have %@. It installs in place, so the audio permission stays.", current)
+            }
+            Dialog.add(stack, headline: LF("Subtitles %@ is available", version), blurb: blurb)
             if let notes, !notes.isEmpty {
                 let box = Dialog.textBox(Self.attributed(notes))
                 stack.addArrangedSubview(box)
@@ -167,51 +186,52 @@ final class UpdateWindow: NSObject, NSWindowDelegate {
             let row = NSStackView()
             row.orientation = .horizontal
             row.spacing = 8
-            if let skip { row.addArrangedSubview(Dialog.button("Skip This Version", skip)) }
+            if let skip { row.addArrangedSubview(Dialog.button(L("Skip This Version"), skip)) }
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(spacer)
-            row.addArrangedSubview(Dialog.button("Later", later))
-            row.addArrangedSubview(Dialog.button("Install Update", install, default: true))
+            row.addArrangedSubview(Dialog.button(L("Later"), later))
+            row.addArrangedSubview(Dialog.button(L("Install Update"), install, default: true))
             row.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
             stack.addArrangedSubview(row)
             stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
         case .downloading(let version, let cancel):
-            Dialog.add(stack, headline: "Downloading \(version)…", blurb: nil)
-            addProgress(stack, indeterminate: true, detail: "Starting…")
-            Dialog.addButtons(stack, [Dialog.button("Cancel", cancel)])
+            Dialog.add(stack, headline: version.map { LF("Downloading %@…", $0) } ?? L("Downloading the update…"), blurb: nil)
+            addProgress(stack, indeterminate: true, detail: L("Starting…"))
+            Dialog.addButtons(stack, [Dialog.button(L("Cancel"), cancel)])
 
         case .extracting(let version):
-            Dialog.add(stack, headline: "Unpacking \(version)…", blurb: nil)
-            addProgress(stack, indeterminate: true, detail: "A moment.")
+            Dialog.add(stack, headline: version.map { LF("Unpacking %@…", $0) } ?? L("Unpacking the update…"), blurb: nil)
+            addProgress(stack, indeterminate: true, detail: L("A moment.", "Under a progress bar while the downloaded update is unpacked"))
 
         case .ready(let version, let install, let later):
-            Dialog.add(stack, headline: "Ready to install",
-                blurb: "Subtitles will quit and come back as \(version). The captions come back with it.")
-            Dialog.addButtons(stack, [Dialog.button("Later", later),
-                               Dialog.button("Install and Relaunch", install, default: true)])
+            Dialog.add(stack, headline: L("Ready to install"),
+                blurb: version.map { LF("Subtitles will quit and come back as %@. The captions come back with it.", $0) }
+                    ?? L("Subtitles will quit and come back updated. The captions come back with it."))
+            Dialog.addButtons(stack, [Dialog.button(L("Later"), later),
+                               Dialog.button(L("Install and Relaunch"), install, default: true)])
 
         case .installing(let version, let retry):
-            Dialog.add(stack, headline: "Installing \(version)…",
+            Dialog.add(stack, headline: version.map { LF("Installing %@…", $0) } ?? L("Installing the update…"),
                 blurb: retry == nil
-                    ? "Subtitles is quitting and will be back in a moment."
-                    : "Subtitles has not quit yet. Something may be asking to keep it open.")
+                    ? L("Subtitles is quitting and will be back in a moment.")
+                    : L("Subtitles has not quit yet. Something may be asking to keep it open."))
             if let retry {
-                Dialog.addButtons(stack, [Dialog.button("Quit and Install", retry, default: true)])
+                Dialog.addButtons(stack, [Dialog.button(L("Quit and Install"), retry, default: true)])
             } else {
                 addProgress(stack, indeterminate: true, detail: nil)
             }
 
         case .upToDate(let version, let dismiss):
-            Dialog.add(stack, headline: "You have the latest version",
-                blurb: "Subtitles \(version) · checked just now")
-            Dialog.addButtons(stack, [Dialog.button("OK", dismiss, default: true)])
+            Dialog.add(stack, headline: L("You have the latest version"),
+                blurb: LF("Subtitles %@ · checked just now", version))
+            Dialog.addButtons(stack, [Dialog.button(L("OK"), dismiss, default: true)])
 
         case .failed(let title, let message, let retry, let dismiss):
             Dialog.add(stack, headline: title, blurb: message)
-            var buttons = [Dialog.button("OK", dismiss, default: retry == nil)]
-            if let retry { buttons.append(Dialog.button("Try Again", retry, default: true)) }
+            var buttons = [Dialog.button(L("OK"), dismiss, default: retry == nil)]
+            if let retry { buttons.append(Dialog.button(L("Try Again"), retry, default: true)) }
             Dialog.addButtons(stack, buttons)
         }
         return stack

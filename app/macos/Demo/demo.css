@@ -15,7 +15,7 @@
   --surface-2:     #f4f4f7;
   --text:          #111114;
   --text-dim:      #5f6068;
-  --text-faint:    #7a7b85;
+  --text-faint:    #6e6f79;
   --border:        rgba(17, 17, 24, 0.08);
   --border-strong: rgba(17, 17, 24, 0.14);
   --accent:        #5150d4;
@@ -51,7 +51,7 @@
     --surface-2:     #17171b;
     --text:          #f2f2f4;
     --text-dim:      #9b9ca6;
-    --text-faint:    #7c7d88;
+    --text-faint:    #8a8b96;
     --border:        rgba(255, 255, 255, 0.08);
     --border-strong: rgba(255, 255, 255, 0.14);
     --accent:        #7a78ff;
@@ -79,7 +79,7 @@
   --surface-2:     #17171b;
   --text:          #f2f2f4;
   --text-dim:      #9b9ca6;
-  --text-faint:    #7c7d88;
+  --text-faint:    #8a8b96;
   --border:        rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
   --accent:        #7a78ff;
@@ -182,7 +182,10 @@ kbd {
 /* ─────────────────────────── demo ─────────────────────────── */
 
 .demo {
-  margin-top: clamp(44px, 7vw, 72px);
+  /* The same gap under the buttons above at every width but a phone's,
+     or more where the hints over the screen need it: the room they rise
+     above it, measured by demoHints in script.js, and 20px of air. */
+  margin-top: max(72px, calc(var(--hint-rise, 0px) + 20px));
   /* None of this is text you would want to select: it is a drawing of a screen,
      and dragging the caption box across it would otherwise sweep a selection
      through the windows behind. */
@@ -2170,7 +2173,7 @@ kbd {
 }
 [dir="rtl"] .scene-fill { transform-origin: right; }
 .scene-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-faint);
   text-align: center;
   transition: color 0.2s ease;
@@ -2190,20 +2193,84 @@ kbd {
    progress. */
 .scene-button:hover .scene-label,
 .scene-button[aria-current="true"] .scene-label { color: var(--text); }
+/* Pause and restart, together at the demo's right edge (demoControls in
+   script.js), level with the tracks: out of the bar's flow, so the segments
+   stay centred under the screen, which is why the bar leaves the pair's
+   width free at both ends. Wider than a phone only. Glyphs in the labels'
+   colour, centred on the tracks' line (6px of a segment's padding and half
+   its 4px track down), with a target a finger can find round them. */
+@media (min-width: 621px) {
+  .demo-scenes:has(.scene-controls) {
+    max-width: min(calc(100% - 2 * (var(--sc-pair) + 8px)), 520px);
+  }
+}
+.demo-scenes { --sc-pair: 58px; }
+.scene-controls {
+  position: absolute;
+  inset-inline-end: 0;
+  display: flex;
+  gap: 2px;
+  margin-top: -6px;
+}
+.scene-control {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+/* Not on a phone: the bar takes the column there, as it always did. */
+@media (max-width: 620px) {
+  .scene-controls { display: none; }
+  .demo { margin-top: max(44px, calc(var(--hint-rise, 0px) + 20px)); }
+}
+.scene-control svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+.scene-control .sc-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* A tint of the text colour rather than a surface: the demo's glow runs
+     under the bar, and a flat fill read as a grey patch on it. No blur: a
+     backdrop filter here drew a glitch round the button in real Chrome. */
+  .scene-control:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+}
+.scene-control:active { transform: scale(0.9); }
+/* Paused, the screen's own animations hold too: the caret, the meters. */
+.demo.is-held .demo-screen *,
+.demo.is-held .demo-screen *::before,
+.demo.is-held .demo-screen *::after { animation-play-state: paused !important; }
 /* vendor:skipped audio, 136 lines */
 
-/* vendor:skipped hints, 154 lines */
+/* vendor:skipped hints, 168 lines */
 
 .demo-caption {
   margin-top: 16px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-faint);
   text-align: center;
   /* Help text, not chrome: it can be selected and copied like any prose. */
   -webkit-user-select: text;
   user-select: text;
 }
-.demo-caption kbd { font-size: 12px; }
+.demo-caption kbd { font-size: 11px; }
 /* The lines under the demo are one block of help text, so they sit closer to
    each other than the block does to the screen above it. */
 .demo-caption + .demo-caption { margin-top: 6px; }
@@ -2409,6 +2476,22 @@ kbd {
   position: relative;
   max-width: 1000px;
   margin-inline: auto;
+}
+/* The screen, the hint over it and the scene bar and captions under it fit
+   the window together, so a laptop with its Dock up (1470 by about 760 in the
+   browser) sees the whole demo at once: the screen is 16:9, so its width is
+   the window's height less what it does not use, times 16/9. That is the
+   site header's 61, which sticks at the top, the Try it here arrow's 40
+   above the screen (the sound arrow sits beside it), the bar and captions
+   below, and a little air: 316px on the home page and 359px on the landing
+   pages, whose captions run longer. At 1470 by 760 that leaves about 28px
+   under the English and a few under German on the home page, the longest.
+   Never under 560px, so a short window still gets a demo worth watching,
+   and on a phone the column, as ever. */
+.demo-frame { --demo-room: 316px; }
+.demo-lite { --demo-room: 359px; }
+@media (min-width: 621px) {
+  .demo-frame { max-width: min(1000px, max(560px, calc((100vh - var(--demo-room)) * 16 / 9))); }
 }
 /* The screen keeps its own corners and hairline; the scene bar and the help
    lines sit under it in the open, as they always did. Its shadow is not

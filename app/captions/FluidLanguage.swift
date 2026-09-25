@@ -52,7 +52,7 @@ public enum FluidLanguage: String, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .auto: return "Auto-detect"
+        case .auto: return L("Auto-detect", "A language choice: the recognizer works out which language is spoken")
         case .en: return "English"
         case .es: return "Español"
         case .fr: return "Français"

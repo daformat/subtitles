@@ -596,7 +596,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         addSubview(blur)
         addSubview(face)
 
-        icon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
+        icon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: L("Search"))
         icon.imageScaling = .scaleProportionallyUpOrDown
 
         field.isBordered = false
@@ -613,7 +613,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         field.onFocus = { [weak self] in self?.onFocus?() }
 
         clearButton.image = NSImage(systemSymbolName: "xmark.circle.fill",
-                                    accessibilityDescription: "Clear")
+                                    accessibilityDescription: L("Clear", "Accessibility name of the button that empties the search field"))
         clearButton.isBordered = false
         clearButton.imagePosition = .imageOnly
         clearButton.imageScaling = .scaleProportionallyUpOrDown
@@ -649,7 +649,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         // In the boxes' ink, which follows the theme the way the fill does.
         field.textColor = Pill.ink.withAlphaComponent(style.textOpacity)
         field.placeholderAttributedString = NSAttributedString(
-            string: "Search", attributes: [
+            string: L("Search", "Placeholder in the search field over the recent boxes"), attributes: [
                 .font: font,
                 .foregroundColor: Pill.ink.withAlphaComponent(style.textOpacity * 0.5),
             ])

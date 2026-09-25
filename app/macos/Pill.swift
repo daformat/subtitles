@@ -7,6 +7,7 @@
 // stacked on top of each other.
 
 import AppKit
+import CaptionCore
 
 enum Pill {
     static let inset = NSSize(width: 22, height: 14)
@@ -152,9 +153,9 @@ enum Pill {
 
         var title: String {
             switch self {
-            case .auto: return "Auto"
-            case .light: return "Light"
-            case .dark: return "Dark"
+            case .auto: return L("theme|Auto", "Color Theme choice: follows the system appearance")
+            case .light: return L("theme|Light", "Color Theme choice: light boxes")
+            case .dark: return L("theme|Dark", "Color Theme choice: dark boxes")
             }
         }
 
@@ -266,9 +267,9 @@ enum Pill {
 
         var title: String {
             switch self {
-            case .off: return "Off"
-            case .nameTab: return "Name Tab"
-            case .header: return "Header Row"
+            case .off: return L("app name|Off", "Show Source App Name choice: the box does not show the app's name")
+            case .nameTab: return L("Name Tab", "Show Source App Name choice: the app name sits in a small tab on top of the box")
+            case .header: return L("Header Row", "Show Source App Name choice: the app name is a row inside the box, above the text")
             }
         }
     }
@@ -558,8 +559,8 @@ enum Pill {
 
         var title: String {
             switch self {
-            case .start: return "Start Alignment"
-            case .center: return "Center Alignment"
+            case .start: return L("Start Alignment", "Text Size and Alignment choice: text aligned to the start of the line (left, or right in right-to-left languages)")
+            case .center: return L("Center Alignment", "Text Size and Alignment choice: text centered")
             }
         }
     }

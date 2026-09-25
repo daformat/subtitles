@@ -31,14 +31,14 @@ enum FluidVariant: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .eou160: return "Parakeet EOU · 160 ms"
-        case .eou320: return "Parakeet EOU · 320 ms"
-        case .eou1280: return "Parakeet EOU · 1280 ms"
-        case .nemotron560: return "Nemotron · 560 ms"
-        case .nemotron1120: return "Nemotron · 1120 ms"
-        case .nemotron2240: return "Nemotron · 2240 ms"
-        case .unified: return "Parakeet Unified · punctuated"
-        case .multilingual: return "Multilingual · 560 ms"
+        case .eou160: return LF("Parakeet EOU · %lld ms", 160)
+        case .eou320: return LF("Parakeet EOU · %lld ms", 320)
+        case .eou1280: return LF("Parakeet EOU · %lld ms", 1280)
+        case .nemotron560: return LF("Nemotron · %lld ms", 560)
+        case .nemotron1120: return LF("Nemotron · %lld ms", 1120)
+        case .nemotron2240: return LF("Nemotron · %lld ms", 2240)
+        case .unified: return L("Parakeet Unified · punctuated", "An English speech model; punctuated means it writes punctuation")
+        case .multilingual: return L("Multilingual · 560 ms", "The speech model that handles all sixteen languages, and its latency")
         }
     }
 
@@ -61,14 +61,14 @@ enum FluidVariant: String, CaseIterable {
         // but measured here it runs at RTF 0.63–2.22, i.e. at or past real time,
         // because 160 ms chunks double the model invocations per second. eou320
         // manages 0.13–0.15 on the same machine.
-        case .eou160: return "215 MB · no punctuation · ⚠︎ RTF 0.6–2.2 here"
-        case .eou320: return "215 MB · no punctuation · RTF 0.13–0.15"
-        case .eou1280: return "215 MB · no punctuation · highest throughput"
-        case .nemotron560: return "612 MB · punctuated · lowest latency"
-        case .nemotron1120: return "612 MB · punctuated · the trained chunk size"
-        case .nemotron2240: return "612 MB · punctuated · highest throughput"
-        case .unified: return "595 MB · punctuated · 2.08 s · Nemotron is faster"
-        case .multilingual: return "583–633 MB · default · 16 languages · punctuated"
+        case .eou160: return L("215 MB · no punctuation · ⚠︎ RTF 0.6–2.2 here", "Model note: download size, writes no punctuation, and runs slower than real time on this Mac (RTF is the real-time factor, keep it)")
+        case .eou320: return L("215 MB · no punctuation · RTF 0.13–0.15")
+        case .eou1280: return L("215 MB · no punctuation · highest throughput")
+        case .nemotron560: return L("612 MB · punctuated · lowest latency")
+        case .nemotron1120: return L("612 MB · punctuated · the trained chunk size", "Model note: this latency is the audio chunk size the model was trained on")
+        case .nemotron2240: return L("612 MB · punctuated · highest throughput")
+        case .unified: return L("595 MB · punctuated · 2.08 s · Nemotron is faster")
+        case .multilingual: return L("583–633 MB · default · 16 languages · punctuated")
         }
     }
 
@@ -362,16 +362,16 @@ actor FluidAudioEngine {
             let headline: String
             switch progress.phase {
             case .listing:
-                headline = "Finding \(name) files…"
+                headline = LF("Finding %@ files…", name)
             case let .downloading(done, total):
                 headline = total > 0
-                    ? "Downloading \(name) · \(percent)% (\(done)/\(total) files)"
-                    : "Downloading \(name) · \(percent)%"
+                    ? LF("Downloading %@ · %lld%% (%lld/%lld files)", name, percent, done, total)
+                    : LF("Downloading %@ · %lld%%", name, percent)
             case let .compiling(model):
                 // `finished()` upstream emits an empty name at 1.0.
                 headline = model.isEmpty
-                    ? "Preparing \(name) · \(percent)%"
-                    : "Compiling \(model) · \(percent)%"
+                    ? LF("Preparing %@ · %lld%%", name, percent)
+                    : LF("Compiling %@ · %lld%%", model, percent)
             }
             // A phase that has reached 100% is not finished, it is between
             // phases: the bytes are down and CoreML is loading them onto the
@@ -379,7 +379,7 @@ actor FluidAudioEngine {
             // like a hang. A full bar sitting there says "done" and is wrong, so
             // the bar goes indeterminate and the headline says what is happening.
             guard displayed < 1 else {
-                let waiting = "Setting up \(name)…"
+                let waiting = LF("Setting up %@…", name)
                 guard last.shouldReport(waiting) else { return }
                 report(Self.indeterminate, waiting)
                 return
@@ -398,9 +398,9 @@ actor FluidAudioEngine {
         // the broken ones first so the downloader treats them as missing.
         let repaired = ModelCache.repair(repo: variant.repo) + ModelCache.repair(repo: .vad)
         if !repaired.isEmpty {
-            onStatus("Repairing \(variant.displayName): refetching \(repaired.count) incomplete model(s)")
+            onStatus(LP("Repairing: downloading %lld incomplete models again", one: "Repairing: downloading %lld incomplete model again", repaired.count))
         }
-        onStatus("Loading \(variant.displayName)…")
+        onStatus(LF("Loading %@…", variant.displayName))
         do {
             let progress = makeProgressHandler()
             if variant.isMultilingual {
@@ -457,11 +457,11 @@ actor FluidAudioEngine {
             // leaving the recogniser's headline up while it downloads reads as a
             // stall on a load that has actually moved on.
             if let speakers {
-                onStatus("Loading speaker detection…")
+                onStatus(L("Loading speaker detection…"))
                 await speakers.load()
             }
             if let vad {
-                onStatus("Loading voice detection…")
+                onStatus(L("Loading voice detection…"))
                 await vad.load()
             }
             loaded = true
@@ -477,7 +477,7 @@ actor FluidAudioEngine {
             // on how far in it got. Neither is a fault, and the load that
             // superseded it owns the status line now.
             guard !Task.isCancelled else { return }
-            onStatus("FluidAudio failed to load: \(error.localizedDescription)")
+            onStatus(LF("The speech model failed to load: %@", error.localizedDescription))
             onReady(false)
         }
     }

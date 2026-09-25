@@ -196,7 +196,7 @@ final class Translator {
                            styleMask: [.titled],
                            backing: .buffered,
                            defer: false)
-        win.title = "Preparing translation…"
+        win.title = L("Preparing translation…")
         win.contentView = NSHostingView(rootView: SessionHost(box: box))
         win.alphaValue = 0
         window = win
@@ -328,7 +328,7 @@ final class Translator {
         }
 
         let name = Self.displayName(target)
-        onProgress(FluidAudioEngine.indeterminate, "Downloading \(name) translation…")
+        onProgress(FluidAudioEngine.indeterminate, LF("Downloading the %@ translation…", name))
         // The consent sheet needs a window it can attach to, so the host comes up
         // for the duration of the ask and goes away again after.
         revealHost(true)
@@ -350,7 +350,9 @@ final class Translator {
 
     static func displayName(_ language: Locale.Language) -> String {
         let code = language.minimalIdentifier
-        return Locale.current.localizedString(forIdentifier: code) ?? code
+        // In the app's language, which a choice in Settings can have moved
+        // away from the one the process started in.
+        return Locale(identifier: Localization.language).localizedString(forIdentifier: code) ?? code
     }
 }
 

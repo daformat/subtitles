@@ -148,10 +148,10 @@ public struct AudioBorealis {
 
         public var title: String {
             switch self {
-            case .rainbow: return "Rainbow"
-            case .northernLights: return "Northern Lights"
-            case .autumn: return "Autumn"
-            case .monochromeHaze: return "Monochrome Haze"
+            case .rainbow: return L("Rainbow", "Audio Borealis look: the glow along the box runs through every color")
+            case .northernLights: return L("Northern Lights", "Audio Borealis look: greens and blues, like an aurora")
+            case .autumn: return L("Autumn", "Audio Borealis look: reds, oranges and pinks")
+            case .monochromeHaze: return L("Monochrome Haze", "Audio Borealis look: a colorless white or gray glow")
             }
         }
 
@@ -188,9 +188,9 @@ public struct AudioBorealis {
 
         public var title: String {
             switch self {
-            case .strong: return "Strong"
-            case .medium: return "Medium"
-            case .subtle: return "Subtle"
+            case .strong: return L("glow strength|Strong", "Audio Borealis strength: how visible the glow is")
+            case .medium: return L("glow strength|Medium", "Audio Borealis strength: how visible the glow is")
+            case .subtle: return L("glow strength|Subtle", "Audio Borealis strength: how visible the glow is")
             }
         }
 

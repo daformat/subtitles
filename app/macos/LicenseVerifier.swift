@@ -14,6 +14,7 @@
 
 import Foundation
 import LicenseCore
+import CaptionCore
 
 final class LicenseVerifier {
     /// Gumroad's id for the product. Public — it is in every buy link — and
@@ -62,14 +63,14 @@ final class LicenseVerifier {
                     let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                     result = .unreachable(NSError(
                         domain: "LicenseVerifier", code: code,
-                        userInfo: [NSLocalizedDescriptionKey: "Gumroad gave an answer that could not be read (HTTP \(code))."]))
+                        userInfo: [NSLocalizedDescriptionKey: LF("Gumroad gave an answer that could not be read (HTTP %lld).", code)]))
                 case let outcome:
                     result = .answered(outcome)
                 }
             } else {
                 result = .unreachable(NSError(
                     domain: "LicenseVerifier", code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Gumroad sent no answer."]))
+                    userInfo: [NSLocalizedDescriptionKey: L("Gumroad sent no answer.")]))
             }
             DispatchQueue.main.async { completion(result) }
         }

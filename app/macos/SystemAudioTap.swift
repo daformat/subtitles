@@ -13,6 +13,7 @@ import AppKit
 import AudioToolbox
 import CoreAudio
 import Foundation
+import CaptionCore
 
 enum TapError: Error, CustomStringConvertible {
     case unsupportedOS
@@ -91,6 +92,16 @@ enum AudioSource: Equatable {
         switch self {
         case .allSystemAudio: return "All system audio"
         case .microphone: return "Microphone"
+        case let .app(_, name): return name
+        }
+    }
+
+    /// The label in the app's language, for what a person reads: the name a
+    /// box wears. `label` stays English, for the log and the defaults.
+    var displayName: String {
+        switch self {
+        case .allSystemAudio: return L("All system audio")
+        case .microphone: return L("Microphone", "The name the caption box wears when it is captioning the microphone")
         case let .app(_, name): return name
         }
     }

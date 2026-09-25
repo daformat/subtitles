@@ -179,7 +179,7 @@ const wearApp = (box, app) => {
 // for a source that is not an app — a white mic on a system-red tile, drawn
 // by AppCatalog.microphoneIcon and rendered to assets/apps/dock/ — under the
 // label AudioSource.microphone carries. A box wears it like any app's row.
-const MIC = { icon: 'microphone', name: 'Microphone' };
+const MIC = { icon: 'microphone', name: I18N('mic', 'Microphone') };
 
 // A box for the ⌥ stack, wearing `app`: the row, and under it the text,
 // which is what the search writes into.
@@ -779,6 +779,9 @@ const borealis = (() => {
       new MutationObserver(speak).observe(box, { childList: true, characterData: true, subtree: true });
     }
     const tick = (dt, ts) => {
+      // A paused demo keeps the frame it had, and the loop stops until a
+      // word lands again.
+      if (box.closest('.is-held')) return false;
       // A word landed within the last half second: the voice is still going.
       const speaking = enabled && box.classList.contains('is-visible') && ts - spokeAt < 450;
       if (speaking && !wasSpeaking) captionStart = ts;
@@ -1745,8 +1748,8 @@ const statusMenu = {
         add('mn-row is-dim', title);
         list.forEach((a) => add('mn-row', a.name + mark));
       };
-      group('Playing now', apps.filter((a) => a.playing), ' ●');
-      group('Other audio apps', apps.filter((a) => !a.playing), '');
+      group(I18N('menu.playing', 'Playing now'), apps.filter((a) => a.playing), ' ●');
+      group(I18N('menu.other', 'Other audio apps'), apps.filter((a) => !a.playing), '');
     };
     // And it follows the demo while it is up: a window fronted or the sound
     // handed over shows in the windows' classes, and the rows redraw.
@@ -2575,6 +2578,137 @@ const windowResize = (() => {
 
 // vendor:skipped audio, 207 lines
 
+// Play, pause and restart, together at the right end of a demo's scene bar,
+// the bar itself staying centred under the screen (see .scene-controls). `demoControls(demo, {halted, changed, restart})`:
+// `halted` is the engine's own answer to whether its loop is parked, the
+// button's pause or anything else (scrolled away, the tab hidden);
+// `changed` is called as the button pauses or plays; `restart` takes the
+// loop back to the top of the first scene. Restarting plays.
+//
+// Paused, the demo holds where it is: the engine's waits stop counting
+// (see `pausable`), the voice suspends with them, the glow keeps the frame
+// it had, and .is-held stops the screen's CSS animations. The scene bar's
+// fill is walked by a CSS transition, which runs on through anything the
+// script does, so it is stopped here, where the transition stands, and
+// sent on for what was left of its walk when the demo goes again; the
+// engines hand every walk to `walk` for that. The same holds for a demo
+// scrolled away or in a hidden tab, so the bar and the captions come back
+// together.
+const demoControls = (demoEl, opts) => {
+  const bar = demoEl.querySelector('.demo-scenes');
+  if (!bar) return null;
+  let held = false;
+  let frozen = false;
+  let walk = null;
+  const SHAPES = {
+    pause: '<path d="M4.25 3.25h2.5v9.5h-2.5zM9.25 3.25h2.5v9.5h-2.5z"/>',
+    play: '<path d="M4.75 2.9v10.2a.6.6 0 0 0 .9.52l8.3-5.1a.6.6 0 0 0 0-1.03l-8.3-5.1a.6.6 0 0 0-.9.51z"/>',
+    restart: '<path class="sc-line" d="M3.4 8a4.6 4.6 0 1 0 1.35-3.25"/><path d="M2.6 2.2v3.9h3.9z"/>',
+  };
+  const button = (name) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'scene-control';
+    b.dataset.control = name;
+    return b;
+  };
+  const toggle = button('pause');
+  const again = button('restart');
+  const label = (b, name, fallback) => {
+    const text = I18N(name, fallback);
+    b.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SHAPES[name] + '</svg>';
+    b.setAttribute('aria-label', text);
+    b.title = text;
+  };
+  const paint = () => {
+    label(toggle, held ? 'play' : 'pause', held ? 'Play' : 'Pause');
+    demoEl.classList.toggle('is-held', held);
+  };
+  label(again, 'restart', 'Restart');
+  paint();
+
+  const scaleOf = (fill) => {
+    const t = getComputedStyle(fill).transform;
+    return t && t !== 'none' ? new DOMMatrixReadOnly(t).a : 0;
+  };
+  const freeze = () => {
+    if (!walk) return;
+    walk.left = Math.max(0, walk.left - (performance.now() - walk.at));
+    walk.fill.style.transitionDuration = '0ms';
+    walk.fill.style.transform = 'scaleX(' + scaleOf(walk.fill) + ')';
+  };
+  const thaw = () => {
+    if (!walk) return;
+    walk.at = performance.now();
+    walk.fill.style.transitionDuration = walk.left + 'ms';
+    walk.fill.style.transform = 'scaleX(' + walk.to + ')';
+  };
+  // The engine calls this whenever what parks it changes.
+  const sync = () => {
+    const now = opts.halted();
+    if (now === frozen) return;
+    frozen = now;
+    if (frozen) freeze();
+    else thaw();
+  };
+  const set = (h) => {
+    if (h === held) return;
+    held = h;
+    paint();
+    opts.changed();
+  };
+  toggle.addEventListener('click', () => {
+    set(!held);
+    // vendor:skipped tracking, 6 lines
+  });
+  again.addEventListener('click', () => {
+    set(false);
+    opts.restart();
+    // vendor:skipped tracking, 6 lines
+  });
+  const group = document.createElement('div');
+  group.className = 'scene-controls';
+  group.append(toggle, again);
+  bar.append(group);
+
+  return {
+    held: () => held,
+    // Picking a scene, or a window, is asking to watch it.
+    play: () => set(false),
+    sync: sync,
+    walk: (fill, to, ms) => {
+      walk = fill && ms > 0 ? { fill: fill, to: to, left: ms, at: performance.now() } : null;
+      if (walk && frozen) freeze();
+    },
+  };
+};
+
+// A wait that only counts while the demo runs: parked while `halted()`,
+// and cut short by `rouse()`, which the engine calls as the demo parks, so
+// the time left is kept for when it goes again rather than spent. `nap(ms)`
+// is the plain wait, still ended early by a rouse, for the engine's own use.
+const pausable = (halted) => {
+  const waking = new Set();
+  const nap = (ms) => new Promise((resolve) => {
+    const finish = () => { clearTimeout(timer); waking.delete(finish); resolve(); };
+    const timer = setTimeout(finish, ms);
+    waking.add(finish);
+  });
+  const rouse = () => { [...waking].forEach((finish) => finish()); };
+  // `out()` says the wait should give up at once, for a jump.
+  const sleep = async (ms, out) => {
+    let left = ms;
+    for (;;) {
+      while (halted() && !(out && out())) await nap(150);
+      if ((out && out()) || left <= 0) return;
+      const at = performance.now();
+      await nap(left);
+      left -= performance.now() - at;
+    }
+  };
+  return { nap: nap, rouse: rouse, sleep: sleep };
+};
+
 // Writing, in every window that is a document. While such a window is in
 // front the caret moves: a notes page or a Word, Docs or Granola document
 // grows a line under the last one, the code editor adds tokens to a new line,
@@ -2597,7 +2731,7 @@ const windowResize = (() => {
     const screen = screenOf(win);
     if (!screen) return false;
     if (watch && !onScreen.has(screen)) { onScreen.set(screen, true); watch.observe(screen); }
-    return win.classList.contains('is-front') && !document.hidden && onScreen.get(screen) !== false;
+    return win.classList.contains('is-front') && !document.hidden && onScreen.get(screen) !== false && !win.closest('.is-held');
   };
 
   // A writer is a function returning the delay before its next step.
@@ -2917,8 +3051,9 @@ function fullyInView(el, slack = 0) {
       paint();
       timer = setInterval(() => {
         // A backgrounded tab should not run the episode on without anybody
-        // watching, or coming back to it shows a clock that has raced ahead.
-        if (document.hidden) return;
+        // watching, or coming back to it shows a clock that has raced ahead;
+        // nor a paused demo.
+        if (document.hidden || demoEl.classList.contains('is-held')) return;
         at = Math.min(TOTAL, at + RATE);
         paint();
       }, 1000);
@@ -3116,9 +3251,15 @@ function fullyInView(el, slack = 0) {
   // copy on top of the first and the two raced the caption text.
   let onScreen = true;
   let paused = false;
+  // Play, pause and restart, see demoControls; set up once the scene bar is.
+  let controls = null;
   const sync = () => {
-    paused = !onScreen || document.hidden;
+    paused = !onScreen || document.hidden || !!(controls && controls.held());
     if (voice) voice.hold(paused);
+    if (controls) controls.sync();
+    // Parked mid-wait, the wait gives back what it had left, see step(); let
+    // go, the loop goes on now rather than at its next look.
+    wake();
   };
 
   const voice = typeof demoVoice !== 'function' ? null : demoVoice(demoEl, screen, {
@@ -3171,10 +3312,19 @@ function fullyInView(el, slack = 0) {
   });
   const wake = () => { [...waking].forEach((finish) => finish()); };
 
+  // Only the time the demo runs counts: parked, a wait is woken (see sync)
+  // and keeps what it had left for when the demo goes again, so a pause
+  // resumes the line where it stood and the bar with it.
   async function step(ms) {
-    await wait(ms);
-    while (paused && !jump) await wait(150);
-    if (jump) throw JUMPED;
+    let left = ms;
+    for (;;) {
+      while (paused && !jump) await wait(150);
+      if (jump) throw JUMPED;
+      if (left <= 0) return;
+      const at = performance.now();
+      await wait(left);
+      left -= performance.now() - at;
+    }
   }
 
   // One subtitle box: types out, holds long enough to read, clears. The app
@@ -3701,6 +3851,7 @@ function fullyInView(el, slack = 0) {
         // Each turn switches translation on, and both languages with it;
         // the next starts with both off.
         if (index === 0) dropTranslation();
+        // vendor:skipped tracking, 3 lines
       } catch (error) {
         if (error !== JUMPED) throw error;
         // A jump out of the epilogue leaves nothing raised behind it, no menu
@@ -3759,10 +3910,12 @@ function fullyInView(el, slack = 0) {
       fill.style.transitionDuration = (i === sceneIndex ? ms : 0) + 'ms';
       fill.style.transform = 'scaleX(' + to + ')';
     });
+    if (controls) controls.walk(sceneFills[sceneIndex], value, ms);
   };
 
   // `direct` skips the ⌘-tab: clicking a window is reaching for that window.
   const jumpTo = (index, direct) => {
+    if (controls && SCENES[index]) controls.play();
     if (index === sceneIndex || !SCENES[index]) return;
     jump = { index: index, direct: !!direct, fade: box.classList.contains('is-visible') };
     paintScene(index);
@@ -3780,6 +3933,17 @@ function fullyInView(el, slack = 0) {
   sceneButtons.forEach((button, index) =>
     button.addEventListener('click', () => jumpTo(index, false))
   );
+
+  // Back to the top of the first scene, even from inside it: a jump, as a
+  // click on a scene is, that jumpTo would refuse for the scene playing.
+  const restart = () => {
+    jump = { index: 0, direct: false, fade: box.classList.contains('is-visible') };
+    paintScene(0);
+    box.classList.remove('is-visible');
+    progress(0, 0);
+    wake();
+  };
+  if (!CAPTURE) controls = demoControls(demoEl, { halted: () => paused, changed: sync, restart: restart });
 
   const sceneOf = (app) => SCENES.findIndex((scene) => scene.app === app);
   windows.forEach((win) =>

@@ -207,9 +207,9 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
     private func present(_ item: SUAppcastItem, reply: @escaping (SPUUserUpdateChoice) -> Void) {
         generation += 1
         let installed = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-            as? String ?? "an older version"
+            as? String ?? "?"
         let size = item.contentLength > 0
-            ? ByteCountFormatter.string(fromByteCount: Int64(item.contentLength), countStyle: .file)
+            ? AppLanguage.bytes(Int64(item.contentLength))
             : nil
         let notes = item.itemDescription.map { ReleaseNotes(html: $0) }
         window.show(.found(
@@ -249,7 +249,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
         } else {
             // Newer than what this Mac can run, most likely. Sparkle's text
             // says which.
-            window.show(.failed(title: "No update for this Mac",
+            window.show(.failed(title: L("No update for this Mac"),
                                 message: error.localizedDescription, retry: nil, dismiss: dismiss))
         }
     }
@@ -269,7 +269,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
             message += " " + suggestion
         }
         window.show(.failed(
-            title: "Couldn't update",
+            title: L("Couldn't update"),
             message: message,
             retry: { [weak self] in
                 acknowledgement()
@@ -285,7 +285,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
         generation += 1
         expectedBytes = 0
         receivedBytes = 0
-        window.show(.downloading(version: current?.displayVersionString ?? "the update",
+        window.show(.downloading(version: current?.displayVersionString,
                                  cancel: cancellation))
     }
 
@@ -300,19 +300,19 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
     }
 
     private func showDownloadProgress() {
-        let got = ByteCountFormatter.string(fromByteCount: Int64(receivedBytes), countStyle: .file)
+        let got = AppLanguage.bytes(Int64(receivedBytes))
         guard expectedBytes > 0 else {
             window.progress(fraction: nil, detail: got)
             return
         }
-        let total = ByteCountFormatter.string(fromByteCount: Int64(expectedBytes), countStyle: .file)
+        let total = AppLanguage.bytes(Int64(expectedBytes))
         window.progress(fraction: min(1, Double(receivedBytes) / Double(expectedBytes)),
-                        detail: "\(got) of \(total)")
+                        detail: LF("%1$@ of %2$@", got, total))
     }
 
     func showDownloadDidStartExtractingUpdate() {
         generation += 1
-        window.show(.extracting(version: current?.displayVersionString ?? "the update"))
+        window.show(.extracting(version: current?.displayVersionString))
     }
 
     func showExtractionReceivedProgress(_ progress: Double) {
@@ -324,7 +324,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
         generation += 1
         window.show(.ready(
-            version: current?.displayVersionString ?? "the update",
+            version: current?.displayVersionString,
             install: { reply(.install) },
             later: { reply(.dismiss) }))
     }
@@ -332,7 +332,7 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
     func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool,
                               retryTerminatingApplication: @escaping () -> Void) {
         generation += 1
-        let version = current?.displayVersionString ?? "the update"
+        let version = current?.displayVersionString
         window.show(.installing(version: version, retry: nil))
         guard !applicationTerminated else { return }
         // The app has been asked to quit. If it is still here in a few seconds,
@@ -356,6 +356,9 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
         window.close()
     }
 
+    /// The update window in the language just chosen, if it is up.
+    func relocalize() { window.relocalize() }
+
     // MARK: the menu and the icon
 
     /// The two items under Pause. "Check for Updates…", or "Update to 1.5.1…"
@@ -366,14 +369,14 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
     /// above still works either way.
     func menuItems() -> [NSMenuItem] {
         let check = NSMenuItem(
-            title: pendingVersion.map { "Update to \($0)…" } ?? "Check for Updates…",
+            title: pendingVersion.map { LF("Update to %@…", $0) } ?? L("Check for Updates…"),
             action: #selector(checkFromMenu), keyEquivalent: "")
         check.target = self
-        let automatic = NSMenuItem(title: "Check for Updates Automatically",
+        let automatic = NSMenuItem(title: L("Check for Updates Automatically"),
                                    action: #selector(toggleAutomaticFromMenu), keyEquivalent: "")
         automatic.target = self
         automatic.state = automaticChecks ? .on : .off
-        automatic.toolTip = "Once a day, asks subtitles-live.com for a newer version"
+        automatic.toolTip = L("Once a day, asks subtitles-live.com for a newer version")
         return [check, automatic]
     }
 

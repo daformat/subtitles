@@ -30,10 +30,19 @@ final class AcknowledgementsWindow: NSObject, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             return
         }
-        let window = Dialog.window(title: "Acknowledgements", delegate: self)
+        let window = Dialog.window(title: L("Acknowledgements"), delegate: self)
         self.window = window
         Dialog.place(content(), in: window)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Rebuilt in the language just chosen, where it stands, if it is open.
+    func relocalize() {
+        guard let old = window else { return }
+        let top = NSPoint(x: old.frame.minX, y: old.frame.maxY)
+        old.close()
+        show()
+        window?.setFrameTopLeftPoint(top)
     }
 
     /// Torn down rather than hidden, so the next open starts at the top.
@@ -46,19 +55,19 @@ final class AcknowledgementsWindow: NSObject, NSWindowDelegate {
         let icon = Dialog.icon()
         stack.addArrangedSubview(icon)
         stack.setCustomSpacing(10, after: icon)
-        Dialog.add(stack, headline: "Acknowledgements",
-                   blurb: "What Subtitles is built on, and the terms it comes with.")
+        Dialog.add(stack, headline: L("Acknowledgements"),
+                   blurb: L("What Subtitles is built on, and the terms it comes with."))
         let box = Dialog.textBox(Self.attributed(Self.blocks()), maxHeight: 360)
         stack.addArrangedSubview(box)
         stack.setCustomSpacing(16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
-        Dialog.addButtons(stack, [Dialog.button("OK", { [weak self] in self?.window?.close() },
+        Dialog.addButtons(stack, [Dialog.button(L("OK"), { [weak self] in self?.window?.close() },
                                                 default: true)])
         return stack
     }
 
     private static func blocks() -> [Notices.Block] {
         guard let url = noticesURL, let text = try? String(contentsOf: url, encoding: .utf8) else {
-            return [.paragraph("The notices file is missing from this copy of the app.")]
+            return [.paragraph(L("The notices file is missing from this copy of the app."))]
         }
         return Notices.parse(text)
     }

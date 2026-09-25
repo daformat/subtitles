@@ -33,8 +33,8 @@ enum ModelCache {
     /// it. Nothing outside this list is ever a candidate for deletion.
     private static var known: [(repo: Repo, name: String)] {
         var out: [(Repo, String)] = FluidVariant.allCases.map { ($0.repo, $0.displayName) }
-        out.append((.vad, "Voice detection"))
-        out.append((.sortformer, "Speaker diarization"))
+        out.append((.vad, L("Voice detection", "Name of a downloaded model: the one that tells speech from music and noise")))
+        out.append((.sortformer, L("Speaker diarization", "Name of a downloaded model: the one that notices when a different person starts speaking. Say it in plain words rather than the technical term")))
         // Variants can share a repo; keep the first name for each.
         var seen = Set<String>()
         return out.filter { seen.insert($0.0.folderName).inserted }
@@ -133,9 +133,7 @@ enum ModelCache {
     }
 
     static func format(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        AppLanguage.bytes(bytes)
     }
 }
 

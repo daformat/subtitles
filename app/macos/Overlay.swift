@@ -80,8 +80,10 @@ final class SubtitleView: NSView {
     var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
 
     /// The Text Size menu's steps, smallest first.
-    static let textSizes: [(label: String, size: CGFloat)] =
-        [("Small", 22), ("Medium", 30), ("Large", 40), ("Huge", 52)]
+    static var textSizes: [(label: String, size: CGFloat)] {
+        [(L("text size|Small"), 22), (L("text size|Medium"), 30),
+         (L("text size|Large"), 40), (L("text size|Huge"), 52)]
+    }
 
     /// Below Small, for the history at Small: not offered in the menu, only
     /// as the step the stack comes down to.

@@ -13,6 +13,7 @@
 // from a menu while watching.
 
 import AppKit
+import CaptionCore
 
 final class SettingsWindow: NSObject, NSWindowDelegate {
     static let shared = SettingsWindow()
@@ -76,6 +77,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Put every overlay setting back to its default. The window rebuilds itself
     /// afterwards, so this only has to change the values.
     var onResetDefaults: (() -> Void)?
+    /// A language was chosen: the other open windows redraw themselves in it.
+    var onLanguageChange: (() -> Void)?
 
     private static let width: CGFloat = 430
     private static let inset: CGFloat = 22
@@ -114,10 +117,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// selected, then full contrast", and in `.preference` style it lays its
     /// items on a material a shade off the window beneath. Fifty lines of view
     /// buys exact control of both.
-    private static let panes: [(label: String, symbol: String)] = [
-        ("UI", "captions.bubble"),
-        ("Models", "cpu"),
-    ]
+    private static var panes: [(label: String, symbol: String)] { [
+        (L("UI", "Settings tab: how the caption boxes look and behave"), "captions.bubble"),
+        (L("Models", "Settings tab: the speech recognition models"), "cpu"),
+        (L("Language", "Settings tab: the language of the app's own menus and windows"), "globe"),
+    ] }
 
     private var stacks: [NSStackView] = []
     private var buttons: [PaneButton] = []
@@ -137,7 +141,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var expiryToggle: ToggleRow?
 
     private let cacheReadout = NSTextField(labelWithString: "")
-    private let clearButton = NSButton(title: "Clear Model Cache…", target: nil, action: nil)
+    /// Titled where the pane is built (`modelsRow`), not here: this object
+    /// outlives a change of language, and the pane is rebuilt in the new one.
+    private let clearButton = NSButton(title: "", target: nil, action: nil)
     /// What the last scan found, and what the button will delete.
     private var removable: [ModelCache.Entry] = []
 
@@ -284,7 +290,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             self.apply = apply
 
             let label = NSTextField(labelWithString: title)
-            let sub = NSTextField(labelWithString: detail)
+            // Wraps, since another language can say it in more words: the
+            // row is the pane's width less the switch and the gap to it.
+            let sub = NSTextField(wrappingLabelWithString: detail)
+            sub.preferredMaxLayoutWidth = width - 60
+            label.lineBreakMode = .byTruncatingTail
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             self.label = label
             self.sub = sub
             sub.font = .systemFont(ofSize: 11)
@@ -337,11 +348,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// at its nearest end rather than pretending to hold a number it cannot
     /// reach.
     private final class SecondsRow: NSObject, NSTextFieldDelegate {
-        let title = NSTextField(labelWithString: "Clear after")
+        let title = NSTextField(labelWithString: L("Clear after", "Settings slider label: how long the recent boxes are kept after nothing is said"))
         let slider = NSSlider()
         private let field = NSTextField()
         private let stepper = NSStepper()
-        private let unit = NSTextField(labelWithString: "sec")
+        private let unit = NSTextField(labelWithString: L("sec", "Short for seconds, after a number field"))
         private let trailing = NSStackView()
         private let apply: (Double) -> Void
 
@@ -462,7 +473,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false)
-        window.title = "Settings"
+        window.title = L("Settings", "Settings window title")
         // The titlebar stops drawing its own material, so the window is one
         // colour from the traffic lights to the bottom edge.
         window.titlebarAppearsTransparent = true
@@ -485,7 +496,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// there. Called again after a reset: the rows read their values once, at
     /// construction, so the only way to show new ones is to build new rows.
     private func install(into window: NSWindow) {
-        stacks = [buildUIStack(), buildModelsStack()]
+        stacks = [buildUIStack(), buildModelsStack(), buildLanguageStack()]
         buttons = Self.panes.enumerated().map { index, pane in
             PaneButton(label: pane.label, symbol: pane.symbol) { [weak self] in
                 guard let self, let window = self.window else { return }
@@ -715,17 +726,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let size = revealSize()
 
         let opacity = SliderRow(
-            "Opacity", range: Double(SubtitleView.minMaskStrength)...1,
+            L("Fade", "Settings slider under Pointer Reveal: how much of the box fades away under the pointer, 50% to 100%"), range: Double(SubtitleView.minMaskStrength)...1,
             value: Double(revealOpacity()),
-            format: { "\(Int(($0 * 100).rounded()))%" },
+            format: { LF("%lld%%", Int(($0 * 100).rounded())) },
             apply: { [weak self] in
                 self?.onRevealOpacity?(CGFloat($0))
                 self?.syncPreview(.reveal, changed: [.revealOpacity])
             })
 
         let width = SliderRow(
-            "Width", range: 200...1600, value: Double(size.width),
-            format: { "\(Int($0.rounded())) pt" },
+            L("Width"), range: 200...1600, value: Double(size.width),
+            format: { LF("%lld pt", Int($0.rounded())) },
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: $0.rounded(), height: self.revealSize().height))
@@ -733,8 +744,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             })
 
         let height = SliderRow(
-            "Height", range: 100...1000, value: Double(size.height),
-            format: { "\(Int($0.rounded())) pt" },
+            L("Height"), range: 100...1000, value: Double(size.height),
+            format: { LF("%lld pt", Int($0.rounded())) },
             apply: { [weak self] in
                 guard let self else { return }
                 self.onRevealSize?(NSSize(width: self.revealSize().width, height: $0.rounded()))
@@ -742,16 +753,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             })
 
         let lines = SliderRow(
-            "Lines", range: 1...5, value: Double(maxLines()), snaps: true,
-            format: { $0 < 1.5 ? "1 line" : "\(Int($0.rounded())) lines" },
+            L("Lines", "Settings slider: how many lines of text a caption box holds"), range: 1...5, value: Double(maxLines()), snaps: true,
+            format: { LP("%lld lines", one: "%lld line", Int($0.rounded())) },
             apply: { [weak self] in
                 self?.onMaxLines?(Int($0.rounded()))
                 self?.syncPreview(.lines, changed: [.maxLines])
             })
 
         let background = SliderRow(
-            "Background", range: 0...1, value: Double(boxOpacity()),
-            format: { "\(Int(($0 * 100).rounded()))%" },
+            L("Background", "Settings slider: how solid the box behind the caption text is"), range: 0...1, value: Double(boxOpacity()),
+            format: { LF("%lld%%", Int(($0 * 100).rounded())) },
             apply: { [weak self] in
                 self?.onBoxOpacity?(CGFloat($0))
                 self?.syncPreview(.background, changed: [.boxOpacity])
@@ -760,9 +771,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // Whole points: the difference between 6 and 6.4 is not one anyone can
         // see, and a readout that says so is noise.
         let blur = SliderRow(
-            "Blur", range: 0...Double(Pill.maxBackdropBlur), value: Double(backdropBlur()),
+            L("Blur", "Settings slider: how much the picture behind the box is blurred"), range: 0...Double(Pill.maxBackdropBlur), value: Double(backdropBlur()),
             snaps: true,
-            format: { $0 < 0.5 ? "Off" : "\(Int($0.rounded())) pt" },
+            format: { $0 < 0.5 ? L("blur|Off", "Readout of the Blur slider at zero: no blur") : LF("%lld pt", Int($0.rounded())) },
             apply: { [weak self] in
                 self?.onBackdropBlur?(CGFloat($0.rounded()))
                 self?.syncPreview(.blur, changed: [.blur])
@@ -774,16 +785,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // clamp already pins a sentinel-sized value to the end of the track.
         let unlimitedStop = 31.0
         let depth = SliderRow(
-            "Keep", range: 0...unlimitedStop,
+            L("Keep", "Settings slider: how many finished boxes are kept for ⌥ to bring back"), range: 0...unlimitedStop,
             value: historyDepth() == OverlayController.unlimitedHistoryDepth
                 ? unlimitedStop : Double(historyDepth()),
             snaps: true,
             format: {
                 switch Int($0.rounded()) {
-                case 0: return "Off"
-                case 1: return "1 box"
+                case 0: return L("recent boxes|Off", "Readout of the Keep slider at zero: no recent boxes are kept")
                 case Int(unlimitedStop): return "∞"
-                case let n: return "\(n) boxes"
+                case let n: return LP("%lld boxes", one: "%lld box", n)
                 }
             },
             apply: { [weak self] in
@@ -794,15 +804,20 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             })
 
         let dimness = SliderRow(
-            "Text", range: Double(HistoryPillView.minTextOpacity)...1,
+            L("Text", "Settings slider: how strong the recent boxes' text is next to the live box's"), range: Double(HistoryPillView.minTextOpacity)...1,
             value: Double(historyTextOpacity()),
-            format: { "\(Int(($0 * 100).rounded()))%" },
+            format: { LF("%lld%%", Int(($0 * 100).rounded())) },
             apply: { [weak self] in
                 self?.onHistoryTextOpacity?(CGFloat($0))
                 self?.syncPreview(.dimness, changed: [.historyTextOpacity])
             })
 
         rows = [lines, background, blur, opacity, width, height, depth, dimness]
+        // The labels' column, as wide as the widest label in the app's
+        // language and never narrower than English needs, so the sliders
+        // still line up from one section to the next.
+        let titles = rows.map(\.title) + [NSTextField(labelWithString: L("Clear after"))]
+        Self.labelWidth = max(84, ceil(titles.map(\.fittingSize.width).max() ?? 0))
 
         let (stack, section) = Self.makeStack()
 
@@ -817,19 +832,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         ])
         screen.apply(currentStyle())
 
-        section("Subtitle Box",
-                "How many lines a box fills before it clears and starts a new one, "
+        section(L("Subtitle Box"),
+                L("How many lines a box fills before it clears and starts a new one, "
                 + "how solid the box behind the text is, and how far the picture "
-                + "under it is softened. The ⌥ history follows it, a step behind.",
+                + "under it is softened. The ⌥ stack follows these, a shade less solid."),
                 Self.grid([lines.cells, background.cells, blur.cells]), nil)
         revealSwitch.target = self
         revealSwitch.action = #selector(toggleReveal)
         revealSwitch.state = revealEnabled() ? .on : .off
         revealRows = [opacity, width, height]
 
-        section("Pointer Reveal",
-                "How much of the box disappears under the pointer, and how far the "
-                + "hole around it reaches. Hold ⇧ to keep the box solid.",
+        section(L("Pointer Reveal", "Settings section: the box turning see-through under the mouse pointer"),
+                L("How much of the box disappears under the pointer, and how far the "
+                + "hole around it reaches. Hold ⇧ to keep the box solid."),
                 Self.grid(revealRows.map(\.cells)), revealSwitch)
         syncRevealEnabled()
         historySwitch.target = self
@@ -842,8 +857,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             self?.syncPreview(.expiry, changed: [.historyExpiry])
         }
         let expires = ToggleRow(
-            "Forget it when idle",
-            detail: "Otherwise the stack is kept until you pause or quit.",
+            L("Forget the stack when idle", "Settings switch: clear the recent boxes after a quiet spell"),
+            detail: L("Otherwise the stack is kept until you pause or quit."),
             value: historyExpires(), width: Self.contentWidth) { [weak self] on in
                 self?.onHistoryExpires?(on)
                 self?.syncHistoryEnabled()
@@ -859,13 +874,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         recent.alignment = .leading
         recent.spacing = 10
 
-        section("Recent Boxes",
-                "How many finished boxes ⌥ can bring back and scroll through, and "
-                + "how far their text sits behind the live one's.",
+        section(L("Recent Boxes"),
+                L("How many finished boxes ⌥ can bring back and scroll through, and "
+                + "how far their text sits behind the live one's."),
                 recent, historySwitch)
         syncHistoryEnabled()
 
-        let reset = NSButton(title: "Reset All Settings…", target: self,
+        let reset = NSButton(title: L("Reset All Settings…"), target: self,
                              action: #selector(resetDefaults))
         reset.bezelStyle = .rounded
         stack.setCustomSpacing(22, after: stack.arrangedSubviews.last!)
@@ -879,10 +894,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let rowWidth = Self.contentWidth
         let vad = ToggleRow(
-            "Skip non-speech", detail: "Stops music reaching the recognizer.",
+            L("Skip non-speech", "Settings switch: music and noise are not transcribed"), detail: L("Stops music reaching the recognizer."),
             value: vadEnabled(), width: rowWidth) { [weak self] in self?.onToggleVAD?($0) }
         let speakers = ToggleRow(
-            "New box on speaker change", detail: "Runs a second model on the Neural Engine.",
+            L("New box on speaker change", "Settings switch: a new caption box starts when a different person speaks"), detail: L("Runs a second model on the Neural Engine."),
             value: speakerBreaksEnabled(), width: rowWidth) { [weak self] in
                 self?.onToggleSpeakerBreaks?($0)
             }
@@ -894,18 +909,66 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         toggles.alignment = .leading
         toggles.spacing = 10
 
-        section("Recognition",
-                "Both decide what reaches the recognizer, so switching either one "
+        section(L("Recognition", "Settings section: speech recognition"),
+                L("Both decide what reaches the recognizer, so switching either one "
                 + "reloads the engine: a pause of a few seconds, and a download "
-                + "the first time speaker changes are turned on.",
+                + "the first time speaker changes are turned on."),
                 toggles, nil)
 
-        section("Downloaded Models",
-                "Every model you try stays downloaded. This removes the ones "
-                + "nothing is using; the one in use is never touched.",
+        section(L("Downloaded Models"),
+                L("Every model you try stays downloaded. This removes the ones "
+                + "nothing is using; the one in use is never touched."),
                 modelsRow(), nil)
 
         return stack
+    }
+
+    // MARK: - Language
+
+    /// The popup's choices: the system's, then the translations, in order.
+    private let languagePopup = NSPopUpButton()
+
+    private func buildLanguageStack() -> NSStackView {
+        let (stack, section) = Self.makeStack()
+
+        languagePopup.removeAllItems()
+        languagePopup.addItem(withTitle: L("System Language", "Language popup: follow the language macOS is set to"))
+        languagePopup.menu?.addItem(.separator())
+        for language in AppLanguage.all {
+            languagePopup.addItem(withTitle: language.name)
+            languagePopup.lastItem?.representedObject = language.code
+        }
+        if let chosen = AppLanguage.chosen,
+           let index = AppLanguage.all.firstIndex(where: { $0.code == chosen }) {
+            languagePopup.selectItem(at: index + 2)
+        } else {
+            languagePopup.selectItem(at: 0)
+        }
+        languagePopup.target = self
+        languagePopup.action = #selector(chooseLanguage)
+
+        section(L("Language"),
+                L("The language of Subtitles' menus and windows. What is transcribed and "
+                  + "what it is translated into are set in the menu, under Language / Models "
+                  + "and Translate To.", "Settings ▸ Language; Language / Models and Translate To are the app's menu items, name them as the menu does"),
+                languagePopup, nil)
+        return stack
+    }
+
+    /// Switched at once, this window included: rebuilt in the new language
+    /// on the same pane, after the popup's menu has finished with it.
+    @objc private func chooseLanguage(_ sender: NSPopUpButton) {
+        let code = sender.selectedItem?.representedObject as? String
+        DispatchQueue.main.async { [weak self] in
+            AppLanguage.switchTo(code) {
+                guard let self else { return }
+                if let window = self.window {
+                    window.title = L("Settings")
+                    self.install(into: window)
+                }
+                self.onLanguageChange?()
+            }
+        }
     }
 
     /// Confirmed, and specific about its reach: everything above goes back to
@@ -914,15 +977,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func resetDefaults() {
         guard let window else { return }
         let alert = NSAlert()
-        alert.messageText = "Reset all settings to their defaults?"
+        alert.messageText = L("Reset all settings to their defaults?")
         alert.informativeText =
-            "Lines, the pointer reveal, how many recent boxes are kept, the text "
-            + "size and the overlay's position all go back to how they started.\n\n"
-            + "Your model, language and audio source are left alone, and no "
-            + "downloaded models are removed."
+            L("Lines, the pointer reveal, how many recent boxes are kept, the text "
+            + "size and the overlay's position all go back to how they started.") + "\n\n"
+            + L("Your model, language and audio source are left alone, and no "
+            + "downloaded models are removed.")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Reset")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Reset"))
+        alert.addButton(withTitle: L("Cancel"))
         alert.buttons[0].hasDestructiveAction = true
         alert.buttons[0].keyEquivalent = ""
         alert.buttons[1].keyEquivalent = "\r"
@@ -940,6 +1003,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// The clear button and the size it would reclaim, on one line.
     private func modelsRow() -> NSView {
+        clearButton.title = L("Clear Model Cache…")
         clearButton.target = self
         clearButton.action = #selector(clearCache)
         clearButton.bezelStyle = .rounded
@@ -965,7 +1029,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let keeping = modelsInUse()
         removable = []
         clearButton.isEnabled = false
-        cacheReadout.stringValue = "Checking…"
+        cacheReadout.stringValue = L("Checking…")
 
         DispatchQueue.global(qos: .userInitiated).async {
             let found = ModelCache.removable(keeping: keeping)
@@ -975,8 +1039,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self.removable = found
                 self.clearButton.isEnabled = !found.isEmpty
                 self.cacheReadout.stringValue = found.isEmpty
-                    ? "Nothing unused"
-                    : "\(ModelCache.format(total)) to reclaim"
+                    ? L("Nothing unused", "Next to Clear Model Cache: no downloaded model is unused")
+                    : LF("%@ to reclaim", ModelCache.format(total))
             }
         }
     }
@@ -990,16 +1054,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let total = doomed.reduce(0) { $0 + $1.bytes }
 
         let alert = NSAlert()
-        alert.messageText = doomed.count == 1
-            ? "Remove 1 unused model?"
-            : "Remove \(doomed.count) unused models?"
+        alert.messageText = LP("Remove %lld unused models?", one: "Remove %lld unused model?", doomed.count)
         alert.informativeText =
             doomed.map { "\($0.name) (\(ModelCache.format($0.bytes)))" }.joined(separator: "\n")
-            + "\n\nFrees \(ModelCache.format(total)). Any of these downloads again "
-            + "the next time you select it."
+            + "\n\n" + LF("Frees %@. Any of these downloads again the next time you select it.",
+                          ModelCache.format(total))
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Remove"))
+        alert.addButton(withTitle: L("Cancel"))
         alert.buttons[0].hasDestructiveAction = true
         // Return picks Cancel, not Remove: the destructive button should have to
         // be aimed at.
@@ -1012,7 +1074,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             self.refreshCacheSize()
             guard !failed.isEmpty else { return }
             let problem = NSAlert()
-            problem.messageText = "Some models could not be removed"
+            problem.messageText = L("Some models could not be removed")
             problem.informativeText = failed.joined(separator: "\n")
             problem.alertStyle = .warning
             problem.beginSheetModal(for: window, completionHandler: nil)
@@ -1149,6 +1211,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         return label
     }
 
+    /// The labels' column in every grid: 84, "Background" in English, or
+    /// wider for a language whose longest label is (`buildUIStack`).
+    private static var labelWidth: CGFloat = 84
+
     /// Title, slider and readout in three aligned columns, so the sliders of
     /// different sections still line up with each other.
     private static func grid(_ rows: [[NSView]]) -> NSGridView {
@@ -1156,10 +1222,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         grid.rowSpacing = 8
         grid.columnSpacing = 10
         grid.column(at: 0).xPlacement = .trailing
-        // Wide enough for the longest label ("Background"), and fixed rather than
-        // sized to content so the sliders line up across sections that do not
-        // share a grid.
-        grid.column(at: 0).width = 84
+        // Wide enough for the longest label, and fixed rather than sized to
+        // content so the sliders line up across sections that do not share a
+        // grid.
+        grid.column(at: 0).width = labelWidth
         grid.column(at: 1).xPlacement = .fill
         grid.column(at: 2).xPlacement = .trailing
         grid.translatesAutoresizingMaskIntoConstraints = false

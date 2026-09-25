@@ -44,6 +44,18 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     <key>CFBundleIconFile</key>           <string>AppIcon</string>
     <key>CFBundleIdentifier</key>         <string>dev.mat.subtitles</string>
     <key>CFBundleName</key>               <string>Subtitles</string>
+    <!-- The languages the app is in (app/Localization, tools/strings.py),
+         English the one to fall back on. Declared as well as present as
+         .lproj folders, so System Settings offers them as this app's
+         language. -->
+    <key>CFBundleDevelopmentRegion</key>  <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string> <string>es</string> <string>fr</string> <string>it</string>
+        <string>pt-BR</string> <string>de</string> <string>nl</string> <string>tr</string>
+        <string>ru</string> <string>ar</string> <string>hi</string> <string>ja</string>
+        <string>ko</string> <string>vi</string> <string>uk</string> <string>zh-Hans</string>
+    </array>
     <key>CFBundlePackageType</key>        <string>APPL</string>
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>
     <key>CFBundleVersion</key>            <string>$BUILD</string>
@@ -140,7 +152,26 @@ cp app/macos/StatusIcon.svg app/macos/LogoMat.svg app/macos/LogoTwitter.svg \
 mkdir -p "$APP/Contents/Resources/Demo"
 cp app/macos/Demo/demo.html app/macos/Demo/demo.css app/macos/Demo/demo.js \
    "$APP/Contents/Resources/Demo/"
+# The demo in each of the site's languages, demo.<lproj>.html, which the
+# welcome window picks by the app's language.
+for page in app/macos/Demo/demo.*.html; do
+  [ -e "$page" ] || continue
+  [ "$(basename "$page")" = demo.shell.html ] && continue
+  cp "$page" "$APP/Contents/Resources/Demo/"
+done
 cp -R app/macos/Demo/assets "$APP/Contents/Resources/Demo/"
+
+# The app's languages: a .lproj per translation in app/Localization, its
+# strings, its counts, and the two permission prompts' wording. Checked first,
+# so a translation missing a string or breaking a format argument stops the
+# build rather than shipping English in its place, or a crash in String(format:).
+echo "==> languages"
+python3 tools/strings.py check > "$OUT/strings-check.log" || {
+  grep -v ": ok$" "$OUT/strings-check.log" | head -30 >&2
+  echo "!! translations incomplete (full list: $OUT/strings-check.log)" >&2
+  exit 1
+}
+python3 tools/strings.py build "$APP/Contents/Resources"
 
 # The app icon. Built from the one PNG rather than committing an .icns, so there
 # is a single source of truth to edit. Cached against the source's timestamp:

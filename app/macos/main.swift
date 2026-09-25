@@ -169,6 +169,8 @@ nonisolated(unsafe) var isPaused = false
 /// the recognizer. Read by the realtime callback, like `isPaused`.
 nonisolated(unsafe) var holdingFinalCaption = false
 
+// Before the application exists: AppKit reads its layout direction once.
+AppLanguage.applyLayoutDirection()
 let app = NSApplication.shared
 
 // [main-edition]
@@ -713,7 +715,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
 
     UserDefaults.standard.set(variant.rawValue, forKey: Defaults.variant)
 
-    engineBusyMessage = "Loading \(variant.displayName)…"
+    engineBusyMessage = LF("Loading %@…", variant.displayName)
     engineBusyProgress = 0
     statusMenu?.updateHealthIndicator()
     renderer.overlay?.clearAndHide()
@@ -780,7 +782,7 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                        : "\(red)engine failed to load\(reset)")
                 engineFailure = ok
                     ? nil
-                    : "\(variant.displayName) failed to load; pick another model"
+                    : LF("%@ failed to load; pick another model", variant.displayName)
                 engineBusyMessage = nil
                 engineBusyProgress = 0
                 statusMenu?.updateHealthIndicator()
@@ -1270,6 +1272,14 @@ if useOverlay {
         UserDefaults.standard.set(speakerBreaksEnabled, forKey: Defaults.speakerBreaks)
         applyVariant(currentVariant)   // tracker is built with the engine
     }
+    settings.onLanguageChange = {
+        AboutWindow.shared.relocalize()
+        AcknowledgementsWindow.shared.relocalize()
+        WelcomeWindow.shared.relocalize()
+        // [main-edition]
+        license.relocalize()
+        // [/main-edition]
+    }
     settings.onResetDefaults = {
         // Forget them rather than write the defaults back: a key that is absent
         // follows the default if the default ever changes, and a key holding the
@@ -1402,7 +1412,7 @@ if useOverlay {
             return (blocked, .normal)
         }
         // [/main-edition]
-        if isPaused { return ("Paused", .idle) }
+        if isPaused { return (L("Paused", "Menu status line while captions are paused"), .idle) }
         // One message, and not a red one. Distinguishing "nothing is playing" from
         // "the grant is missing" needs `processesOutputtingAudio()`, and that is
         // not trustworthy enough to accuse anyone with: browsers hold the audio
@@ -1412,10 +1422,10 @@ if useOverlay {
         // one that is overwhelmingly more common.
         if !renderer.receivingAudio {
             if tap.source == .microphone {
-                return ("No sound from the microphone. Check permission if you are speaking",
+                return (L("No sound from the microphone. Check permission if you are speaking"),
                         .idle)
             }
-            return ("No audio reaching Subtitles. Check permission if audio is playing",
+            return (L("No audio reaching Subtitles. Check permission if audio is playing"),
                     .idle)
         }
         return (String(format: "%@ · RTF %.2f", currentVariant.displayName, lastRTF),
@@ -1435,6 +1445,8 @@ if useOverlay {
     updater.quietFor = { isPaused ? .infinity : TimeInterval(renderer.silentSeconds) }
     updater.mayInterrupt = { !WelcomeWindow.shared.isVisible }
     updater.start()
+    let relocalizeOthers = settings.onLanguageChange
+    settings.onLanguageChange = { relocalizeOthers?(); updater.relocalize() }
     // The one question, as the welcome window closes rather than at the next
     // launch — see `askAboutAutomaticChecks`. A no-op once it has been answered.
     WelcomeWindow.shared.onDismiss = { updater.askAboutAutomaticChecks() }
@@ -1620,8 +1632,9 @@ func endFreeMinutes(on overlay: OverlayController) {
     if let fluid = fluidEngine { Task { await fluid.flush() } }
     let rest = Int(LicenseRecord.freeRest / 60)
     overlay.showFinalCaption(
-        "Your trial has ended, captions will resume in \(rest) minutes.\n"
-            + "Get a license key at subtitles-live.com",
+        LP("Your trial has ended, captions will resume in %lld minutes.",
+           one: "Your trial has ended, captions will resume in %lld minute.", rest) + "\n"
+            + L("Get a license key at subtitles-live.com", "Shown in the caption box; subtitles-live.com becomes a link"),
         link: ("subtitles-live.com", { NSWorkspace.shared.open(LicenseController.buyURL) }))
     DispatchQueue.main.asyncAfter(deadline: .now() + finalCaptionHold) {
         // A pause or a key in the meantime has already settled it.
@@ -1653,7 +1666,9 @@ if useOverlay {
     // [main-edition]
     WelcomeWindow.shared.trialLine = {
         guard case .trial = license.entitlement else { return nil }
-        return "Your free trial runs for \(LicenseRecord.trialDays) days, and starts when the captions do."
+        return LP("Your free trial runs for %lld days, and starts when the captions do.",
+                  one: "Your free trial runs for %lld day, and starts when the captions do.",
+                  LicenseRecord.trialDays)
     }
     // [/main-edition]
     if WelcomeWindow.shouldShowAtLaunch {

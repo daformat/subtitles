@@ -10,6 +10,7 @@
 // checking a version number, or after the changelog or the third-party notices.
 
 import AppKit
+import CaptionCore
 
 final class AboutWindow: NSObject, NSWindowDelegate {
     static let shared = AboutWindow()
@@ -43,6 +44,15 @@ final class AboutWindow: NSObject, NSWindowDelegate {
         self.window = window
         window.center()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Rebuilt in the language just chosen, where it stands, if it is open.
+    func relocalize() {
+        guard let old = window else { return }
+        let top = NSPoint(x: old.frame.minX, y: old.frame.maxY)
+        old.close()
+        show()
+        window?.setFrameTopLeftPoint(top)
     }
 
     /// Torn down rather than hidden, so the next open rebuilds against whatever
@@ -110,7 +120,7 @@ final class AboutWindow: NSObject, NSWindowDelegate {
             contentRect: NSRect(x: 0, y: 0, width: Self.width + Self.insetH * 2, height: 200),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
-        window.title = "About \(Self.bundleName)"
+        window.title = LF("About %@", Self.bundleName)
         // The title is in the window's own bar and saying it twice is a waste of
         // 22 points; the icon below says which app this is anyway.
         window.titlebarAppearsTransparent = true
@@ -178,12 +188,12 @@ final class AboutWindow: NSObject, NSWindowDelegate {
     /// button. Neither takes an ellipsis: one opens a page, the other a
     /// window that asks nothing.
     private static func buttons() -> NSView {
-        var buttons = [Dialog.button("Changelog") {
-            NSWorkspace.shared.open(URL(string: "https://subtitles-live.com/changelog/")!)
+        var buttons = [Dialog.button(L("Changelog")) {
+            NSWorkspace.shared.open(AppLanguage.siteURL("changelog/"))
         }]
         // Left out when the file is absent, rather than offered dead.
         if AcknowledgementsWindow.noticesURL != nil {
-            buttons.append(Dialog.button("Acknowledgements") {
+            buttons.append(Dialog.button(L("Acknowledgements", "Button and window title: the licenses of the components the app is built on")) {
                 AcknowledgementsWindow.shared.show()
             })
         }
@@ -252,10 +262,11 @@ final class AboutWindow: NSObject, NSWindowDelegate {
     /// What the app is, and its licence.
     private static var credits: NSAttributedString {
         let block = Composer()
-        block.add("subtitles-live.com\n", link: "https://subtitles-live.com")
-        block.add("Live captions for whatever your Mac is playing, "
-                  + "or the microphone for a conversation translated live.\u{2028}"
-                  + "Nothing is recorded; no audio ever leaves the machine.\n",
+        block.add("subtitles-live.com\n", link: AppLanguage.siteURL("").absoluteString)
+        block.add(L("Live captions for whatever your Mac is playing, "
+                  + "or the microphone for a conversation translated live.")
+                  + "\u{2028}"
+                  + L("Nothing is recorded; no audio ever leaves the machine.") + "\n",
                   colour: .labelColor)
         // [main-edition]
         block.add("FSL-1.1-ALv2", colour: .secondaryLabelColor)
@@ -299,7 +310,7 @@ final class AboutWindow: NSObject, NSWindowDelegate {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
             as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        return "Version \(short) (\(build))"
+        return LF("Version %@ (%@)", short, build)
     }
 
 }

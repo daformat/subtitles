@@ -14,6 +14,7 @@
 import AppKit
 import FluidAudio
 import WebKit
+import CaptionCore
 
 final class WelcomeWindow: NSObject, NSWindowDelegate {
     static let shared = WelcomeWindow()
@@ -181,7 +182,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// for the same reason: the demo is an animation in a web process, and a
     /// closed window is not a reason to keep painting it.
     func windowWillClose(_ notification: Notification) {
-        onDismiss?()
+        if !relocalizing { onDismiss?() }
         poll?.invalidate()
         poll = nil
         readyTimer?.invalidate()
@@ -203,6 +204,19 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func close() { window?.performClose(nil) }
+
+    /// True while `relocalize` takes the window down to build it again, which
+    /// is not the person dismissing it.
+    private var relocalizing = false
+
+    /// Rebuilt in the language just chosen, demo and all, if it is open.
+    func relocalize() {
+        guard let old = window else { return }
+        relocalizing = true
+        old.close()
+        relocalizing = false
+        show()
+    }
 
     // MARK: the download
 
@@ -249,7 +263,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         guard let row = statusRow else { return }
         for view in row.arrangedSubviews { view.removeFromSuperview() }
 
-        let button = NSButton(title: "All set, close", target: self, action: #selector(close))
+        let button = NSButton(title: L("All set, close", "Button that closes the welcome window once the speech model is ready"), target: self, action: #selector(close))
         button.bezelStyle = .rounded
         button.controlSize = .large
         // Return closes it, which is what anybody who has been waiting will press.
@@ -272,15 +286,19 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
                                         bottom: Self.inset, right: Self.insetH)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let title = NSTextField(labelWithString: "Welcome to Subtitles")
+        let title = NSTextField(labelWithString: L("Welcome to Subtitles"))
         title.font = .systemFont(ofSize: 17, weight: .semibold)
         stack.addArrangedSubview(title)
 
         // Deliberately short. The demo below says what this is far better than a
         // paragraph would, and the one thing it cannot show — that ⇧ is being
         // held — is one of the lines underneath it.
-        let blurb = NSTextField(labelWithString:
-            "Live captions for whatever your Mac plays, or the microphone for a conversation translated live.")
+        // Wrapping, and centered when it does: a language that says this in
+        // more words than English takes a second line rather than the margins.
+        let blurb = NSTextField(wrappingLabelWithString:
+            L("Live captions for whatever your Mac plays, or the microphone for a conversation translated live."))
+        blurb.alignment = .center
+        blurb.preferredMaxLayoutWidth = Self.width
         blurb.font = .systemFont(ofSize: 11)
         blurb.textColor = .secondaryLabelColor
         stack.addArrangedSubview(blurb)
@@ -292,9 +310,11 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         // Dissolving leads, because it is the one thing here that happens
         // without being asked for: point at the captions and they go. The two
         // keys under it are what to do about that.
-        let dissolve = hintLine("Point at the captions and they dissolve under you.")
+        let dissolve = hintLine(L("Point at the captions and they dissolve under you."))
         stack.addArrangedSubview(dissolve)
-        stack.setCustomSpacing(16, after: demo)
+        // Close under the scene bar, so the lines read as the demo's own
+        // captions rather than as a section after it.
+        stack.setCustomSpacing(6, after: demo)
 
         let hint = buildShiftHint()
         stack.addArrangedSubview(hint)
@@ -331,7 +351,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
             contentRect: NSRect(x: 0, y: 0, width: Self.width + Self.insetH * 2, height: 200),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false)
-        window.title = "Welcome to Subtitles"
+        window.title = L("Welcome to Subtitles")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
@@ -403,8 +423,8 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// native window never quite matches the labels around it, and this way the
     /// key can light up when the key is actually held.
     private func buildShiftHint() -> NSView {
-        hintRow([hintLabel("Hold"), KeycapView(key: "⇧", modifier: .shift),
-                 hintLabel("and drag the captions to move them.")])
+        keyHint(L("Hold %@ and drag the captions to move them.", "Welcome window; %@ is a drawn ⇧ key"),
+                KeycapView(key: "⇧", modifier: .shift))
     }
 
     /// "Hold ⌥ to stack the last few back up."
@@ -413,8 +433,22 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// something on screen rather than a promise about the app — which is what
     /// earns it a line of its own.
     private func buildOptionHint() -> NSView {
-        hintRow([hintLabel("Hold"), KeycapView(key: "⌥", modifier: .option),
-                 hintLabel("to stack the last few back up.")])
+        keyHint(L("Hold %@ to stack the last few back up.", "Welcome window; %@ is a drawn ⌥ key. The last few caption boxes come back, stacked"),
+                KeycapView(key: "⌥", modifier: .option))
+    }
+
+    /// A sentence with a key drawn in it where its %@ is, so each language
+    /// puts the key where its own word order wants it.
+    private func keyHint(_ sentence: String, _ key: KeycapView) -> NSView {
+        let parts = sentence.components(separatedBy: "%@")
+        var views: [NSView] = []
+        if let before = parts.first?.trimmingCharacters(in: .whitespaces), !before.isEmpty {
+            views.append(hintLabel(before))
+        }
+        views.append(key)
+        let after = parts.dropFirst().joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        if !after.isEmpty { views.append(hintLabel(after)) }
+        return hintRow(views)
     }
 
     /// A line of help text with nothing but words in it.
@@ -444,7 +478,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     }
 
     private func buildProgress(into row: NSStackView) {
-        let label = NSTextField(labelWithString: "Preparing…")
+        let label = NSTextField(labelWithString: L("Preparing…"))
         label.font = .systemFont(ofSize: 11)
         label.textColor = .secondaryLabelColor
         label.alignment = .center
@@ -661,8 +695,11 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
 
     /// nil for a binary run straight from `.build`, which has no bundle to read
     /// the demo out of. The window then simply has no demo in it.
+    /// The demo in the app's language, as the site has it in that language,
+    /// and the English one for a language it has no page for.
     private static var demoURL: URL? {
-        Bundle.main.url(forResource: "demo", withExtension: "html", subdirectory: "Demo")
+        Bundle.main.url(forResource: "demo." + AppLanguage.current, withExtension: "html", subdirectory: "Demo")
+            ?? Bundle.main.url(forResource: "demo", withExtension: "html", subdirectory: "Demo")
     }
 }
 

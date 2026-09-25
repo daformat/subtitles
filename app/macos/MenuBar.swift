@@ -453,7 +453,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         let toggle = NSMenuItem(
-            title: isPaused() ? "Resume Subtitles" : "Pause Subtitles",
+            title: isPaused() ? L("Resume Subtitles") : L("Pause Subtitles"),
             action: #selector(togglePause), keyEquivalent: "s")
         toggle.keyEquivalentModifierMask = [.command, .option]
         toggle.target = self
@@ -480,24 +480,24 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(textSizeMenuItem())
         menu.addItem(iconStyleMenuItem())
 
-        let share = NSMenuItem(title: "Show Overlay In Screen Share / Capture",
+        let share = NSMenuItem(title: L("Show Overlay In Screen Share / Capture", "Menu switch: whether the captions appear when the screen is shared or recorded"),
                                action: #selector(toggleScreenShare), keyEquivalent: "")
         share.target = self
         share.state = screenShareEnabled() ? .on : .off
         menu.addItem(share)
 
-        let reveal = NSMenuItem(title: "Fade Away Under Pointer",
+        let reveal = NSMenuItem(title: L("Fade Away Under Pointer", "Menu switch: the caption box turns see-through where the mouse pointer is over it"),
                                 action: #selector(toggleReveal), keyEquivalent: "")
         reveal.target = self
         reveal.state = revealEnabled() ? .on : .off
-        reveal.toolTip = "Point at the box to see through it; hold ⇧ to keep it solid"
+        reveal.toolTip = L("Point at the box to see through it; hold ⇧ to keep it solid")
         menu.addItem(reveal)
 
-        let history = NSMenuItem(title: "Recent Boxes On ⌥",
+        let history = NSMenuItem(title: L("Recent Boxes On ⌥", "Menu switch: holding the ⌥ key brings back the last few caption boxes"),
                                  action: #selector(toggleHistory), keyEquivalent: "")
         history.target = self
         history.state = historyEnabled() ? .on : .off
-        history.toolTip = "Hold ⌥ to stack the last few boxes back up; scroll for older"
+        history.toolTip = L("Hold ⌥ to stack the last few boxes back up; scroll for older")
         menu.addItem(history)
 
         // The box's colors and the glow, a group of their own under the
@@ -508,7 +508,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         // An action among checkmarks, set apart from them.
         menu.addItem(.separator())
-        let reset = NSMenuItem(title: "Reset Overlay Position",
+        let reset = NSMenuItem(title: L("Reset Overlay Position", "Menu action: puts the caption box back where it started on screen"),
                                action: #selector(resetPosition), keyEquivalent: "")
         reset.target = self
         menu.addItem(reset)
@@ -522,7 +522,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(aboutMenuItem())
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Subtitles", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: L("Quit Subtitles"), action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }
@@ -530,11 +530,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: source
 
     private func sourceMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Listen To", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Listen To", "Menu: which sound to caption (all of the Mac, one app, or the microphone)"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentSource()
 
-        let all = NSMenuItem(title: "All system audio",
+        let all = NSMenuItem(title: L("All system audio", "Listen To choice: everything the Mac plays"),
                              action: #selector(selectAllAudio), keyEquivalent: "")
         all.target = self
         all.state = current == .allSystemAudio ? .on : .off
@@ -547,14 +547,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         if !playing.isEmpty {
             sub.addItem(.separator())
-            let header = NSMenuItem(title: "Playing now", action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: L("Playing now", "Listen To group header: apps playing sound at this moment"), action: nil, keyEquivalent: "")
             header.isEnabled = false
             sub.addItem(header)
             for p in playing { sub.addItem(processItem(p, current: current, marker: " ●")) }
         }
         if !idle.isEmpty {
             sub.addItem(.separator())
-            let header = NSMenuItem(title: "Other audio apps", action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: L("Other audio apps", "Listen To group header: apps that can play sound but are silent right now"), action: nil, keyEquivalent: "")
             header.isEnabled = false
             sub.addItem(header)
             // Long tail of helpers and daemons; showing all of them is noise.
@@ -587,12 +587,16 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// when the row is chosen, not when the menu opens.
     private func microphoneItem(current: AudioSource) -> NSMenuItem {
         guard let device = SystemAudioTap.defaultInputName() else {
-            let none = NSMenuItem(title: "Microphone (none connected)", action: nil, keyEquivalent: "")
+            let none = NSMenuItem(title: L("Microphone (none connected)"), action: nil, keyEquivalent: "")
             none.isEnabled = false
             return none
         }
+        // The device's own name when it already says microphone, in English
+        // or in the app's language: "MacBook Pro Microphone", "Micro MacBook Pro".
+        let word = L("Microphone")
         let title = device.localizedCaseInsensitiveContains("microphone")
-            ? device : "Microphone (\(device))"
+            || device.localizedCaseInsensitiveContains(word)
+            ? device : LF("Microphone (%@)", device)
         let item = NSMenuItem(title: title, action: #selector(selectMicrophone), keyEquivalent: "")
         item.target = self
         item.state = current == .microphone ? .on : .off
@@ -620,7 +624,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // already ignores a switch while one is in flight, and the progress bar
         // above says why — so neither replacing the submenu nor greying it out
         // buys anything the user cannot already see.
-        let item = NSMenuItem(title: "Language / Models", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Language / Models", "Menu: the spoken language and the speech model that transcribes it"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentVariantID()
         let onMultilingual = current == FluidVariant.multilingual.rawValue
@@ -642,12 +646,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // within a group is instant; crossing between them is another ~600 MB, and
         // that is worth knowing before clicking rather than after.
         sub.addItem(.separator())
-        sub.addItem(groupHeader("Latin-script pack · 583 MB"))
+        sub.addItem(groupHeader(L("Latin-script pack · 583 MB", "Group header: languages written in the Latin alphabet share one 583 MB download")))
         for entry in [FluidLanguage.es, .fr, .it, .pt, .de] {
             sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
         }
         sub.addItem(.separator())
-        sub.addItem(groupHeader("Full vocabulary · 633 MB"))
+        sub.addItem(groupHeader(L("Full vocabulary · 633 MB", "Group header: the other languages share the larger 633 MB download")))
         // The order the model card lists its transcription-ready tier in, with
         // Mandarin last because it sits a tier below the rest. Not alphabetical:
         // these are endonyms, so sorting 中文, 日本語 and Русский orders them by
@@ -661,13 +665,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func autoDetectItem(checked: Bool) -> NSMenuItem {
-        let item = NSMenuItem(title: "Multilingual",
+        let item = NSMenuItem(title: L("Multilingual", "Language / Models choice: one model for all sixteen languages, which detects the language itself"),
                               action: #selector(selectLanguage(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = FluidLanguage.auto.rawValue
         item.state = checked ? .on : .off
         item.attributedTitle = NSAttributedString(
-            string: "Multilingual\n633 MB · default · detects the language itself",
+            string: L("Multilingual") + "\n"
+                + L("633 MB · default · detects the language itself", "Second line under Multilingual"),
             attributes: [.font: NSFont.menuFont(ofSize: 0)])
         return item
     }
@@ -708,6 +713,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         ]
         let selected = variants.first { $0.rawValue == current }
         let item = NSMenuItem(
+            // "English" in English in every language, as each language in
+            // these menus is named in itself.
             title: selected.map { "English · \($0.displayName)" } ?? "English",
             action: nil, keyEquivalent: "")
         item.state = selected == nil ? .off : .on
@@ -753,11 +760,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// targets nothing can be transcribed into.
     @available(macOS 15, *)
     private func translateMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Translate To", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Translate To", "Menu: the language the captions are translated into"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentTranslationID()
 
-        let off = NSMenuItem(title: "Off", action: #selector(selectTranslation(_:)),
+        let off = NSMenuItem(title: L("translation|Off", "Translate To choice: no translation"), action: #selector(selectTranslation(_:)),
                              keyEquivalent: "")
         off.target = self
         off.representedObject = ""            // empty stands for off
@@ -772,7 +779,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // Timing, since it does nothing on its own — and without an action
         // then, which is what a menu that enables its own items goes by.
         let on = current != nil
-        let both = NSMenuItem(title: "Show Both Languages",
+        let both = NSMenuItem(title: L("Show Both Languages", "Translate To switch: the original stays under the translation"),
                               action: on ? #selector(toggleBothLanguages) : nil,
                               keyEquivalent: "")
         both.target = on ? self : nil
@@ -806,7 +813,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// effect.
     @available(macOS 15, *)
     private func translationModeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Translation Timing", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Translation Timing", "Menu: how soon the translation appears, against how often it changes"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentTranslationMode()
         let on = currentTranslationID() != nil
@@ -838,7 +845,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func textSizeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Text Size and Alignment", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Text Size and Alignment"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentFontSize()
         for (label, size) in SubtitleView.textSizes {
@@ -890,7 +897,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// A permanent entry claims nothing and is there whenever it is wanted, which
     /// is the honest shape for a question the app cannot answer.
     private func permissionMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Check Audio Permission…",
+        let item = NSMenuItem(title: L("Check Audio Permission…", "Menu action: opens Privacy & Security in System Settings"),
                               action: #selector(openPrivacySettings), keyEquivalent: "")
         item.target = self
         return item
@@ -900,7 +907,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// is open — an agent app has no main menu for AppKit to route a global key
     /// equivalent through — but it is the right thing to print next to the item.
     private func settingsMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Settings…", action: #selector(showSettings),
+        let item = NSMenuItem(title: L("Settings…"), action: #selector(showSettings),
                               keyEquivalent: ",")
         item.target = self
         return item
@@ -909,7 +916,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func showSettings() { SettingsWindow.shared.show() }
 
     private func welcomeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Show Welcome Screen Again",
+        let item = NSMenuItem(title: L("Show Welcome Screen Again"),
                               action: #selector(showWelcome), keyEquivalent: "")
         item.target = self
         return item
@@ -918,7 +925,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func showWelcome() { WelcomeWindow.shared.show() }
 
     private func aboutMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "About Subtitles",
+        let item = NSMenuItem(title: L("About Subtitles"),
                               action: #selector(showAbout), keyEquivalent: "")
         item.target = self
         return item
@@ -944,7 +951,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     /// Auto, light and dark — see `Pill.Theme`.
     private func themeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Color Theme", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Color Theme", "Menu: light or dark caption boxes"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentTheme()
         for choice in Pill.Theme.allCases {
@@ -953,7 +960,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             entry.target = self
             entry.representedObject = choice.rawValue
             entry.state = choice == current ? .on : .off
-            if choice == .auto { entry.toolTip = "Follows the system's appearance" }
+            if choice == .auto { entry.toolTip = L("Follows the system's appearance") }
             sub.addItem(entry)
         }
         item.submenu = sub
@@ -968,10 +975,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     /// Off and the looks, then the strengths in a group of their own.
     private func borealisMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Audio Borealis", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Audio Borealis", "Menu: a colored glow along the caption box that moves with the sound. A playful name after the aurora borealis; keep it playful"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let look = borealisLook()
-        let off = NSMenuItem(title: "Off", action: #selector(selectBorealisLook(_:)), keyEquivalent: "")
+        let off = NSMenuItem(title: L("glow|Off", "Audio Borealis choice: no glow"), action: #selector(selectBorealisLook(_:)), keyEquivalent: "")
         off.target = self
         off.representedObject = ""            // empty stands for off
         off.state = look == nil ? .on : .off
@@ -1012,7 +1019,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: icon style
 
     private func iconStyleMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Show Source App Name", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("Show Source App Name", "Menu: whether and how each caption box shows the name of the app it came from"), action: nil, keyEquivalent: "")
         let sub = NSMenu()
         let current = currentIconStyle()
         for style in Pill.IconStyle.allCases {

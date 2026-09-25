@@ -191,15 +191,15 @@ public enum TranslationMode: String, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .hybrid: return "Live, Then Settle"
-        case .speculative: return "Always Live"
+        case .hybrid: return L("Live, Then Settle", "Translation Timing choice: the translation shows at once, and its last words are redone once the sentence is finished")
+        case .speculative: return L("Always Live", "Translation Timing choice: the whole translation is redone on every new word")
         }
     }
 
     public var note: String {
         switch self {
-        case .hybrid: return "tail is dimmed until it settles · recommended"
-        case .speculative: return "no lag · anything on screen may change"
+        case .hybrid: return L("tail is dimmed until it settles · recommended", "Second line under Live, Then Settle in the menu")
+        case .speculative: return L("no lag · anything on screen may change", "Second line under Always Live in the menu")
         }
     }
 }

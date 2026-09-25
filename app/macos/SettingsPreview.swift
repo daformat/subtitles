@@ -28,6 +28,7 @@
 // itself, which works here as well as over the overlay.
 
 import AppKit
+import CaptionCore
 
 /// Everything the preview needs to draw a frame, gathered from the same getters
 /// the rows read. Passed whole on every edit rather than set piecemeal: the
@@ -402,17 +403,17 @@ private final class PreviewStage: NSView {
             drawGlyph(apple, height: 1.6 * u, center: NSPoint(x: x + w / 2, y: bar.midY))
             x += w + 0.2 * u + 1.55 * u
         }
-        x += text("Meetings", at: NSPoint(x: x, y: bar.midY),
+        x += text(L("Meetings", "Settings preview: the name of a made-up video call app in a drawn menu bar"), at: NSPoint(x: x, y: bar.midY),
                   font: .systemFont(ofSize: size, weight: .bold),
                   color: ink.withAlphaComponent(0.82)) + 1.55 * u
-        for menu in ["File", "Edit", "View"] {
+        for menu in [L("File", "Drawn menu bar menu"), L("Edit", "Drawn menu bar menu"), L("View", "Drawn menu bar menu")] {
             x += text(menu, at: NSPoint(x: x, y: bar.midY), font: .systemFont(ofSize: size),
                       color: ink.withAlphaComponent(0.72)) + 1.55 * u
         }
 
         // The right half, laid out from the edge inwards.
         let clock = Date().formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-            .hour().minute())
+            .hour().minute().locale(AppLanguage.locale))
         let clockFont = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
         let clockWidth = width(of: clock, font: clockFont)
         var right = bar.maxX - 1.36 * u - clockWidth
@@ -477,7 +478,7 @@ private final class PreviewStage: NSView {
                                         y: titleBar.midY - light / 2, width: light, height: light)).fill()
         }
         let titleFont = NSFont.systemFont(ofSize: 1.36 * u, weight: .medium)
-        let title = "Weekly sync · 4 people"
+        let title = L("Weekly sync · 4 people", "Settings preview: title of a drawn video call window. A weekly team meeting, not data syncing")
         text(title, at: NSPoint(x: frame.midX - width(of: title, font: titleFont) / 2, y: titleBar.midY),
              font: titleFont, color: ink.withAlphaComponent(0.55))
 
@@ -832,13 +833,13 @@ final class SettingsPreview: NSView {
     /// reading once: each says something true about the thing above it, and
     /// they are of deliberately different lengths so the line limit has
     /// something to page.
-    private static let script = [
-        "Play something and these become the real captions, live.",
-        "A box fills to the line limit, then clears and starts the next one. It never scrolls.",
-        "Point anywhere in here and the box dissolves under the pointer, so you can read through it.",
-        "Finished boxes are kept. Hold ⌥ here, or over the overlay, and they stack back up.",
-        "All of it runs on this Mac. Nothing is recorded and nothing is sent anywhere.",
-    ]
+    private static var script: [String] { [
+        L("Play something and these become the real captions, live."),
+        L("A box fills to the line limit, then clears and starts the next one. It never scrolls."),
+        L("Point anywhere in here and the box dissolves under the pointer, so you can read through it."),
+        L("Finished boxes are kept. Hold ⌥ here, or over the overlay, and they stack back up."),
+        L("All of it runs on this Mac. Nothing is recorded and nothing is sent anywhere."),
+    ] }
 
     override var isFlipped: Bool { false }
 
@@ -1004,50 +1005,55 @@ final class SettingsPreview: NSView {
     }
 
     private func sentence(for topic: PreviewTopic) -> String {
-        func pct(_ v: CGFloat) -> String { "\(Int((v * 100).rounded()))%" }
+        func pct(_ v: CGFloat) -> Int { Int((v * 100).rounded()) }
 
         switch topic {
         case .lines:
             return style.maxLines == 1
-                ? "One line to a box. It clears and starts again on the next word that will not fit."
-                : "\(style.maxLines) lines to a box, then it clears and the next one starts."
+                ? L("One line to a box. It clears and starts again on the next word that will not fit.")
+                : LP("%lld lines to a box, then it clears and the next one starts.",
+                     one: "%lld line to a box, then it clears and the next one starts.", style.maxLines)
         case .background:
             return style.boxOpacity < 0.02
-                ? "No pill at all. Bare text over the picture, the way some players draw subtitles."
-                : "The pill behind the text is \(pct(style.boxOpacity)) solid."
+                ? L("No pill at all. Bare text over the picture, the way some players draw subtitles.",
+                    "The pill is the rounded box drawn behind the caption text")
+                : LF("The pill behind the text is %lld%% solid.", pct(style.boxOpacity))
         case .blur:
             let points = Int(style.blur.rounded())
             return points == 0
-                ? "No blur. The picture shows through the pill exactly as it is."
-                : "The picture behind the pill is softened by \(points) point\(points == 1 ? "" : "s")."
+                ? L("No blur. The picture shows through the pill exactly as it is.")
+                : LP("The picture behind the pill is softened by %lld points.",
+                     one: "The picture behind the pill is softened by %lld point.", points)
         case .reveal:
             guard style.revealEnabled else {
-                return "The box stays solid under the pointer. Move it instead: hold ⇧ and drag."
+                return L("The box stays solid under the pointer. Move it instead: hold ⇧ and drag.")
             }
-            return "Point at the box and this much of it dissolves, this far around the pointer."
+            return L("Point at the box and this much of it dissolves, this far around the pointer.")
         case .keep:
             guard style.historyEnabled, style.historyDepth > 0 else {
-                return "⌥ brings nothing back. Finished boxes are gone once they clear."
+                return L("⌥ brings nothing back. Finished boxes are gone once they clear.")
             }
             switch style.historyDepth {
             case 1:
-                return "⌥ brings back the last box."
+                return L("⌥ brings back the last box.")
             case OverlayController.unlimitedHistoryDepth:
-                return "⌥ brings back every box, newest first, and scrolls through them."
+                return L("⌥ brings back every box, newest first, and scrolls through them.")
             case let n:
-                return "⌥ brings back the last \(n) boxes, newest first, and scrolls through them."
+                return LP("⌥ brings back the last %lld boxes, newest first, and scrolls through them.",
+                          one: "⌥ brings back the last %lld box, newest first, and scrolls through them.", n)
             }
         case .dimness:
-            return "The stack's text sits at \(pct(style.historyTextOpacity)) against the live box's white."
+            return LF("The stack's text is %lld%% as strong as the live box's.", pct(style.historyTextOpacity))
         case .expiry:
             guard style.historyExpires else {
-                return "The stack is kept until you pause or quit."
+                return L("The stack is kept until you pause or quit.")
             }
             let s = Int(style.historyExpiry.rounded())
-            let quiet = s % 60 == 0 && s >= 60
-                ? "\(s / 60) minute\(s == 60 ? "" : "s")"
-                : "\(s) second\(s == 1 ? "" : "s")"
-            return "After \(quiet) with nothing said, the stack is forgotten."
+            return s % 60 == 0 && s >= 60
+                ? LP("After %lld minutes with nothing said, the stack is forgotten.",
+                     one: "After %lld minute with nothing said, the stack is forgotten.", s / 60)
+                : LP("After %lld seconds with nothing said, the stack is forgotten.",
+                     one: "After %lld second with nothing said, the stack is forgotten.", s)
         }
     }
 
@@ -1075,7 +1081,7 @@ final class SettingsPreview: NSView {
             return
         }
 
-        let words = Self.script[scriptIndex].split(separator: " ").map(String.init)
+        let words = Self.words(Self.script[scriptIndex])
         guard wordIndex < words.count else {
             // Read it before it goes.
             holdTicks = 16
@@ -1088,15 +1094,35 @@ final class SettingsPreview: NSView {
         // The same rule the overlay pages by, measured by the same code: if the
         // next word would push past the line limit, the box closes and the new
         // one starts from that word.
-        let grown = page.isEmpty ? word : page + " " + word
+        let bare = word.trimmingCharacters(in: .whitespaces)
+        let grown = page.isEmpty ? bare : page + word
         if !page.isEmpty,
            box.lineCount(committed: grown, tentative: "", width: ceiling) > style.maxLines {
             close(page)
-            page = word
+            page = bare
         } else {
             page = grown
         }
         relayout()
+    }
+
+    /// A line cut into the words it is typed out by, each carrying whatever
+    /// came before it (a space, an opening mark) and the last one whatever
+    /// ends the line, so the words joined back together are the line. By the
+    /// system's word breaks rather than at spaces: Japanese and Chinese write
+    /// none, and a line cut at spaces would arrive all at once.
+    private static func words(_ line: String) -> [String] {
+        var out: [String] = []
+        var from = line.startIndex
+        line.enumerateSubstrings(in: line.startIndex..<line.endIndex, options: .byWords) { _, range, _, _ in
+            out.append(String(line[from..<range.upperBound]))
+            from = range.upperBound
+        }
+        if from < line.endIndex {
+            if out.isEmpty { out.append("") }
+            out[out.count - 1] += line[from...]
+        }
+        return out
     }
 
     private func beginLine() {

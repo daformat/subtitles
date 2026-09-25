@@ -131,43 +131,43 @@ expect "the page's base" "$CSS_BASE" '^/\* .* base '
 expect "the border-box reset" "$CSS_BASE" 'box-sizing: border-box'
 expect "the plain keycap" "$CSS_BASE" '^kbd {'
 expect "the end of the page's base" "$(extract styles.css 180 181)" '^\.wrap {'
-CSS_DEMO=$(slice styles.css 773 3118)
+CSS_DEMO=$(slice styles.css 773 3199)
 expect "the demo styles" "$CSS_DEMO" '^\.demo {'
 expect "the scene buttons' styles" "$CSS_DEMO" '^\.demo-scenes {'
-expect "the end of the demo styles" "$(extract styles.css 3119 3123)" 'sections'
+expect "the end of the demo styles" "$(extract styles.css 3200 3204)" 'sections'
 # The app's menu, dropped from the status item in the demo's first scene, is
 # styled with the landing pages' windows rather than in the demo section,
 # because those pages drop the same menu. Vendored without it the menu is a
 # bare list of ticks and words.
-CSS_MENU=$(slice styles.css 4544 4706)
+CSS_MENU=$(slice styles.css 4641 4803)
 expect "the menu's styles" "$CSS_MENU" '^\.mn-root {'
-expect "the end of the menu's styles" "$(extract styles.css 4707 4707)" 'landing pages'
+expect "the end of the menu's styles" "$(extract styles.css 4804 4804)" 'landing pages'
 # The frame is the redesign's box around the screen and lives with the hero's
 # styles, a long way past the demo section. It changes nothing at this window's
 # width, but it is the demo's own rule and belongs with the rest.
-CSS_FRAME=$(slice styles.css 3966 4013)
+CSS_FRAME=$(slice styles.css 4047 4110)
 expect "the demo frame" "$CSS_FRAME" '^\.demo-frame {'
-expect "the end of the demo frame" "$(extract styles.css 4014 4016)" 'works with'
+expect "the end of the demo frame" "$(extract styles.css 4111 4113)" 'works with'
 # The Notes window is drawn as Notes: the toolbar in its title bar, the three
 # columns under it. Those styles sit with the landing pages' windows, further
 # past the demo section again, because the landing demos draw the same window.
-CSS_NOTES=$(slice styles.css 5038 5159)
+CSS_NOTES=$(slice styles.css 5135 5256)
 expect "the Notes window's styles" "$CSS_NOTES" '^/\* ── Notes'
 expect "the Notes window's columns" "$CSS_NOTES" '^\.nt-side {'
-expect "the end of the Notes window's styles" "$(extract styles.css 5160 5162)" 'Visual Studio Code'
+expect "the end of the Notes window's styles" "$(extract styles.css 5257 5259)" 'Visual Studio Code'
 # The Tahoe pass: the windows drawn the way macOS 26 draws them — rounder
 # frames with a rim, sidebars as glass panes with the traffic lights in them,
 # the call's controls as a capsule over the tiles, the menu on the same glass.
 # It restyles the demo's windows from the end of the stylesheet, after every
 # page's own rules, and without it the windows are the old squarer ones under
 # the new markup.
-CSS_TAHOE=$(slice styles.css 5511 5762)
+CSS_TAHOE=$(slice styles.css 5608 5859)
 expect "the Tahoe styles" "$CSS_TAHOE" '^/\* .* Tahoe '
 expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
 # It is the last thing in the file, so what says it still ends where it did is
 # that nothing follows it: a section added after it would move the end, and
 # so would rules added to it.
-[ -z "$(extract styles.css 5763 100658)" ] || {
+[ -z "$(extract styles.css 5860 100755)" ] || {
   echo "!! styles.css no longer ends with the Tahoe styles — the site's line numbers have moved." >&2
   echo "   Re-check the ranges in $0 against $SITE." >&2
   exit 1
@@ -214,10 +214,10 @@ JS_I18N=$(slice script.js 18 30)
 # and without it that line threw after its last word and left the box up for
 # good.
 JS_CAPTURE=$(slice script.js 58 147)
-JS_WAVE=$(slice script.js 328 352)
-JS_SEARCH=$(slice script.js 359 3026)
-JS_WRITE=$(slice script.js 4233 4376)
-JS=$(slice script.js 4687 6443)
+JS_WAVE=$(slice script.js 339 363)
+JS_SEARCH=$(slice script.js 370 3181)
+JS_WRITE=$(slice script.js 4409 4552)
+JS=$(slice script.js 4921 6709)
 expect "the i18n helper" "$JS_I18N" 'const I18N = '
 expect "the recording flag" "$JS_CAPTURE" '^const CAPTURE = '
 expect "the settings seed" "$JS_CAPTURE" '^const SETTINGS = '
@@ -226,7 +226,7 @@ expect "the end of the settings seed" "$(extract script.js 148 149)" 'function t
 # window's waveform to whole device pixels, and the stylesheet's layout of the
 # bars is only what stands in until it runs.
 expect "the waveform fitter" "$JS_WAVE" 'function waveFit'
-expect "the end of the waveform fitter" "$(extract script.js 352 352)" '^})();$'
+expect "the end of the waveform fitter" "$(extract script.js 363 363)" '^})();$'
 # Everything the caption demo shares with the landing pages' demos, from the
 # stack's helpers to the window resizing: the boxes' icon rows, the keycaps,
 # the ⇧ ring, the name tab, the settings seed's defaults and what dresses a
@@ -237,22 +237,24 @@ expect "the stack search" "$JS_SEARCH" '^const stackSearch = '
 expect "the settings seed's defaults" "$JS_SEARCH" '^const DEMO_DEFAULTS = '
 expect "the app's menu" "$JS_SEARCH" '^const statusMenu = '
 expect "the window resizing" "$JS_SEARCH" '^const windowResize = '
+# The demos' play, pause and restart (demoControls, and pausable, which the
+# caption demo's waits go through) follow it, the last of what the demos share.
 # It runs on through the demos' voice, which sits between it and the landing
 # pages' demo and is the site's alone: the markers cut it to one line.
 expect "the demos' voice, cut" "$JS_SEARCH" 'vendor:skipped audio'
-expect "the end of the stack search" "$(extract script.js 3027 3042)" 'function liteDemo'
+expect "the end of the stack search" "$(extract script.js 3182 3197)" 'function liteDemo'
 # liveWriting moves the caret in every window that is a document, the demo's
 # notes window among them. It lives with the landing pages' scripts because
 # theirs have documents too, but the home demo's notes are what it was drawn for.
 expect "the writing animation" "$JS_WRITE" 'function liveWriting'
-expect "the end of the writing animation" "$(extract script.js 4377 4379)" 'function navFit'
+expect "the end of the writing animation" "$(extract script.js 4553 4555)" 'function navFit'
 expect "the menu bar clock" "$JS" 'function menuBarClock'
 expect "the caption demo" "$JS" 'function captionDemo'
 # The demo used to be the last thing in the site's script, and its range ended
 # at the end of the file. The changelog page's release filter follows it now,
 # and that is the page's, not the demo's: the lines just past the range say
 # whether the demo still ends where it did.
-expect "the end of the caption demo" "$(extract script.js 6444 6447)" 'changelog'
+expect "the end of the caption demo" "$(extract script.js 6710 6713)" 'changelog'
 ALLJS=$(
   echo "// Generated by tools/vendor-demo.sh from the site's script.js. Do not edit."
   echo "$JS_I18N"
@@ -312,6 +314,70 @@ if shell.count(token) != 1:
 (out / "demo.html").write_text(shell.replace(token, part))
 PY
 rm -f "$OUT/demo.html.part"
+
+# ── the demo in the site's other languages ──
+# The welcome window shows the demo in the app's language, and the site has
+# the demo in all of them: each locale's home page carries the same markup in
+# its language, with the copy the script writes in a <template id="i18n-js">
+# that the script's I18N reads. Cut by anchors rather than line ranges, since
+# a translated page's lines wrap where its sentences do: from the demo's own
+# div to the end of the scene buttons, the line before the captions under the
+# demo, as the English slice runs. Written as demo.<lproj>.html, named as the
+# app's .lproj folders are, beside the English demo.html and sharing its
+# stylesheet, script and icons.
+rm -f "$OUT"/demo.*.html.tmp
+python3 - "$SITE" "$OUT" "$(dirname "$0")/vendor_markers.py" <<'PY'
+import pathlib, re, subprocess, sys
+site, out, markers = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+LPROJ = {"pt": "pt-BR", "zh": "zh-Hans"}
+shell = (out / "demo.shell.html").read_text()
+token = "<!--" + "DEMO" + "-->"
+english = (out / "demo.html").read_text()
+
+def cut(text):
+    return subprocess.run([sys.executable, markers], input=text, capture_output=True,
+                          text=True, check=True).stdout
+
+def tags(html):
+    return re.findall(r"<(/?[a-z][a-z0-9-]*)", html)
+
+written = []
+for page in sorted(site.glob("*/index.html")):
+    locale = page.parent.name
+    if not re.fullmatch(r"[a-z]{2}", locale):
+        continue
+    lines = page.read_text().split("\n")
+    start = next(i for i, l in enumerate(lines) if 'id="demo"' in l)
+    caption = next(i for i in range(start, len(lines)) if "demo-caption" in lines[i])
+    end = caption
+    while not lines[end - 1].strip():
+        end -= 1
+    markup = cut("\n".join(lines[start:end]) + "\n")
+    markup = markup.replace('src="/assets/', 'src="assets/')
+    if re.search(r'(src|href)="/', markup):
+        raise SystemExit(f"!! {locale}: the demo names a file by absolute path")
+    if "demo-hint" in markup:
+        raise SystemExit(f"!! {locale}: the demo markup still has the hints in it")
+    text = page.read_text()
+    m = re.search(r'<template id="i18n-js">.*?</template>', text, re.S)
+    if not m:
+        raise SystemExit(f"!! {locale}: no i18n-js template")
+    template = cut(m.group(0) + "\n")
+    html = re.search(r"<html[^>]*>", text).group(0)
+    part = ("<!-- Generated by tools/vendor-demo.sh from the site's " + locale
+            + "/index.html. Do not edit. -->\n" + markup + "      </div>\n" + template)
+    # The same markup as the English, element for element, or the page is a
+    # stale build of an older demo and the script will not find its parts.
+    en_markup = english[english.index('id="demo"'):english.index("</div>", english.rindex("scene-button"))]
+    loc_markup = markup[markup.index('id="demo"'):markup.index("</div>", markup.rindex("scene-button"))]
+    if tags(en_markup) != tags(loc_markup):
+        raise SystemExit(f"!! {locale}: its demo markup is not the English one's; rebuild the site (build.py) first")
+    page_out = shell.replace(token, part).replace('<html lang="en">', html, 1)
+    name = f"demo.{LPROJ.get(locale, locale)}.html"
+    (out / name).write_text(page_out)
+    written.append(name)
+print("    " + " ".join(written))
+PY
 
 echo "vendored into $OUT:"
 for f in demo.html demo.css demo.js; do

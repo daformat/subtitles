@@ -33,6 +33,66 @@ public enum Revocation: String, Codable, Equatable, CaseIterable {
         case .disabled: return "disabled"
         }
     }
+
+    // The phrase above is English for the log. What a person reads is a whole
+    // sentence per reason, since no other language can drop a word into the
+    // same slot and agree with it.
+
+    /// Under the version in About.
+    public var aboutLine: String {
+        switch self {
+        case .refunded: return L("License refunded")
+        case .chargebacked: return L("License charged back", "The buyer's bank reversed the payment")
+        case .disputed: return L("License disputed", "The buyer disputed the payment with their bank")
+        case .disabled: return L("License disabled", "The seller turned the key off")
+        }
+    }
+
+    /// The menu's status line while the key's loss has paused captions.
+    public var blockedStatusLine: String {
+        switch self {
+        case .refunded: return L("License refunded. Resume to enter another key")
+        case .chargebacked: return L("License charged back. Resume to enter another key")
+        case .disputed: return L("License disputed. Resume to enter another key")
+        case .disabled: return L("License disabled. Resume to enter another key")
+        }
+    }
+
+    /// The license window's headline.
+    public var headline: String {
+        switch self {
+        case .refunded: return L("This key was refunded")
+        case .chargebacked: return L("This key was charged back")
+        case .disputed: return L("This key was disputed")
+        case .disabled: return L("This key was disabled")
+        }
+    }
+
+    /// What the license window says under that headline, before the line on
+    /// where keys come from.
+    public var explanation: String {
+        switch self {
+        case .refunded:
+            return L("Gumroad reports the purchase as refunded, so the key no longer works here. Enter another to carry on.")
+        case .chargebacked:
+            return L("Gumroad reports the purchase as charged back, so the key no longer works here. Enter another to carry on.")
+        case .disputed:
+            return L("Gumroad reports the purchase as disputed, so the key no longer works here. Enter another to carry on.")
+        case .disabled:
+            return L("Gumroad reports the key as disabled, so it no longer works here. Enter another to carry on.")
+        }
+    }
+
+    /// Said when a key typed in turns out to have been revoked: the key on
+    /// file is untouched.
+    public var refusal: String {
+        switch self {
+        case .refunded: return L("This key was refunded and no longer works. Nothing has changed.")
+        case .chargebacked: return L("This key was charged back and no longer works. Nothing has changed.")
+        case .disputed: return L("This key was disputed and no longer works. Nothing has changed.")
+        case .disabled: return L("This key was disabled and no longer works. Nothing has changed.")
+        }
+    }
 }
 
 public enum VerifyOutcome: Equatable {

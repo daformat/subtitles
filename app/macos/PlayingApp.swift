@@ -61,7 +61,7 @@ final class AppCatalog {
     }
 
     private static func resolveName(_ family: String) -> String {
-        if family == AudioSource.microphoneID { return AudioSource.microphone.label }
+        if family == AudioSource.microphoneID { return AudioSource.microphone.displayName }
         if family.hasPrefix("pid:") {
             guard let pid = pid_t(family.dropFirst(4)) else { return family }
             return NSRunningApplication(processIdentifier: pid)?.localizedName ?? "pid \(pid)"

@@ -16,6 +16,7 @@
 
 import AppKit
 import LicenseCore
+import CaptionCore
 
 final class LicenseController {
     /// Fired on the main thread whenever the entitlement may have changed:
@@ -65,8 +66,8 @@ final class LicenseController {
         guard !record.allowsCaptions(now: now) else { return nil }
         if record.entitlement(now: now) == .expired,
            case .resting(let until) = record.freeMinutes(now: now) {
-            let time = until.formatted(date: .omitted, time: .shortened)
-            return "Trial ended. Captions resume at \(time), or Resume to enter a key"
+            let time = until.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLanguage.locale))
+            return LF("Trial ended. Captions resume at %@, or Resume to enter a key", time)
         }
         return entitlement.blockedStatusLine
     }
@@ -260,6 +261,9 @@ final class LicenseController {
     func recheck(then: @escaping () -> Void) {
         reverifyIfDue(force: true, then: then)
     }
+
+    /// The license window in the language just chosen, if it is up.
+    func relocalize() { window.relocalize() }
 
     // MARK: the menu
 

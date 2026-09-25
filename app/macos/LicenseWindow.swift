@@ -14,6 +14,7 @@
 import AppKit
 #if canImport(LicenseCore)
 import LicenseCore
+import CaptionCore
 #endif
 
 final class LicenseWindow: NSObject, NSWindowDelegate {
@@ -59,12 +60,26 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
 
     func show(_ state: State) {
         self.state = state
-        let window = self.window ?? Dialog.window(title: "Subtitles License", delegate: self)
+        let window = self.window ?? Dialog.window(title: L("Subtitles License", "License window title"), delegate: self)
         self.window = window
         Dialog.place(contentView(for: state), in: window)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         if let field, field.isEnabled { window.makeFirstResponder(field) }
+    }
+
+    /// Redrawn in the language just chosen, if it is up, keeping what was
+    /// typed.
+    func relocalize() {
+        guard let window, window.isVisible, let state else { return }
+        window.title = L("Subtitles License")
+        let typed = typedKey
+        if case .enter(let entitlement, _, let outcome, let activate, let buy, let findKey, let close) = state {
+            show(.enter(entitlement: entitlement, key: typed, outcome: outcome,
+                        activate: activate, buy: buy, findKey: findKey, close: close))
+        } else {
+            show(state)
+        }
     }
 
     func close() {
@@ -120,12 +135,12 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             let row = NSStackView()
             row.orientation = .horizontal
             row.spacing = 8
-            row.addArrangedSubview(Dialog.button("Buy a Key", buy))
-            row.addArrangedSubview(Dialog.button("Where Is My Key?", findKey))
+            row.addArrangedSubview(Dialog.button(L("Buy a Key"), buy))
+            row.addArrangedSubview(Dialog.button(L("Where Is My Key?", "Button: opens the page where a buyer finds the key they bought"), findKey))
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(spacer)
-            let go = Dialog.button("Activate", fire, default: true)
+            let go = Dialog.button(L("Activate", "Button: checks the typed license key and turns it on"), fire, default: true)
             go.isEnabled = outcome != .checking
             row.addArrangedSubview(go)
             row.widthAnchor.constraint(equalToConstant: Dialog.width).isActive = true
@@ -133,8 +148,8 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
             let privacy = Dialog.label(
-                "Activating sends the key to Gumroad once, and checks it again about once a month. "
-                    + "Nothing else ever leaves this Mac.",
+                L("Activating sends the key to Gumroad once, and checks it again about once a month. "
+                    + "Nothing else ever leaves this Mac."),
                 size: 10, colour: .tertiaryLabelColor)
             stack.addArrangedSubview(privacy)
             stack.setCustomSpacing(12, after: row)
@@ -142,10 +157,10 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         case .licensed(let entitlement, let justActivated, let enterAnother, let checkNow, let done):
             let (headline, blurb) = Self.licensedCopy(for: entitlement, justActivated: justActivated)
             Dialog.add(stack, headline: headline, blurb: blurb)
-            var buttons = [Dialog.button(entitlement == .grandfathered ? "Enter a Key" : "Enter a Different Key",
+            var buttons = [Dialog.button(entitlement == .grandfathered ? L("Enter a Key") : L("Enter a Different Key"),
                                          enterAnother)]
-            if let checkNow { buttons.append(Dialog.button("Check Now", checkNow)) }
-            buttons.append(Dialog.button("Done", done, default: true))
+            if let checkNow { buttons.append(Dialog.button(L("Check Now", "Button: asks Gumroad about the key right away"), checkNow)) }
+            buttons.append(Dialog.button(L("Done"), done, default: true))
             Dialog.addButtons(stack, buttons)
         }
         return stack
@@ -153,51 +168,51 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
 
     // MARK: copy
 
-    private static let keys = "Keys are sold on Gumroad, arrive by email, and cover every Mac you use."
+    private static var keys: String { L("Keys are sold on Gumroad, arrive by email, and cover every Mac you use.") }
 
     static func formCopy(for entitlement: Entitlement) -> (String, String) {
         switch entitlement {
         case .trial(let days, true):
-            return ("Enter your license key",
-                    "Your trial has \(days) \(days == 1 ? "day" : "days") left. \(keys)")
+            return (L("Enter your license key"),
+                    LP("Your trial has %lld days left.", one: "Your trial has %lld day left.", days) + " " + keys)
         case .trial(_, false):
-            return ("Enter your license key",
-                    "Your \(LicenseRecord.trialDays)-day trial starts when captions do. \(keys)")
+            return (L("Enter your license key"),
+                    LP("Your %lld-day trial starts when captions do.", one: "Your %lld-day trial starts when captions do.",
+                       LicenseRecord.trialDays) + " " + keys)
         case .expired:
-            return ("Your trial has ended",
-                    "Subtitles keeps running but has stopped transcribing until a key is entered. \(keys)")
+            return (L("Your trial has ended"),
+                    L("Subtitles keeps running but has stopped transcribing until a key is entered.") + " " + keys)
         case .revoked(let why):
-            return ("This key was \(why.phrase)",
-                    "Gumroad reports the purchase as \(why.phrase), so the key no longer works here. "
-                        + "Enter another to carry on. \(keys)")
+            return (why.headline, why.explanation + " " + keys)
         case .licensed, .provisional, .grandfathered:
-            return ("Enter a license key",
-                    "The key on file stays until the new one is confirmed. \(keys)")
+            return (L("Enter a license key"),
+                    L("The key on file stays until the new one is confirmed.") + " " + keys)
         }
     }
 
     static func licensedCopy(for entitlement: Entitlement, justActivated: Bool) -> (String, String) {
         switch entitlement {
         case .licensed(let email):
-            let to = email.map { "Subtitles is licensed to \($0)." } ?? "Subtitles is licensed on this Mac."
+            let to = email.map { LF("Subtitles is licensed to %@.", $0) } ?? L("Subtitles is licensed on this Mac.")
             return justActivated
-                ? ("You're all set", "\(to) Thank you. Captions are back.")
-                : ("Licensed", "\(to) If you ever reinstall, your key is in your Gumroad library and on your receipt.")
+                ? (L("You're all set"), to + " " + L("Thank you. Captions are back."))
+                : (L("Licensed"), to + " " + L("If you ever reinstall, your key is in your Gumroad library and on your receipt."))
         case .provisional(let until):
-            return ("Key accepted, to be confirmed",
-                    "Gumroad could not be reached. Your key works until \(Self.when(until)) "
-                        + "and is checked as soon as you are online; nothing more to do.")
+            return (L("Key accepted, to be confirmed"),
+                    LF("Gumroad could not be reached. Your key works until %@ "
+                        + "and is checked as soon as you are online; nothing more to do.", Self.when(until)))
         case .grandfathered:
-            return ("Licensed",
-                    "This copy is from before there were license keys, and is licensed as it is. "
-                        + "If you ever reinstall, your key is in your Gumroad library.")
+            return (L("Licensed"),
+                    L("This copy is from before there were license keys, and is licensed as it is. "
+                        + "If you ever reinstall, your key is in your Gumroad library."))
         case .trial, .expired, .revoked:
-            return ("Licensed", "")
+            return (L("Licensed"), "")
         }
     }
 
     private static func when(_ date: Date) -> String {
         let f = DateFormatter()
+        f.locale = AppLanguage.locale
         f.dateStyle = .full
         f.timeStyle = .short
         f.doesRelativeDateFormatting = true
@@ -219,17 +234,17 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             spinner.controlSize = .small
             spinner.startAnimation(nil)
             row.addArrangedSubview(spinner)
-            row.addArrangedSubview(Dialog.label("Checking with Gumroad…", size: 11, colour: .secondaryLabelColor))
+            row.addArrangedSubview(Dialog.label(L("Checking with Gumroad…"), size: 11, colour: .secondaryLabelColor))
             return row
         case .notAKey:
-            text = "That doesn't look like a key. Keys are four groups of eight letters and digits, "
-                + "like 4B1C2D3E-5F607182-93A4B5C6-D7E8F9A0."
+            text = L("That doesn't look like a key. Keys are four groups of eight letters and digits, "
+                + "like 4B1C2D3E-5F607182-93A4B5C6-D7E8F9A0.")
         case .invalid:
-            text = "Gumroad doesn't know this key. Check it against your receipt, or your Gumroad library."
+            text = L("Gumroad doesn't know this key. Check it against your receipt, or your Gumroad library.")
         case .revoked(let why):
-            text = "This key was \(why.phrase) and no longer works. Nothing has changed."
+            text = why.refusal
         case .unreachable(let message):
-            text = "Couldn't reach Gumroad: \(message) Your current key stays; try again when you are online."
+            text = LF("Couldn't reach Gumroad: %@ Your current key stays; try again when you are online.", message)
             colour = .secondaryLabelColor
         }
         return Dialog.label(text, size: 11, colour: colour)
