@@ -4,6 +4,32 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.13.0 · 2026-09-26
+
+- **Hear the translation.** A new Speak Translation menu reads the
+  translation aloud as each sentence settles, in the best voice installed
+  for its language. It is on whenever VoiceOver is, and can be set to
+  Always or Off. Nothing is skipped and nothing is sped up: when the voice
+  falls behind, it catches up in the pauses. ⌥⌘. stops it, or reads the
+  last line again.
+- **The original steps back.** While the translation is read, the original
+  drops to a quarter of its volume and comes back after. Lower the Original
+  While Speaking, in the same menu, turns this off.
+- **Made for VoiceOver.** VoiceOver reads the caption box and presses its
+  button. The offer to save the transcript and the trial's last line are
+  spoken as they appear, and stay up for 30 seconds instead of 10.
+  VoiceOver's own speech is never captioned, translated or turned down.
+- **Talk over the translation.** With the microphone and the Mac's
+  speakers, the translation waits for a pause before it speaks, and anyone
+  who talks while it reads is still captioned: the echo cancellation macOS
+  uses for calls takes the voice out of what the microphone hears. With
+  headphones on, it reads straight away.
+- **The offer to save the transcript comes after a minute or more of speech,**
+  without a countdown in its text, and Escape takes it away. Save
+  Transcript… is in the menu whenever there is something to save.
+- Microphones that do not run at 48 kHz, AirPods among them, no longer
+  crash the app or freeze its menu.
+
 ## 1.12.0 · 2026-09-26
 
 - **Save the session's transcript.** Once the audio stops, or ten seconds

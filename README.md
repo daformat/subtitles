@@ -251,6 +251,18 @@ person speaks their own language and reads the other's under it. Switching
 clears whatever is on screen and resets the recogniser, so the new source
 starts a fresh sentence rather than continuing the last one.
 
+**Speak Translation** reads the translation aloud as each sentence settles,
+in the best installed voice for the target language: on whenever VoiceOver is
+(the default), Always, or Off. Nothing is skipped or sped up; ⌥⌘. stops the
+voice or repeats the last line. While it reads, the source is muted at the tap
+and played back from the app a quarter as loud (**Lower the Original While
+Speaking**), never for the microphone. VoiceOver is left out of all system
+audio and of the source list, so it is never captioned, and the caption box
+reads to VoiceOver as a group with its button. With the microphone on the
+Mac's speakers the voice waits for a pause, and the microphone is recorded
+through macOS voice processing, which cancels whatever the Mac plays and
+leaves the room captioned.
+
 ### Command line
 
 ```
@@ -270,7 +282,8 @@ starts a fresh sentence rather than continuing the last one.
         ↓                     realtime thread: copy into the ring, nothing else
 [lock-free SPSC ring buffer]
         ↓                     worker thread
-[resample 48k stereo → 16k mono]
+[resample to 16k mono]        3:1 from the tap's 48 kHz; any other rate (a 24 kHz
+                              AirPods mic) through a fractional filter
         ↓
 [energy gate + pre-roll]      skips silence; replays ~1 s so no word starts cold
         ↓                     ── C ABI: the core hands frames out here ──
