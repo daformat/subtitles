@@ -349,8 +349,8 @@
   "speech|Off": "Nicht vorlesen",
   "When VoiceOver Is On": "Wenn VoiceOver aktiv ist",
   "Always": "Immer",
-  "Lower the Original While Speaking": "Original beim Vorlesen leiser",
-  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Das Original bleibt hörbar, mit einem Viertel der Lautstärke, solange die Übersetzung vorgelesen wird. Nicht beim Mikrofon.",
+  "Lower the Original While Speaking": "Original beim Vorlesen dämpfen",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Das Original bleibt hörbar, mit einem Viertel der Lautstärke, solange die Übersetzung vorgelesen wird. Gilt nicht für das Mikrofon.",
   "Stop or Repeat Speech": "Vorlesen stoppen oder wiederholen",
   "Save Transcript… is also in the Subtitles menu.": "„Transkript sichern…“ gibt es auch im Menü von Subtitles.",
   "%@ is in the Subtitles menu.": "„%@“ gibt es im Menü von Subtitles."

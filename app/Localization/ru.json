@@ -377,10 +377,10 @@
   "Save a transcript of this session before it clears?": "Сохранить расшифровку этого сеанса, пока она не очищена?",
  "Speak Translation": "Озвучивать перевод",
  "speech|Off": "Не озвучивать",
- "When VoiceOver Is On": "Когда включен VoiceOver",
+ "When VoiceOver Is On": "Когда включён VoiceOver",
  "Always": "Всегда",
  "Lower the Original While Speaking": "Приглушать оригинал во время озвучки",
- "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригинал остается слышен, вчетверо тише, пока звучит перевод. Не для микрофона.",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Пока звучит перевод, оригинал остаётся слышен, но вчетверо тише. С микрофоном не действует.",
  "Stop or Repeat Speech": "Остановить или повторить озвучку",
  "Save Transcript… is also in the Subtitles menu.": "«Сохранить расшифровку…» есть и в меню Subtitles.",
  "%@ is in the Subtitles menu.": "«%@» есть в меню Subtitles."

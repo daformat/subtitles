@@ -346,11 +346,11 @@
   "SubRip (SRT)": "SubRip (SRT)",
   "Save a transcript of this session before it clears?": "Een transcript van deze sessie bewaren voordat het wordt gewist?",
   "Speak Translation": "Vertaling voorlezen",
-  "speech|Off": "Niet voorlezen",
+  "speech|Off": "Uit",
   "When VoiceOver Is On": "Als VoiceOver aan staat",
   "Always": "Altijd",
   "Lower the Original While Speaking": "Origineel zachter tijdens voorlezen",
-  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Het origineel blijft hoorbaar, op een kwart van het volume, terwijl de vertaling wordt voorgelezen. Niet bij de microfoon.",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Het origineel blijft hoorbaar, op een kwart van het volume, terwijl de vertaling wordt voorgelezen. Geldt niet voor de microfoon.",
   "Stop or Repeat Speech": "Voorlezen stoppen of herhalen",
   "Save Transcript… is also in the Subtitles menu.": "Transcript bewaren… staat ook in het menu van Subtitles.",
   "%@ is in the Subtitles menu.": "%@ staat in het menu van Subtitles."

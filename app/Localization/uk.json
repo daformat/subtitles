@@ -380,7 +380,7 @@
  "When VoiceOver Is On": "Коли увімкнено VoiceOver",
  "Always": "Завжди",
  "Lower the Original While Speaking": "Приглушувати оригінал під час озвучення",
- "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригінал лишається чутним, учетверо тихіше, поки звучить переклад. Не для мікрофона.",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригінал лишається чутним, учетверо тихіше, поки звучить переклад. З мікрофоном не діє.",
  "Stop or Repeat Speech": "Зупинити або повторити озвучення",
  "Save Transcript… is also in the Subtitles menu.": "«Зберегти розшифровку…» є і в меню Subtitles.",
  "%@ is in the Subtitles menu.": "«%@» є в меню Subtitles."

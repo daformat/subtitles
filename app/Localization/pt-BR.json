@@ -352,6 +352,6 @@
   "Lower the Original While Speaking": "Abaixar o Original Durante a Leitura",
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "O original continua audível, a um quarto do volume, enquanto a tradução é lida. Não vale para o microfone.",
   "Stop or Repeat Speech": "Parar ou Repetir a Leitura",
-  "Save Transcript… is also in the Subtitles menu.": "Salvar transcrição… também está no menu do Subtitles.",
-  "%@ is in the Subtitles menu.": "%@ está no menu do Subtitles."
+  "Save Transcript… is also in the Subtitles menu.": "O item Salvar transcrição… também está no menu do Subtitles.",
+  "%@ is in the Subtitles menu.": "O item %@ está no menu do Subtitles."
 }

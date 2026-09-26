@@ -332,11 +332,11 @@
   "Save a transcript of this session before it clears?": "このセッションの書き起こしを、消去される前に保存しますか？",
  "Speak Translation": "翻訳を読み上げ",
  "speech|Off": "オフ",
- "When VoiceOver Is On": "VoiceOverがオンのとき",
+ "When VoiceOver Is On": "VoiceOver がオンのとき",
  "Always": "常に",
- "Lower the Original While Speaking": "読み上げ中は元の音声を下げる",
- "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "翻訳の読み上げ中も、元の音声は4分の1の音量で聞こえます。マイクには適用されません。",
- "Stop or Repeat Speech": "読み上げを停止/繰り返す",
- "Save Transcript… is also in the Subtitles menu.": "「書き起こしを保存…」はSubtitlesメニューにもあります。",
- "%@ is in the Subtitles menu.": "「%@」はSubtitlesメニューにあります。"
+ "Lower the Original While Speaking": "読み上げ中は元の音声を小さくする",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "翻訳の読み上げ中も、元の音声は 4 分の 1 の音量で聞こえます。マイクには適用されません。",
+ "Stop or Repeat Speech": "読み上げを停止 / 繰り返し",
+ "Save Transcript… is also in the Subtitles menu.": "「書き起こしを保存…」は Subtitles メニューにもあります。",
+ "%@ is in the Subtitles menu.": "「%@」は Subtitles メニューにあります。"
 }

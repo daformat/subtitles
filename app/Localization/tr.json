@@ -346,12 +346,12 @@
   "SubRip (SRT)": "SubRip (SRT)",
   "Save a transcript of this session before it clears?": "Bu oturumun dökümü silinmeden önce kaydedilsin mi?",
   "Speak Translation": "Çeviriyi Seslendir",
-  "speech|Off": "Seslendirme Yok",
+  "speech|Off": "Kapalı",
   "When VoiceOver Is On": "VoiceOver Açıkken",
   "Always": "Her Zaman",
   "Lower the Original While Speaking": "Seslendirirken Orijinali Kıs",
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Çeviri okunurken orijinal, dörtte bir ses düzeyinde duyulmaya devam eder. Mikrofon için geçerli değildir.",
   "Stop or Repeat Speech": "Seslendirmeyi Durdur veya Tekrarla",
-  "Save Transcript… is also in the Subtitles menu.": "Dökümü Kaydet… Subtitles menüsünde de var.",
-  "%@ is in the Subtitles menu.": "%@ Subtitles menüsünde."
+  "Save Transcript… is also in the Subtitles menu.": "“Dökümü Kaydet…” komutu Subtitles menüsünde de var.",
+  "%@ is in the Subtitles menu.": "“%@” komutu Subtitles menüsünde."
 }

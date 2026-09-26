@@ -405,13 +405,13 @@
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
   "Save a transcript of this session before it clears?": "هل تريد حفظ نص هذه الجلسة قبل مسحه؟",
-  "Speak Translation": "قراءة الترجمة بصوت عالٍ",
-  "speech|Off": "بلا قراءة",
+  "Speak Translation": "نطق الترجمة",
+  "speech|Off": "بلا نطق",
   "When VoiceOver Is On": "عند تشغيل VoiceOver",
   "Always": "دائمًا",
-  "Lower the Original While Speaking": "خفض الصوت الأصلي أثناء القراءة",
-  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "يبقى الصوت الأصلي مسموعًا بربع مستواه أثناء قراءة الترجمة. لا ينطبق على الميكروفون.",
-  "Stop or Repeat Speech": "إيقاف القراءة أو تكرارها",
+  "Lower the Original While Speaking": "خفض الصوت الأصلي أثناء النطق",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "يبقى الصوت الأصلي مسموعًا بربع مستواه أثناء نطق الترجمة. لا ينطبق على الميكروفون.",
+  "Stop or Repeat Speech": "إيقاف النطق أو تكراره",
   "Save Transcript… is also in the Subtitles menu.": "«حفظ النص…» موجود أيضًا في قائمة Subtitles.",
   "%@ is in the Subtitles menu.": "«%@» موجود في قائمة Subtitles."
 }

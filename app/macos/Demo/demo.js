@@ -2576,12 +2576,12 @@ const windowResize = (() => {
   return { attach: attach, pin: pin };
 })();
 
-// vendor:skipped audio, 207 lines
+// vendor:skipped audio, 208 lines
 
 // Play, pause and restart, together at the right end of a demo's scene bar,
 // the bar itself staying centred under the screen (see .scene-controls). `demoControls(demo, {halted, changed, restart})`:
 // `halted` is the engine's own answer to whether its loop is parked, the
-// button's pause or anything else (scrolled away, the tab hidden);
+// button's pause or anything else (the tab hidden);
 // `changed` is called as the button pauses or plays; `restart` takes the
 // loop back to the top of the first scene. Restarting plays.
 //
@@ -2591,9 +2591,8 @@ const windowResize = (() => {
 // fill is walked by a CSS transition, which runs on through anything the
 // script does, so it is stopped here, where the transition stands, and
 // sent on for what was left of its walk when the demo goes again; the
-// engines hand every walk to `walk` for that. The same holds for a demo
-// scrolled away or in a hidden tab, so the bar and the captions come back
-// together.
+// engines hand every walk to `walk` for that. The same holds for a demo in
+// a hidden tab, so the bar and the captions come back together.
 const demoControls = (demoEl, opts) => {
   const bar = demoEl.querySelector('.demo-scenes');
   if (!bar) return null;
@@ -3249,12 +3248,11 @@ function fullyInView(el, slack = 0) {
   // One loop for the lifetime of the page. It parks on `paused` instead of
   // returning, because restarting it on every scroll-back stacked a second
   // copy on top of the first and the two raced the caption text.
-  let onScreen = true;
   let paused = false;
   // Play, pause and restart, see demoControls; set up once the scene bar is.
   let controls = null;
   const sync = () => {
-    paused = !onScreen || document.hidden || !!(controls && controls.held());
+    paused = document.hidden || !!(controls && controls.held());
     if (voice) voice.hold(paused);
     if (controls) controls.sync();
     // Parked mid-wait, the wait gives back what it had left, see step(); let
@@ -4600,14 +4598,9 @@ function fullyInView(el, slack = 0) {
   });
   window.addEventListener('blur', () => { altKey = false; showHistory(); });
 
-  // Only run while the demo is actually on screen...
-  new IntersectionObserver(
-    ([entry]) => { onScreen = entry.isIntersecting; sync(); },
-    { threshold: 0.15 }
-  ).observe(box);
-
-  // ...and only while the tab is in front: timers in a backgrounded tab are
-  // throttled to about one a second, which would wreck the pacing.
+  // Scrolled away, the demo plays on, and is heard. It only runs while the
+  // tab is in front: timers in a backgrounded tab are throttled to about one
+  // a second, which would wreck the pacing.
   document.addEventListener('visibilitychange', sync);
 
   // A beat after the screen is all in view, or within 40px of it, before
@@ -4616,7 +4609,7 @@ function fullyInView(el, slack = 0) {
   // after it does, rather than having started half off screen or before
   // anybody has scrolled to it. The call goes on in the meantime, fronted
   // and talking above. Only the first start waits for this; after it, the
-  // loop parks and picks up on the 15% above. A recording starts at once.
+  // loop plays on scrolled away. A recording starts at once.
   const begin = () => setTimeout(loop, START_MS);
   const NEAR = 40;
   if (CAPTURE || fullyInView(screen, NEAR)) begin();

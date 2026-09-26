@@ -332,7 +332,7 @@
   "Save a transcript of this session before it clears?": "要在清除前存储本次会话的文字记录吗？",
  "Speak Translation": "朗读翻译",
  "speech|Off": "关闭",
- "When VoiceOver Is On": "VoiceOver 开启时",
+ "When VoiceOver Is On": "旁白开启时",
  "Always": "始终",
  "Lower the Original While Speaking": "朗读时降低原声",
  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "朗读翻译时，原声仍可听到，音量降为四分之一。不适用于麦克风。",

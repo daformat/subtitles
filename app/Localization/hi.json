@@ -338,7 +338,7 @@
   "Transcript %@": "ट्रांसक्रिप्ट %@",
   "Speaker %lld": "वक्ता %lld",
   "Name speakers in saved transcripts": "सहेजी गई ट्रांसक्रिप्ट में वक्ताओं के नाम दें",
-  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "जब एक से ज़्यादा लोग बोलते हैं, तो हर बारी वक्ता 1, वक्ता 2… से शुरू होती है SRT फ़ाइलों में ये नहीं होते।",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "जब एक से ज़्यादा लोग बोलते हैं, तो हर बारी वक्ता 1, वक्ता 2… से शुरू होती है। SRT फ़ाइलों में ये नहीं होते।",
   "Buy a License": "लाइसेंस खरीदें",
   "Format:": "फ़ॉर्मैट:",
   "Plain Text": "सादा टेक्स्ट",
@@ -350,7 +350,7 @@
   "When VoiceOver Is On": "VoiceOver चालू होने पर",
   "Always": "हमेशा",
   "Lower the Original While Speaking": "पढ़ते समय मूल आवाज़ धीमी करें",
-  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "अनुवाद पढ़े जाने के दौरान मूल आवाज़ एक-चौथाई आवाज़ में सुनाई देती रहती है। माइक्रोफ़ोन पर लागू नहीं।",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "अनुवाद पढ़े जाते समय मूल आवाज़ सुनाई देती रहती है, पर चौथाई वॉल्यूम पर। माइक्रोफ़ोन पर लागू नहीं।",
   "Stop or Repeat Speech": "पढ़ना रोकें या दोहराएँ",
   "Save Transcript… is also in the Subtitles menu.": "“ट्रांसक्रिप्ट सहेजें…” Subtitles मेनू में भी है।",
   "%@ is in the Subtitles menu.": "“%@” Subtitles मेनू में है।"
