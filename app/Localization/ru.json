@@ -365,8 +365,6 @@
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Сколько строк заполняет блок, прежде чем очиститься и начать новый, насколько плотный фон под текстом и насколько размыто изображение под ним. Стопка ⌥ повторяет эти настройки, но её фон чуть прозрачнее.",
  "The stack's text is %lld%% as strong as the live box's.": "Текст в стопке насыщен на %lld %% от текста живого блока.",
   "Save Transcript…": "Сохранить расшифровку…",
-  "Save a transcript of this session before it clears? (%@)": "Сохранить расшифровку этого сеанса, пока она не очищена? (%@)",
-  "about %@": "около %@",
   "Transcript %@": "Расшифровка %@",
   "Speaker %lld": "Говорящий %lld",
   "Name speakers in saved transcripts": "Указывать говорящих в сохранённых расшифровках",
@@ -376,5 +374,14 @@
   "Plain Text": "Простой текст",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "Сохранить расшифровку этого сеанса, пока она не очищена?"
+  "Save a transcript of this session before it clears?": "Сохранить расшифровку этого сеанса, пока она не очищена?",
+ "Speak Translation": "Озвучивать перевод",
+ "speech|Off": "Не озвучивать",
+ "When VoiceOver Is On": "Когда включен VoiceOver",
+ "Always": "Всегда",
+ "Lower the Original While Speaking": "Приглушать оригинал во время озвучки",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригинал остается слышен, вчетверо тише, пока звучит перевод. Не для микрофона.",
+ "Stop or Repeat Speech": "Остановить или повторить озвучку",
+ "Save Transcript… is also in the Subtitles menu.": "«Сохранить расшифровку…» есть и в меню Subtitles.",
+ "%@ is in the Subtitles menu.": "«%@» есть в меню Subtitles."
 }

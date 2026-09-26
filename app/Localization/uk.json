@@ -365,8 +365,6 @@
  "Nemotron · %lld ms": "Nemotron · %lld мс",
  "Parakeet EOU · %lld ms": "Parakeet EOU · %lld мс",
   "Save Transcript…": "Зберегти розшифровку…",
-  "Save a transcript of this session before it clears? (%@)": "Зберегти розшифровку цього сеансу, доки її не очищено? (%@)",
-  "about %@": "близько %@",
   "Transcript %@": "Розшифровка %@",
   "Speaker %lld": "Мовець %lld",
   "Name speakers in saved transcripts": "Позначати мовців у збережених розшифровках",
@@ -376,5 +374,14 @@
   "Plain Text": "Простий текст",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "Зберегти розшифровку цього сеансу, доки її не очищено?"
+  "Save a transcript of this session before it clears?": "Зберегти розшифровку цього сеансу, доки її не очищено?",
+ "Speak Translation": "Озвучувати переклад",
+ "speech|Off": "Не озвучувати",
+ "When VoiceOver Is On": "Коли увімкнено VoiceOver",
+ "Always": "Завжди",
+ "Lower the Original While Speaking": "Приглушувати оригінал під час озвучення",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригінал лишається чутним, учетверо тихіше, поки звучить переклад. Не для мікрофона.",
+ "Stop or Repeat Speech": "Зупинити або повторити озвучення",
+ "Save Transcript… is also in the Subtitles menu.": "«Зберегти розшифровку…» є і в меню Subtitles.",
+ "%@ is in the Subtitles menu.": "«%@» є в меню Subtitles."
 }

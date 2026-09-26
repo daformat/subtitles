@@ -335,8 +335,6 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles zet het geluid dat je Mac afspeelt om in tekst, zodat het realtime ondertiteling kan tonen.",
   "InfoPlist|NSMicrophoneUsageDescription": "Subtitles zet wat de microfoon hoort om in tekst als je de microfoon als bron kiest, zodat het realtime ondertiteling kan tonen.",
   "Save Transcript…": "Transcript bewaren…",
-  "Save a transcript of this session before it clears? (%@)": "Een transcript van deze sessie bewaren voordat het wordt gewist? (%@)",
-  "about %@": "ca. %@",
   "Transcript %@": "Transcript %@",
   "Speaker %lld": "Spreker %lld",
   "Name speakers in saved transcripts": "Sprekers benoemen in bewaarde transcripten",
@@ -346,5 +344,14 @@
   "Plain Text": "Platte tekst",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "Een transcript van deze sessie bewaren voordat het wordt gewist?"
+  "Save a transcript of this session before it clears?": "Een transcript van deze sessie bewaren voordat het wordt gewist?",
+  "Speak Translation": "Vertaling voorlezen",
+  "speech|Off": "Niet voorlezen",
+  "When VoiceOver Is On": "Als VoiceOver aan staat",
+  "Always": "Altijd",
+  "Lower the Original While Speaking": "Origineel zachter tijdens voorlezen",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Het origineel blijft hoorbaar, op een kwart van het volume, terwijl de vertaling wordt voorgelezen. Niet bij de microfoon.",
+  "Stop or Repeat Speech": "Voorlezen stoppen of herhalen",
+  "Save Transcript… is also in the Subtitles menu.": "Transcript bewaren… staat ook in het menu van Subtitles.",
+  "%@ is in the Subtitles menu.": "%@ staat in het menu van Subtitles."
 }

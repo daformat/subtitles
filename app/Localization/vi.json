@@ -320,8 +320,6 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles chuyển âm thanh máy Mac của bạn đang phát thành chữ để hiện phụ đề theo thời gian thực.",
   "InfoPlist|NSMicrophoneUsageDescription": "Khi bạn chọn micrô làm nguồn, Subtitles chuyển những gì micrô nghe được thành chữ để hiện phụ đề theo thời gian thực.",
   "Save Transcript…": "Lưu bản ghi…",
-  "Save a transcript of this session before it clears? (%@)": "Lưu bản ghi của phiên này trước khi bị xóa? (%@)",
-  "about %@": "khoảng %@",
   "Transcript %@": "Bản ghi %@",
   "Speaker %lld": "Người nói %lld",
   "Name speakers in saved transcripts": "Ghi tên người nói trong bản ghi đã lưu",
@@ -331,5 +329,14 @@
   "Plain Text": "Văn bản thường",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "Lưu bản ghi của phiên này trước khi bị xóa?"
+  "Save a transcript of this session before it clears?": "Lưu bản ghi của phiên này trước khi bị xóa?",
+  "Speak Translation": "Đọc bản dịch",
+  "speech|Off": "Tắt",
+  "When VoiceOver Is On": "Khi VoiceOver bật",
+  "Always": "Luôn luôn",
+  "Lower the Original While Speaking": "Giảm âm gốc khi đọc",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Âm gốc vẫn nghe được, ở một phần tư âm lượng, trong khi bản dịch được đọc. Không áp dụng cho micrô.",
+  "Stop or Repeat Speech": "Dừng hoặc đọc lại",
+  "Save Transcript… is also in the Subtitles menu.": "“Lưu bản ghi…” cũng có trong menu Subtitles.",
+  "%@ is in the Subtitles menu.": "“%@” có trong menu Subtitles."
 }

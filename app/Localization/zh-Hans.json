@@ -320,8 +320,6 @@
  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles 会转写 Mac 正在播放的音频，以便显示实时字幕。",
  "InfoPlist|NSMicrophoneUsageDescription": "当你选择麦克风作为声音来源时，Subtitles 会转写麦克风听到的内容，以便显示实时字幕。",
   "Save Transcript…": "存储文字记录…",
-  "Save a transcript of this session before it clears? (%@)": "要在清除前存储本次会话的文字记录吗？（%@）",
-  "about %@": "约%@",
   "Transcript %@": "文字记录 %@",
   "Speaker %lld": "说话人 %lld",
   "Name speakers in saved transcripts": "在存储的文字记录中标出说话人",
@@ -331,5 +329,14 @@
   "Plain Text": "纯文本",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "要在清除前存储本次会话的文字记录吗？"
+  "Save a transcript of this session before it clears?": "要在清除前存储本次会话的文字记录吗？",
+ "Speak Translation": "朗读翻译",
+ "speech|Off": "关闭",
+ "When VoiceOver Is On": "VoiceOver 开启时",
+ "Always": "始终",
+ "Lower the Original While Speaking": "朗读时降低原声",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "朗读翻译时，原声仍可听到，音量降为四分之一。不适用于麦克风。",
+ "Stop or Repeat Speech": "停止或重复朗读",
+ "Save Transcript… is also in the Subtitles menu.": "“存储文字记录…”也在 Subtitles 菜单中。",
+ "%@ is in the Subtitles menu.": "“%@”在 Subtitles 菜单中。"
 }

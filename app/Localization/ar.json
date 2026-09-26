@@ -395,8 +395,6 @@
   "Nemotron · %lld ms": "Nemotron · %lld مللي ثانية",
   "Parakeet EOU · %lld ms": "Parakeet EOU · %lld مللي ثانية",
   "Save Transcript…": "حفظ النص…",
-  "Save a transcript of this session before it clears? (%@)": "هل تريد حفظ نص هذه الجلسة قبل مسحه؟ (%@)",
-  "about %@": "نحو %@",
   "Transcript %@": "نص %@",
   "Speaker %lld": "المتحدث %lld",
   "Name speakers in saved transcripts": "تسمية المتحدثين في النصوص المحفوظة",
@@ -406,5 +404,14 @@
   "Plain Text": "نص عادي",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "هل تريد حفظ نص هذه الجلسة قبل مسحه؟"
+  "Save a transcript of this session before it clears?": "هل تريد حفظ نص هذه الجلسة قبل مسحه؟",
+  "Speak Translation": "قراءة الترجمة بصوت عالٍ",
+  "speech|Off": "بلا قراءة",
+  "When VoiceOver Is On": "عند تشغيل VoiceOver",
+  "Always": "دائمًا",
+  "Lower the Original While Speaking": "خفض الصوت الأصلي أثناء القراءة",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "يبقى الصوت الأصلي مسموعًا بربع مستواه أثناء قراءة الترجمة. لا ينطبق على الميكروفون.",
+  "Stop or Repeat Speech": "إيقاف القراءة أو تكرارها",
+  "Save Transcript… is also in the Subtitles menu.": "«حفظ النص…» موجود أيضًا في قائمة Subtitles.",
+  "%@ is in the Subtitles menu.": "«%@» موجود في قائمة Subtitles."
 }

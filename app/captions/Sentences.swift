@@ -6,6 +6,12 @@ public struct Sentence: Equatable, Sendable {
     public let start: TimeInterval
     public let end: TimeInterval
 
+    public init(text: String, start: TimeInterval, end: TimeInterval) {
+        self.text = text
+        self.start = start
+        self.end = end
+    }
+
     /// Stable across the repeated full-transcript callbacks that deliver it.
     /// Start time alone is not enough — a revision can rewrite a sentence without
     /// moving its first word — so the text takes part in the identity too.

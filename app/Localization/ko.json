@@ -320,8 +320,6 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles는 Mac에서 재생되는 소리를 받아써서 실시간 캡션으로 보여 줍니다.",
   "InfoPlist|NSMicrophoneUsageDescription": "마이크를 소스로 선택하면 Subtitles는 마이크에 들리는 소리를 받아써서 실시간 캡션으로 보여 줍니다.",
   "Save Transcript…": "대본 저장…",
-  "Save a transcript of this session before it clears? (%@)": "이 세션의 대본이 지워지기 전에 저장할까요? (%@)",
-  "about %@": "약 %@",
   "Transcript %@": "대본 %@",
   "Speaker %lld": "화자 %lld",
   "Name speakers in saved transcripts": "저장한 대본에 화자 표시",
@@ -331,5 +329,14 @@
   "Plain Text": "일반 텍스트",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "이 세션의 대본이 지워지기 전에 저장할까요?"
+  "Save a transcript of this session before it clears?": "이 세션의 대본이 지워지기 전에 저장할까요?",
+  "Speak Translation": "번역 읽어 주기",
+  "speech|Off": "끔",
+  "When VoiceOver Is On": "VoiceOver가 켜져 있을 때",
+  "Always": "항상",
+  "Lower the Original While Speaking": "읽는 동안 원래 소리 줄이기",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "번역을 읽는 동안 원래 소리는 4분의 1 음량으로 계속 들립니다. 마이크에는 적용되지 않습니다.",
+  "Stop or Repeat Speech": "읽기 중단 또는 반복",
+  "Save Transcript… is also in the Subtitles menu.": "'대본 저장…'은 Subtitles 메뉴에도 있습니다.",
+  "%@ is in the Subtitles menu.": "'%@'은(는) Subtitles 메뉴에 있습니다."
 }

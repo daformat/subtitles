@@ -393,6 +393,12 @@ final class TranslationController {
         set { pipeline.mode = newValue }
     }
 
+    /// Each settled translation, once, for the voice. See `TranslationPipeline.onSettled`.
+    var onSettled: ((String) -> Void)? {
+        get { pipeline.onSettled }
+        set { pipeline.onSettled = newValue }
+    }
+
     init(target: Locale.Language,
          source: Locale.Language?,
          trustedSource: Bool = false,

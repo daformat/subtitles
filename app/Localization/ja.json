@@ -320,8 +320,6 @@
  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles は、Mac で再生中の音声を文字起こしして、リアルタイムの字幕として表示します。",
  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles は、マイクを入力元に選んだとき、マイクが拾った音声を文字起こしして、リアルタイムの字幕として表示します。",
   "Save Transcript…": "書き起こしを保存…",
-  "Save a transcript of this session before it clears? (%@)": "このセッションの書き起こしを、消去される前に保存しますか？（%@）",
-  "about %@": "約%@",
   "Transcript %@": "書き起こし %@",
   "Speaker %lld": "話者 %lld",
   "Name speakers in saved transcripts": "保存した書き起こしに話者を表示",
@@ -331,5 +329,14 @@
   "Plain Text": "標準テキスト",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "このセッションの書き起こしを、消去される前に保存しますか？"
+  "Save a transcript of this session before it clears?": "このセッションの書き起こしを、消去される前に保存しますか？",
+ "Speak Translation": "翻訳を読み上げ",
+ "speech|Off": "オフ",
+ "When VoiceOver Is On": "VoiceOverがオンのとき",
+ "Always": "常に",
+ "Lower the Original While Speaking": "読み上げ中は元の音声を下げる",
+ "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "翻訳の読み上げ中も、元の音声は4分の1の音量で聞こえます。マイクには適用されません。",
+ "Stop or Repeat Speech": "読み上げを停止/繰り返す",
+ "Save Transcript… is also in the Subtitles menu.": "「書き起こしを保存…」はSubtitlesメニューにもあります。",
+ "%@ is in the Subtitles menu.": "「%@」はSubtitlesメニューにあります。"
 }

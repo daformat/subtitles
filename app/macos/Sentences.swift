@@ -145,6 +145,18 @@ final class TranslationPipeline {
     /// Assigned after init by the controller, which cannot reference itself in its
     /// own initialiser.
     var onSameLanguageHandler: (() -> Void)?
+    /// Each settled chunk's translation, once, in the order spoken: what the
+    /// voice reads aloud. Not a translation that came back as its own
+    /// original, which is already heard as it is. Setting it also makes
+    /// `speculative` settle chunks, which that mode otherwise never does.
+    var onSettled: ((String) -> Void)?
+    /// Sentences already handed to `onSettled` in this turn, so one settled
+    /// again after a restart under another pair is not read twice.
+    private var spoken: Set<String> = []
+    /// Turns discarded from the screen whose answers still in flight are read
+    /// aloud when they land: the box has gone, but a listener has not heard
+    /// them yet.
+    private var speakOnly: Set<Int> = []
 
     init(translator: Translator,
          onTranslated: @escaping (TranslatedTranscript) -> Void,
@@ -176,9 +188,20 @@ final class TranslationPipeline {
         lastIngested = words
 
         if mode == .speculative {
-            // No settled text at all: the whole transcript is provisional and is
-            // retranslated every update. Deliberately the naive shape, kept as the
-            // thing the other two modes are judged against.
+            // Settled chunks are still found, for the voice: the buffer is fed
+            // either way, so switching the voice on mid-turn does not settle
+            // the whole transcript at once, and they are only translated when
+            // someone is listening for them. Never drawn in this mode.
+            let fresh = buffer.ingest(words, ended: ended, settleAfter: Self.settleAfter)
+            if onSettled != nil {
+                for sentence in fresh where done[sentence.id] == nil {
+                    order.append(sentence)
+                    queued.append(sentence)
+                }
+            }
+            // No settled text on screen: the whole transcript is provisional and
+            // is retranslated every update. Deliberately the naive shape, kept as
+            // the thing the other two modes are judged against.
             tail = words.map(\.text).joined(separator: " ")
             tailStart = words[0].start
             tailEnd = words[words.count - 1].end
@@ -232,11 +255,13 @@ final class TranslationPipeline {
     /// progress and any translation of it are dropped, and settling resumes with
     /// whatever is said next.
     func discardPending() {
+        speakWhatIsDiscarded()
         buffer.skip(to: seenWords)
         turnStart = seenWords
         heldWords = nil
         heldEnded = false
         clearTurn()
+        spoken.removeAll()
         pendingReset = false
     }
 
@@ -249,6 +274,7 @@ final class TranslationPipeline {
     private func closeTurn() {
         buffer.skip(to: turnStart)
         clearTurn()
+        spoken.removeAll()
         pendingReset = false
         if let held = heldWords {
             heldWords = nil
@@ -269,6 +295,36 @@ final class TranslationPipeline {
         guard !pendingReset else { return }
         buffer.restart(at: turnStart)
         clearTurn()
+    }
+
+    /// Everything `discardPending` is about to drop from the screen, still
+    /// read aloud: the answer in flight, when it lands, and whatever was
+    /// settled but not yet sent, with the clause in progress, translated
+    /// now. After the in-flight request, since the translator answers in
+    /// order, so the voice keeps the order they were said in.
+    private func speakWhatIsDiscarded() {
+        guard onSettled != nil else { return }
+        if inFlight { speakOnly.insert(turnGeneration) }
+        var leftover = queued
+        if !tail.isEmpty {
+            leftover.append(Sentence(text: tail, start: tailStart, end: tailEnd))
+        }
+        guard !leftover.isEmpty else { return }
+        Task { [weak self] in
+            guard let self,
+                  let results = try? await self.translator.translate(leftover.map(\.text)) else { return }
+            for (sentence, text) in zip(leftover, results) {
+                self.speak(CaptionCase.matchingLeading(text, to: sentence.text), for: sentence)
+            }
+        }
+    }
+
+    /// Hand a settled translation to the voice, once, unless it came back as
+    /// its own original, which is already heard as it is.
+    private func speak(_ translated: String, for sentence: Sentence) {
+        guard let onSettled, !TranslatedTranscript.sameWords(translated, sentence.text),
+              spoken.insert(sentence.id).inserted else { return }
+        onSettled(translated)
     }
 
     private func clearTurn() {
@@ -322,7 +378,9 @@ final class TranslationPipeline {
                 // answer is the old pair's, and is not shown.
                 if generation == self.turnGeneration {
                     for (sentence, text) in zip(batch, results) {
-                        self.done[sentence.id] = CaptionCase.matchingLeading(text, to: sentence.text)
+                        let settled = CaptionCase.matchingLeading(text, to: sentence.text)
+                        self.done[sentence.id] = settled
+                        self.speak(settled, for: sentence)
                     }
                     // Kept if the tail is what was sent or has only grown since:
                     // the translation of its first words is still that, over the
@@ -337,6 +395,11 @@ final class TranslationPipeline {
                     }
                     Self.trace("got \(results.count) result(s)")
                     self.emit()
+                } else if self.speakOnly.remove(generation) != nil {
+                    // Discarded from the screen while out: read, not shown.
+                    for (sentence, text) in zip(batch, results) {
+                        self.speak(CaptionCase.matchingLeading(text, to: sentence.text), for: sentence)
+                    }
                 } else {
                     Self.trace("dropped \(results.count) result(s) from a restarted turn")
                 }

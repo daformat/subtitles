@@ -335,8 +335,6 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transcribe el audio que reproduce tu Mac para mostrar subtítulos en directo.",
   "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transcribe lo que capta el micrófono cuando lo eliges como origen, para mostrar subtítulos en directo.",
   "Save Transcript…": "Guardar transcripción…",
-  "Save a transcript of this session before it clears? (%@)": "¿Guardar una transcripción de esta sesión antes de que se borre? (%@)",
-  "about %@": "unos %@",
   "Transcript %@": "Transcripción %@",
   "Speaker %lld": "Hablante %lld",
   "Name speakers in saved transcripts": "Nombrar a los hablantes en las transcripciones guardadas",
@@ -346,5 +344,14 @@
   "Plain Text": "Texto sin formato",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "¿Guardar una transcripción de esta sesión antes de que se borre?"
+  "Save a transcript of this session before it clears?": "¿Guardar una transcripción de esta sesión antes de que se borre?",
+  "Speak Translation": "Leer la traducción",
+  "speech|Off": "No leer",
+  "When VoiceOver Is On": "Con VoiceOver activado",
+  "Always": "Siempre",
+  "Lower the Original While Speaking": "Bajar el original durante la lectura",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "El original se sigue oyendo, a una cuarta parte del volumen, mientras se lee la traducción. No con el micrófono.",
+  "Stop or Repeat Speech": "Detener o repetir la lectura",
+  "Save Transcript… is also in the Subtitles menu.": "Guardar transcripción… también está en el menú de Subtitles.",
+  "%@ is in the Subtitles menu.": "%@ está en el menú de Subtitles."
 }

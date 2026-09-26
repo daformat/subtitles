@@ -11,6 +11,7 @@
 import CSubs
 import AppKit
 import AudioToolbox
+import AVFoundation
 import CoreAudio
 import Foundation
 import CaptionCore
@@ -128,6 +129,39 @@ final class SystemAudioTap {
     /// while the microphone is the source. Not followed from in here: the new
     /// device's format may differ, and that is the caller's to handle.
     var onDefaultInputChanged: (() -> Void)?
+    /// Called on the main queue when Sound settings' output changes: headphones
+    /// on or off, which decides whether the microphone may be spoken over, and
+    /// the device a replayed source has to follow.
+    var onDefaultOutputChanged: (() -> Void)?
+    /// Called on the main queue when a process starts or stops doing audio:
+    /// VoiceOver's own object only exists once it has spoken, so a tap made
+    /// before then could not leave it out. See `excluded`.
+    var onProcessesChanged: (() -> Void)?
+
+    /// What the all-audio tap was made leaving out, to tell when a process
+    /// that should be left out has appeared since. Empty for any other tap.
+    private(set) var excluded: Set<AudioObjectID> = []
+
+    /// Mute the source while it is tapped and play it back from here, through
+    /// `duck`, so it can be lowered under the translation read aloud. Read by
+    /// `prepare`: set it, then prepare again for it to apply. Never for the
+    /// microphone, which is not something the app plays.
+    var replaysSource = false
+    let duck = DuckGain()
+
+    /// Record the microphone through macOS's voice processing, the echo
+    /// canceller calls use, rather than as it is. For a microphone the
+    /// loudspeakers can reach while something may speak: it takes out what
+    /// the Mac itself plays, VoiceOver and the translation read aloud among
+    /// it, and leaves the room, so whoever talks over the voice is still
+    /// captioned. Measured 26 Sept 2026: the voice, played from this process
+    /// or another, falls from -28 dBFS to the floor once the canceller has
+    /// adapted, a second or two into the first speech. Read by `prepare`.
+    var cancelsEcho = false
+    /// The running microphone is voice-processed: `cancelsEcho` asked for
+    /// it and voice processing started.
+    private(set) var echoCancelled = false
+    private var voiceEngine: AVAudioEngine?
 
     init(onAudio: @escaping (UnsafePointer<Float>, Int) -> Void) {
         self.onAudio = onAudio
@@ -136,6 +170,16 @@ final class SystemAudioTap {
             [weak self] _, _ in
             guard let self, self.source == .microphone else { return }
             self.onDefaultInputChanged?()
+        }
+        var outAddr = Self.address(kAudioHardwarePropertyDefaultOutputDevice)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &outAddr, .main) {
+            [weak self] _, _ in
+            self?.onDefaultOutputChanged?()
+        }
+        var listAddr = Self.address(kAudioHardwarePropertyProcessObjectList)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &listAddr, .main) {
+            [weak self] _, _ in
+            self?.onProcessesChanged?()
         }
     }
 
@@ -180,6 +224,32 @@ final class SystemAudioTap {
             throw TapError.noOutputDevice
         }
         return uid
+    }
+
+    /// Whether what the Mac plays only reaches the listener's ears: headphones
+    /// in the jack, or Bluetooth (AirPods, mostly). A microphone can be spoken
+    /// over then without hearing the voice. Loudspeakers, AirPlay, and a USB
+    /// device that could be either, are taken as heard by the room.
+    static func outputIsHeadphones() -> Bool {
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var addr = address(kAudioHardwarePropertyDefaultOutputDevice)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &addr, 0, nil, &size, &device) == noErr,
+              let transport = uint32(device, kAudioDevicePropertyTransportType) else { return false }
+        switch transport {
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE:
+            return true
+        case kAudioDeviceTransportTypeBuiltIn:
+            var sourceAddr = address(kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput)
+            var dataSource: UInt32 = 0
+            size = UInt32(MemoryLayout<UInt32>.size)
+            guard AudioObjectGetPropertyData(device, &sourceAddr, 0, nil, &size, &dataSource) == noErr
+            else { return false }
+            return dataSource == 0x6864_706E // 'hdpn'
+        default:
+            return false
+        }
     }
 
     // MARK: - microphone
@@ -348,6 +418,9 @@ final class SystemAudioTap {
             if bundle?.isEmpty == true { bundle = nil }
             let family = apps.family(pid: pid, bundle: bundle)
             if let ownBundle, bundle == ownBundle || family.id == ownBundle { continue }
+            // Never a source: VoiceOver is not something to caption, and
+            // offered in Listen To, or picked as the app playing, it would be.
+            if Self.speaksForVoiceOver(bundle: bundle, family: family.id) { continue }
             let playing = (uint32(id, kAudioProcessPropertyIsRunningOutput) ?? 0) != 0
             out.append(AudioProcess(objectID: id, pid: pid, family: family, isPlaying: playing))
         }
@@ -382,6 +455,59 @@ final class SystemAudioTap {
         audioSources().filter(\.isPlaying).map(\.name)
     }
 
+    /// What the all-audio tap leaves out. The app itself: it reads the
+    /// translation aloud and, lowering the original, plays that back, and
+    /// neither must reach the recognizer. And VoiceOver, with anything
+    /// speaking for it: someone moving through a menu would otherwise have
+    /// VoiceOver's words captioned, translated and read out over it, and a
+    /// muted tap would lower VoiceOver along with everything else.
+    /// Fixed when the tap is made, so VoiceOver starting later needs a new one.
+    static func excludedFromAllAudio(log: Bool = true) -> [AudioObjectID] {
+        let found = ownAndVoiceOver()
+        if log, !found.isEmpty {
+            let described = found.map { "\($0.isSelf ? "self" : $0.name) (\($0.id))" }
+            FileHandle.standardError.write(
+                "all audio, leaving out: \(described.joined(separator: ", "))\n".data(using: .utf8)!)
+        }
+        return found.map(\.id)
+    }
+
+    /// VoiceOver's audio objects, for the echo gate to listen to. Never the
+    /// app's own: see EchoGate.swift.
+    static func voiceOverObjects() -> [AudioObjectID] { ownAndVoiceOver().filter { !$0.isSelf }.map(\.id) }
+
+    /// Whether VoiceOver has an audio object yet: it has none until it first
+    /// speaks.
+    static func voiceOverHasAudio() -> Bool { ownAndVoiceOver().contains { !$0.isSelf } }
+
+    /// VoiceOver itself plays its speech, from its own process (measured 26
+    /// Sept 2026, com.apple.VoiceOver, no daemon); the rest is a precaution
+    /// for helpers it may start, which the responsible-app rule folds under
+    /// it, and the speech services.
+    private static func speaksForVoiceOver(bundle: String?, family: String) -> Bool {
+        family == "com.apple.VoiceOver"
+            || bundle.map { $0.hasPrefix("com.apple.VoiceOver") || $0.hasPrefix("com.apple.speech.") } == true
+    }
+
+    private static func ownAndVoiceOver() -> [(id: AudioObjectID, isSelf: Bool, name: String)] {
+        let ownPID = getpid()
+        let apps = RunningApps()
+        var out: [(id: AudioObjectID, isSelf: Bool, name: String)] = []
+        for id in processObjectIDs() {
+            guard let pidRaw = uint32(id, kAudioProcessPropertyPID) else { continue }
+            let pid = pid_t(bitPattern: pidRaw)
+            var bundle = cfString(id, kAudioProcessPropertyBundleID)
+            if bundle?.isEmpty == true { bundle = nil }
+            let family = apps.family(pid: pid, bundle: bundle).id
+            if pid == ownPID {
+                out.append((id, true, "self"))
+            } else if speaksForVoiceOver(bundle: bundle, family: family) {
+                out.append((id, false, bundle ?? family))
+            }
+        }
+        return out
+    }
+
     /// Object IDs are recycled; resolve them only at the moment of use. The
     /// same attribution as the menu's, so picking Safari taps the WebKit
     /// service that plays for it.
@@ -412,6 +538,14 @@ final class SystemAudioTap {
         let desc: CATapDescription
         switch source {
         case .microphone:
+            if cancelsEcho, let processed = prepareVoiceProcessing() {
+                format = processed
+                self.source = .microphone
+                FileHandle.standardError.write(
+                    ("microphone → \(Self.defaultInputName() ?? "?") through voice processing, "
+                        + "\(Int(format.sampleRate)) Hz, 1 ch\n").data(using: .utf8)!)
+                return format
+            }
             // No tap and no aggregate: the input device is read as it is, and
             // its own format is what the sink gets. A microphone is usually
             // mono and not always 48 kHz, which is why the caller compares what
@@ -432,7 +566,9 @@ final class SystemAudioTap {
             // processes: the tap builds, the aggregate reports 2 input channels,
             // AudioDeviceStart returns noErr, and the device then silently never
             // runs. Cost hours in Spike 0B.
-            desc = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+            let leftOut = Self.excludedFromAllAudio()
+            desc = CATapDescription(stereoGlobalTapButExcludeProcesses: leftOut)
+            excluded = Set(leftOut)
             self.source = .allSystemAudio
         case let .app(familyID, name):
             let objectIDs = Self.objectIDs(forFamily: familyID)
@@ -464,9 +600,31 @@ final class SystemAudioTap {
                     .data(using: .utf8)!)
         }
 
+        return try create(desc)
+    }
+
+    /// A tap on exactly these processes, heard and never muted or played back:
+    /// the echo gate's, on VoiceOver and the app itself.
+    @discardableResult
+    func prepare(processes objectIDs: [AudioObjectID]) throws -> TapFormat {
+        guard #available(macOS 14.2, *) else { throw TapError.unsupportedOS }
+        stop()
+        replaysSource = false
+        return try create(CATapDescription(stereoMixdownOfProcesses: objectIDs))
+    }
+
+    @available(macOS 14.2, *)
+    private func create(_ desc: CATapDescription) throws -> TapFormat {
         desc.uuid = UUID()
-        desc.muteBehavior = .unmuted // the user still hears their audio
+        // The user still hears their audio: as it is, or muted at the source
+        // and played back from here, where it can be lowered. Muted only while
+        // tapped, so a tap that has stopped, or a crash, gives the sound back.
+        desc.muteBehavior = replaysSource ? .mutedWhenTapped : .unmuted
         desc.isPrivate = true
+        if replaysSource {
+            FileHandle.standardError.write("tap muted at the source; playing it back to lower it under speech\n"
+                .data(using: .utf8)!)
+        }
         tapDescription = desc
 
         let err = AudioHardwareCreateProcessTap(desc, &tapID)
@@ -488,7 +646,62 @@ final class SystemAudioTap {
     ///
     /// A tap needs an aggregate device built for its IOProc to run on; the
     /// microphone's IOProc runs on the input device itself.
+    /// The default input through an engine with voice processing on, not yet
+    /// started, and the format it will deliver: its first channel, the
+    /// processed one, at the engine's rate (24 kHz measured here, which the
+    /// core resamples). nil if voice processing will not start, and the
+    /// microphone is then read as it is.
+    private func prepareVoiceProcessing() -> TapFormat? {
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        // Both ends exist before voice processing is turned on: it spans
+        // input and output, and without the output the engine would not start
+        // (kAUInitialize failed, -10875, measured).
+        _ = engine.outputNode
+        _ = engine.mainMixerNode
+        do {
+            try input.setVoiceProcessingEnabled(true)
+        } catch {
+            FileHandle.standardError.write("voice processing unavailable: \(error)\n".data(using: .utf8)!)
+            return nil
+        }
+        // Not quieter for it: calls lower every other app while they run,
+        // and here the Mac's sound is what the person is listening to.
+        input.voiceProcessingOtherAudioDuckingConfiguration =
+            .init(enableAdvancedDucking: false, duckingLevel: .min)
+        // The level as spoken: the core's gate and the glow read it.
+        input.isVoiceProcessingAGCEnabled = false
+        let rate = input.outputFormat(forBus: 0).sampleRate
+        guard rate > 0 else { return nil }
+        voiceEngine = engine
+        echoCancelled = true
+        return TapFormat(sampleRate: rate, channels: 1, isInterleaved: true)
+    }
+
+    var isRunning: Bool { procID != nil || voiceEngine?.isRunning == true }
+
     func start() throws {
+        if let engine = voiceEngine {
+            guard !engine.isRunning else { return }
+            let sink = onAudio
+            let expected = format.sampleRate
+            var warned = false
+            // On the engine's own thread, not the device's: nothing here
+            // allocates either way. The first channel is the processed one.
+            engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, _ in
+                if buffer.format.sampleRate != expected, !warned {
+                    warned = true
+                    FileHandle.standardError.write(
+                        "voice processing delivers \(Int(buffer.format.sampleRate)) Hz, not \(Int(expected))\n"
+                            .data(using: .utf8)!)
+                }
+                guard let data = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
+                sink(data, Int(buffer.frameLength))
+            }
+            engine.prepare()
+            try engine.start()
+            return
+        }
         // Already running. Stacking a second IOProc on one device leaks the
         // first the same way `prepare()` describes.
         guard procID == nil else { return }
@@ -528,7 +741,11 @@ final class SystemAudioTap {
     /// turn as though they were one.
     private func installIOProc(on device: AudioObjectID, allBuffers: Bool) throws {
         let sink = onAudio
-        var err = AudioDeviceCreateIOProcIDWithBlock(&procID, device, nil) { _, input, _, _, _ in
+        let replay = allBuffers && replaysSource
+        let duck = duck
+        let rate = Float(format.sampleRate)
+        let down = 1 / (rate * 0.08), up = 1 / (rate * 0.4)
+        var err = AudioDeviceCreateIOProcIDWithBlock(&procID, device, nil) { _, input, _, output, _ in
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
             for buffer in abl.prefix(allBuffers ? abl.count : 1) {
                 guard let data = buffer.mData else { continue }
@@ -536,6 +753,10 @@ final class SystemAudioTap {
                 if count > 0 {
                     sink(data.assumingMemoryBound(to: Float.self), count)
                 }
+            }
+            if replay, let tapBuffer = abl.last {
+                DuckedPlayback.play(tapBuffer, into: UnsafeMutableAudioBufferListPointer(output),
+                                    duck: duck, down: down, up: up)
             }
         }
         guard err == noErr else {
@@ -567,6 +788,12 @@ final class SystemAudioTap {
     /// `procID` was cleared regardless, so no later `stop()` could reach it.
     @discardableResult
     func stop() -> Bool {
+        if let engine = voiceEngine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            voiceEngine = nil
+            echoCancelled = false
+        }
         var ok = true
         func check(_ what: String, _ status: OSStatus) -> Bool {
             guard status != noErr else { return true }
@@ -600,6 +827,7 @@ final class SystemAudioTap {
         }
         inputDevice = AudioObjectID(kAudioObjectUnknown)
         tapDescription = nil
+        excluded = []
         return ok
     }
 

@@ -23,6 +23,7 @@
 
 import CSubs
 import AppKit
+import Carbon.HIToolbox
 import CaptionCore
 import UniformTypeIdentifiers
 
@@ -222,6 +223,35 @@ final class SubtitleView: NSView {
     private var actionButton: ActionButton?
 
     @objc private func pressAction() { action?.press() }
+
+    // MARK: VoiceOver
+
+    /// Whether VoiceOver finds the box and reads what it says. Off for the
+    /// Settings preview's box, which is a drawing of one.
+    var isReadByVoiceOver = true
+
+    /// One element: the app's name and the text, the original under a
+    /// translation included, with the button, when there is one, inside it to
+    /// be pressed. Read when VoiceOver comes to it, never announced as it
+    /// changes: the live box would talk over whoever is speaking. What the app
+    /// says itself, the offer and the trial's end, `OverlayController`
+    /// announces.
+    override func isAccessibilityElement() -> Bool { isReadByVoiceOver }
+    override func accessibilityRole() -> NSAccessibility.Role? { isReadByVoiceOver ? .group : nil }
+
+    override func accessibilityLabel() -> String? {
+        guard isReadByVoiceOver else { return nil }
+        let caption = [committed, tentative].filter { !$0.isEmpty }.joined(separator: " ")
+        let under = [secondary, secondaryTentative].filter { !$0.isEmpty }.joined(separator: " ")
+        let text = [caption, under].filter { !$0.isEmpty }.joined(separator: "\n")
+        guard let appName, !appName.isEmpty else { return text }
+        return text.isEmpty ? appName : "\(appName): \(text)"
+    }
+
+    override func accessibilityChildren() -> [Any]? {
+        guard isReadByVoiceOver, let actionButton else { return [] }
+        return [actionButton]
+    }
 
     /// Between the text and the button.
     static let actionGap: CGFloat = 16
@@ -971,7 +1001,9 @@ final class OverlayController {
     /// The box holds a line of the app's own rather than the transcript's —
     /// see `showFinalCaption` — and nothing the recognizer or the translator
     /// still has in flight may replace it or fade it.
-    private var holdsFinalCaption = false
+    private var holdsFinalCaption = false {
+        didSet { if holdsFinalCaption != oldValue { syncEscapeHotkey() } }
+    }
 
     // ── paging state ──
     // Broadcast subtitles never scroll a wall of text: they fill, clear, and
@@ -1319,7 +1351,9 @@ final class OverlayController {
 
     /// The box is showing the offer to save the transcript. See
     /// `offerTranscriptIfIdle`.
-    private var offersTranscript = false
+    private var offersTranscript = false {
+        didSet { if offersTranscript != oldValue { syncEscapeHotkey() } }
+    }
     /// The save panel is up. The stack is kept while it is, whatever the
     /// timer says: it is what is being saved.
     private var savingTranscript = false
@@ -1330,10 +1364,6 @@ final class OverlayController {
     /// so one that came up on silence and ran out does not come back at the
     /// tail.
     private var offeredSinceText = false
-    /// The offer came up ahead of the tail, on silence, so the stack outlasts
-    /// it and the question says for how long. At the tail the two end
-    /// together, and the bar already says it.
-    private var offerCountsDown = false
 
     /// Whether the source has stopped making sound, as Core Audio tells it:
     /// nothing playing, or the chosen app not playing. Nil when there is no
@@ -2240,9 +2270,10 @@ final class OverlayController {
     private func offerTranscriptIfIdle() {
         let idle = Date().timeIntervalSince(lastTextAt)
         let due = isSourceSilent == true || idle >= historyExpiry - Self.transcriptOfferLead
+        let enoughSaid = debugOffersAnyway || speechInStack >= Self.transcriptOfferMinimum
         let wanted = isHistoryExpiryEnabled && !savingTranscript && !isSuppressed
             && !holdsFinalCaption && !stack.isEmpty
-            && (offersTranscript || (due && !offeredSinceText))
+            && (offersTranscript || (due && !offeredSinceText && enoughSaid))
         guard wanted else {
             withdrawTranscriptOffer(fading: true)
             return
@@ -2252,10 +2283,8 @@ final class OverlayController {
 
         offersTranscript = true
         offeredSinceText = true
+        debugOffersAnyway = false
         offerElapsed = 0
-        // Half a second of slack: the poll that brings it up at the tail can
-        // run that far ahead of the exact moment.
-        offerCountsDown = historyExpiry - idle > Self.transcriptOfferLead + 0.5
         // Said by Subtitles, like the trial's last line.
         view.icon = NSApp.applicationIconImage
         view.appName = "Subtitles"
@@ -2269,6 +2298,79 @@ final class OverlayController {
         tickTranscriptOffer()
         layout()
         show()
+        announce(L("Save a transcript of this session before it clears?")
+                 + " " + L("Save Transcript… is also in the Subtitles menu.", "Read by VoiceOver after the offer to save the transcript"))
+    }
+
+    /// Less speech than this and the box does not ask: a minute of captions
+    /// is rarely worth a file, and a question after every short clip is one
+    /// to learn to ignore. The status menu still offers it.
+    static let transcriptOfferMinimum: TimeInterval = 60
+
+    /// How long the stack's words were spoken over: each box's time from its
+    /// first word to its last, by the clock, which the recognizer's restarts
+    /// do not touch.
+    private var speechInStack: TimeInterval {
+        stack.reduce(0) { $0 + max($1.lastWord.timeIntervalSince($1.shown), 0) }
+    }
+
+    /// Settings ▸ Debug's offer comes up whatever was said: its two sample
+    /// boxes are seconds long.
+    private var debugOffersAnyway = false
+
+    /// There is something to save: the status menu offers Save Transcript…
+    /// whenever there is, the box's question or not.
+    var hasTranscript: Bool { !stack.isEmpty && !savingTranscript }
+
+    /// The status menu's Save Transcript…: the offer's button when the box is
+    /// asking, and the same save when it is not.
+    func acceptTranscriptOffer() { saveTranscript() }
+
+    /// Have VoiceOver say `text` now, whatever has focus: the box is in a
+    /// panel that never becomes key, so nothing would read it otherwise.
+    /// Only for what the app says itself; captions are never announced.
+    ///
+    /// Said by main.swift's `Speaker` in VoiceOver's own voice and rate, not
+    /// posted to VoiceOver as an announcement: VoiceOver only reads those
+    /// from the app in front, and this one never is.
+    private func announce(_ text: String) {
+        guard NSWorkspace.shared.isVoiceOverEnabled else { return }
+        onAnnounce?(text)
+    }
+
+    /// Says a line of the app's own aloud. See `announce`.
+    var onAnnounce: ((String) -> Void)?
+
+    // MARK: Escape
+
+    /// Escape pressed over a line of the app's own: the trial's end asks for
+    /// its hold to be cut short, which main.swift owns. The offer is simply
+    /// taken down here.
+    var onDismissFinalCaption: (() -> Void)?
+
+    /// ⎋, registered only while the offer or the trial's end is up. A Carbon
+    /// hotkey like ⌥⌘S, since the panel never becomes key and a keyboard
+    /// monitor would need Accessibility permission. It takes Escape from
+    /// every app for those seconds, which is why it is held no longer.
+    private var escapeHotkey: Hotkey?
+
+    private func syncEscapeHotkey() {
+        let wanted = offersTranscript || holdsFinalCaption
+        if wanted, escapeHotkey == nil {
+            escapeHotkey = Hotkey(keyCode: kVK_Escape, modifiers: 0, id: 4) { [weak self] in
+                self?.escapePressed()
+            }
+        } else if !wanted {
+            escapeHotkey = nil
+        }
+    }
+
+    private func escapePressed() {
+        if offersTranscript {
+            withdrawTranscriptOffer(fading: true)
+        } else if holdsFinalCaption {
+            onDismissFinalCaption?()
+        }
     }
 
     /// The pointer is over the box on screen, the transparent margin round it
@@ -2311,33 +2413,16 @@ final class OverlayController {
         }
         if panel.alphaValue == 0 { boxIsCleared = true }
         offeredSinceText = false
+        debugOffersAnyway = true
         lastTextAt = Date().addingTimeInterval(-(historyExpiry - Self.transcriptOfferLead))
     }
     #endif
 
-    /// The offer's question, with how long is left before the stack goes in
-    /// brackets after it: to the second under a minute, "(18s)", and past
-    /// one, "(about 4m)", rounded, where "4m 40s" would be reading for its
-    /// own sake. In the language's own abbreviations.
+    /// The offer's question. No time left in it: the bar under it says
+    /// that, and a line whose words change every second is no line to read.
     private var transcriptOfferText: String {
-        let question = L("Save a transcript of this session before it clears?",
-                         "Asked in the caption box before the recent boxes are forgotten")
-        guard offerCountsDown else { return question }
-        let left = max(historyExpiry - Date().timeIntervalSince(lastTextAt), 0).rounded(.up)
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
-        var calendar = Calendar.current
-        calendar.locale = AppLanguage.locale
-        formatter.calendar = calendar
-        let time: String
-        if left < 60 {
-            formatter.allowedUnits = [.second]
-            time = formatter.string(from: left) ?? ""
-        } else {
-            formatter.allowedUnits = [.minute]
-            time = LF("about %@", formatter.string(from: (left / 60).rounded() * 60) ?? "")
-        }
-        return LF("Save a transcript of this session before it clears? (%@)", time)
+        L("Save a transcript of this session before it clears?",
+          "Asked in the caption box before the recent boxes are forgotten")
     }
 
     /// The offer's bar, over its own ten seconds, and its end when they are
@@ -2353,15 +2438,19 @@ final class OverlayController {
         guard offersTranscript else { return }
         if let last = offerTickedAt {
             let step = now.timeIntervalSince(last)
-            if isPointerOverBox { lastTextAt += step } else { offerElapsed += step }
+            if isPointerOverBox {
+                lastTextAt += step
+            } else if NSWorkspace.shared.isVoiceOverEnabled {
+                // Thirty seconds rather than ten under VoiceOver: hearing the
+                // question and reaching the button or the menu takes longer
+                // than reading and clicking. The expiry waits the difference.
+                offerElapsed += step / 3
+                lastTextAt += step * 2 / 3
+            } else {
+                offerElapsed += step
+            }
         }
         view.progress = CGFloat(min(offerElapsed / Self.transcriptOfferLead, 1))
-        // The time left, a second at a time.
-        let text = transcriptOfferText
-        if text != view.committed {
-            view.committed = text
-            layout()
-        }
         // At the tail, the expiry takes it down with the stack; the poll
         // that runs it is at most half a second behind.
         if offerElapsed >= Self.transcriptOfferLead,
@@ -2416,13 +2505,16 @@ final class OverlayController {
     /// The format last saved in, offered first next time.
     private static let transcriptFormatKey = "transcript.format"
 
-    /// The offer taken: ask where, write the file, and forget the stack, as
-    /// the timer would have. Cancelled, the timer takes it from there.
+    /// Ask where, and write the file. Taken from the offer, the stack is then
+    /// forgotten, as the timer was about to; cancelled, the timer takes it
+    /// from there. From the status menu with no offer up, mid-session, the
+    /// stack stays: ⌥ still brings back what was just saved.
     ///
     /// What is saved is the stack as it was clicked. Should someone speak
     /// while the panel is up, only the boxes saved are forgotten.
     private func saveTranscript() {
-        guard offersTranscript else { return }
+        guard !stack.isEmpty, !savingTranscript else { return }
+        let fromOffer = offersTranscript
         let entries = transcriptEntries
         let saved = stack.count
         let clickedAt = Date()
@@ -2459,6 +2551,7 @@ final class OverlayController {
                 NSAlert(error: error).runModal()
                 return
             }
+            guard fromOffer else { return }
             if self.lastTextAt <= clickedAt {
                 self.streams.clear()
                 self.forgetStack()
@@ -2633,7 +2726,9 @@ final class OverlayController {
     /// `setPaused` or `clearAndHide` takes it down.
     /// `action` is a button inline after the text, as the offer to save the
     /// transcript has.
-    func showFinalCaption(_ text: String, action: (title: String, press: () -> Void)? = nil) {
+    /// `hint` follows the text when VoiceOver announces it: where to act on it.
+    func showFinalCaption(_ text: String, action: (title: String, press: () -> Void)? = nil,
+                          hint: String? = nil) {
         guard !isSuppressed else { return }
         history.dismiss()
         cancelHold()
@@ -2663,6 +2758,7 @@ final class OverlayController {
         view.committed = text
         layout()
         show()
+        announce([text, hint].compactMap { $0 }.joined(separator: " "))
     }
 
     /// Wipe the box and fade it out, leaving it free to come back on the next

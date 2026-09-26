@@ -159,6 +159,9 @@ enum Defaults {
     static let translateTo = "translate.target"
     static let translateMode = "translate.mode"
     static let bothLanguages = "translate.bothLanguages"
+    /// See `Speaker.Mode`.
+    static let speakTranslation = "speech.mode"
+    static let lowersOriginal = "speech.lowersOriginal"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -557,12 +560,35 @@ let onEvent: @convention(c) (UnsafePointer<subs_event_t>?, UnsafeMutableRawPoint
 // model load's worth of buffered audio.
 /// How loud what the app listens to is, for the glow along the live box.
 let voiceMeter = VoiceMeter()
+/// Silences the microphone while VoiceOver or the app itself speaks through
+/// loudspeakers. See EchoGate.swift and `syncEchoGate`.
+let echoGate = EchoGate()
 let tap = SystemAudioTap { samples, count in
     if isPaused { return }
     voiceMeter.feed(samples, count: count)
     if holdingFinalCaption { return }
+    if echoGate.isShut {
+        echoGate.pushSilence(count) { subs_push_audio(engine, $0, UInt($1)) }
+        return
+    }
     subs_push_audio(engine, samples, UInt(count))
 }
+
+/// Reads the translation aloud. Made before the tap is first prepared: whether
+/// the tap mutes its source and plays it back depends on it.
+let speaker = Speaker()
+speaker.mode = UserDefaults.standard.string(forKey: Defaults.speakTranslation)
+    .flatMap(Speaker.Mode.init(rawValue:)) ?? .withVoiceOver
+speaker.lowersOriginal = UserDefaults.standard.object(forKey: Defaults.lowersOriginal) as? Bool ?? true
+// The saved target now, not when `applyTranslation` restores it: whether the
+// tap replays its source depends on it, and a change then would bring capture
+// up before the core is ready for it.
+if #available(macOS 15, *) { speaker.language = translateTo?.locale }
+speaker.onSpeaking = { speaking in tap.duck.target = speaking ? Speaker.duckedGain : 1 }
+speaker.onVoice = { echoGate.appIsSpeaking($0) }
+/// ⌥⌘. while the translation is read aloud: registered only then, so it is
+/// not taken from other apps for a feature that is off.
+var speechHotkey: Hotkey?
 
 var startingSource: AudioSource = .allSystemAudio
 if let name = UserDefaults.standard.string(forKey: Defaults.sourceName),
@@ -583,6 +609,9 @@ if startingSource == .microphone, AVCaptureDevice.authorizationStatus(for: .audi
 /// can differ from the taps' 48 kHz stereo, and `resumeCapture` rebuilds the
 /// core when it does.
 nonisolated(unsafe) var format: TapFormat
+speaker.waitsForQuiet = speechWaitsForQuiet(over: startingSource)
+syncTapReplay(for: startingSource)
+tap.cancelsEcho = wantsEchoCancelled(over: startingSource)
 do {
     format = try tap.prepare(source: startingSource)
 } catch {
@@ -606,11 +635,81 @@ func makeCore() -> OpaquePointer? {
 /// pushing into it from the realtime thread as it went.
 nonisolated(unsafe) var coreRebuildsPending = 0
 
+/// Whether the voice waits for the room to be quiet: a microphone the
+/// loudspeakers can reach, which would otherwise have it talk over whoever is
+/// being captioned. The echo gate keeps it out of the captions meanwhile.
+func speechWaitsForQuiet(over source: AudioSource) -> Bool {
+    source == .microphone && !SystemAudioTap.outputIsHeadphones()
+}
+
+/// Whether the microphone is recorded through voice processing, which takes
+/// what the Mac plays out of it: with the sound on loudspeakers and something
+/// that may speak, VoiceOver or the translation read aloud. With headphones
+/// nothing reaches it, and the microphone is left as it is.
+func wantsEchoCancelled(over source: AudioSource) -> Bool {
+    source == .microphone && !SystemAudioTap.outputIsHeadphones()
+        && (speaker.voiceOverRunning || speaker.isActive)
+}
+
+/// Make the microphone again when whether it should be voice-processed has
+/// changed: speech or VoiceOver turned on or off, or headphones on or off.
+func followEchoCancellation() {
+    guard tap.source == .microphone, !isPaused,
+          wantsEchoCancelled(over: .microphone) != tap.cancelsEcho else { return }
+    err(tap.cancelsEcho ? "microphone as it is again" : "microphone through voice processing, to hear over the voice")
+    tap.select(.microphone)
+    resumeCapture()
+}
+
+/// Whether the tap mutes its source and plays it back, to lower it under the
+/// voice. Read by the next `prepare`; never for the microphone, which the app
+/// does not play.
+func syncTapReplay(for source: AudioSource) {
+    tap.replaysSource = speaker.wantsDucking && source != .microphone
+    if !tap.replaysSource { tap.duck.target = 1 }
+}
+
+/// Speaking turned on or off, ducking with it, or VoiceOver started or
+/// stopped. The tap is made again when its mute has changed, a gap of a few
+/// milliseconds in capture. VoiceOver starting is `tap.onProcessesChanged`'s
+/// to follow, since its audio object only appears once it speaks.
+func applySpeechState() {
+    let replays = speaker.wantsDucking && tap.source != .microphone
+    if replays != tap.replaysSource {
+        tap.select(tap.source)
+        resumeCapture()
+    }
+    followEchoCancellation()
+    syncEchoGate()
+    if speaker.isActive, speechHotkey == nil {
+        speechHotkey = Hotkey(keyCode: kVK_ANSI_Period, modifiers: cmdKey | optionKey, id: 3) {
+            speaker.stopOrRepeat()
+        }
+        if speechHotkey == nil { err("could not register ⌥⌘. (already taken?)") }
+    } else if !speaker.isActive {
+        speechHotkey = nil
+    }
+}
+speaker.onStateChanged = { applySpeechState() }
+
 func resumeCapture() {
     // Paused means the tap stays down, whoever is asking. Variant and source
     // switches both end by calling this, and without the guard a model change
     // while paused would quietly put the app back to capturing.
     guard !isPaused, coreRebuildsPending == 0 else { return }
+    defer { syncEchoGate() }
+    // Already running: leave it. Every caller that changes what the tap is
+    // made with stops it first (`tap.select`), so a running tap is already
+    // the one wanted; the core rebuilt at launch ends here with it running.
+    // Restarting it anyway was free for a process tap and fatal for a
+    // Bluetooth microphone: AirPods stopped 16 ms after a start, while still
+    // switching into their call profile, never return from the next
+    // AudioDeviceStart, and this is the main thread (26 Sept 2026).
+    guard !tap.isRunning else { return }
+    syncTapReplay(for: tap.source)
+    tap.cancelsEcho = wantsEchoCancelled(over: tap.source)
+    // The gate's VoiceOver tap down before anything starts: see EchoGate.swift.
+    echoGate.suspend()
     do {
         let live = try tap.prepare(source: tap.source)
         // The core downmixes and resamples whatever it was built for, but it is
@@ -635,7 +734,47 @@ func resumeCapture() {
 // paused waits for the resume.
 tap.onDefaultInputChanged = {
     err("microphone is now \(SystemAudioTap.defaultInputName() ?? "none"); following it")
+    tap.select(tap.source)
     resumeCapture()
+}
+// Headphones on or off: the microphone may or may not be spoken over now. And
+// a source played back from here is played on the device the tap was made
+// with, so it has to be made again on the new one, or the sound would stay on
+// the speakers with the headphones on.
+/// The fallback for when voice processing would not start: up while the
+/// microphone is the source and running as it is, something may speak
+/// (VoiceOver, or the app's voice) and the sound comes out where the
+/// microphone can hear it; down otherwise, and while paused. Only once the
+/// microphone runs: see EchoGate.swift.
+func syncEchoGate() {
+    let wanted = !isPaused && tap.source == .microphone && tap.isRunning && !tap.echoCancelled
+        && (speaker.voiceOverRunning || speaker.isActive)
+        && !SystemAudioTap.outputIsHeadphones()
+    echoGate.set(enabled: wanted, voiceOver: wanted ? SystemAudioTap.voiceOverObjects() : [])
+}
+
+// A process started or stopped doing audio. VoiceOver's object is made when
+// it first speaks, after any tap made as it started: the all-audio tap is
+// made again to leave it out, and the echo gate to hear it.
+tap.onProcessesChanged = {
+    if tap.source == .allSystemAudio, tap.isRunning, !isPaused,
+       !Set(SystemAudioTap.excludedFromAllAudio(log: false)).isSubset(of: tap.excluded) {
+        err("VoiceOver or Subtitles has new audio; leaving it out of all audio")
+        tap.select(tap.source)
+        resumeCapture()
+    }
+    syncEchoGate()
+}
+
+tap.onDefaultOutputChanged = {
+    followEchoCancellation()
+    syncEchoGate()
+    speaker.waitsForQuiet = speechWaitsForQuiet(over: tap.source)
+    if tap.replaysSource, !isPaused {
+        err("output changed; playing the source back on the new device")
+        tap.select(tap.source)
+        resumeCapture()
+    }
 }
 
 /// Serialises core teardown and creation. Switching used to be blocked while a
@@ -954,6 +1093,7 @@ func applyTranslation(_ target: FluidLanguage?) {
         UserDefaults.standard.removeObject(forKey: Defaults.translateTo)
     }
     guard #available(macOS 15, *) else { return }
+    speaker.language = target?.locale
     MainActor.assumeIsolated {
         guard let target else {
             translationBox = nil
@@ -982,6 +1122,12 @@ func applyTranslation(_ target: FluidLanguage?) {
                 statusMenu?.updateHealthIndicator()
             })
         controller.onReadiness = { renderer.overlay?.translationProducesOutput = $0 }
+        // Read aloud in the listener's language only: translated back the
+        // other way, with both languages showing, the original already is.
+        controller.onSettled = { text in
+            guard renderer.overlay?.translationBelow != true else { return }
+            speaker.say(text)
+        }
         translationBox = controller
         renderer.overlay?.prefersTranslation = true
         renderer.overlay?.translationBelow = pair.target != target.locale
@@ -1070,6 +1216,9 @@ func selectSource(_ source: AudioSource, overlay: OverlayController? = nil) {
         }
     }
     if source == .microphone, tap.source != .microphone { sourceBeforeMicrophone = tap.source }
+    // What was being read belongs to the source being left.
+    speaker.stop()
+    speaker.waitsForQuiet = speechWaitsForQuiet(over: source)
     tap.select(source)
     resumeCapture()
     switch source {
@@ -1118,6 +1267,8 @@ func togglePause() {
     // is both untrue and exactly the thing a pause button is supposed to settle.
     if isPaused {
         tap.stop()
+        speaker.stop()
+        syncEchoGate()
         // Then drop what is already buffered. With `onAudioFrames` gated above,
         // nothing refills it while paused, so resuming starts from silence
         // instead of replaying the seconds before the pause.
@@ -1411,7 +1562,10 @@ if useOverlay {
     playingApp.onSilence = { controller.isSourceSilent = $0 }
     playingApp.voice = { voiceDetector }
     playingApp.probe = { await fluidEngine?.wordProbe() }
-    renderer.onWords = { playingApp.noteWords($0) }
+    renderer.onWords = { words in
+        playingApp.noteWords(words)
+        speaker.noteWords(words)
+    }
     playingApp.start()
     settings.iconStyle = { iconStyle }
     settings.textAlignment = { textAlignment }
@@ -1515,6 +1669,26 @@ if useOverlay {
         refreshTranslationSource()
         settings.refreshPreview(changed: [.bothLanguages])
     }
+    controller.onAnnounce = { speaker.announce($0) }
+    // [main-edition]
+    controller.onDismissFinalCaption = { finalCaptionCutShort = true }
+    // [/main-edition]
+    menu.hasTranscript = { controller.hasTranscript }
+    menu.onSaveTranscript = { controller.acceptTranscriptOffer() }
+    menu.currentSpeechMode = { speaker.mode }
+    menu.onSelectSpeechMode = { mode in
+        speaker.mode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Defaults.speakTranslation)
+        err("speak translation: \(mode.rawValue)")
+    }
+    menu.lowersOriginal = { speaker.lowersOriginal }
+    menu.onToggleLowersOriginal = {
+        speaker.lowersOriginal.toggle()
+        UserDefaults.standard.set(speaker.lowersOriginal, forKey: Defaults.lowersOriginal)
+        err(speaker.lowersOriginal ? "lowering the original while speaking" : "leaving the original as it is")
+    }
+    menu.speechActive = { speaker.isActive }
+    menu.onStopOrRepeatSpeech = { speaker.stopOrRepeat() }
     menu.screenShareEnabled = { screenShareEnabled }
     menu.onToggleScreenShare = {
         screenShareEnabled.toggle()
@@ -1622,6 +1796,8 @@ if useOverlay {
     // ⌥⌘S. Carbon, so it needs no Accessibility permission — see Hotkey.swift.
     hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }
     if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
+    // ⌥⌘. too, when the translation is read aloud.
+    applySpeechState()
 
     err("overlay on: click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
 }
@@ -1656,6 +1832,8 @@ license.onUnblocked = {
 
 /// How long the line that ends the free minutes stays up before the pause.
 let finalCaptionHold: TimeInterval = 15
+/// Set by Escape over that line: the hold ends at the next tick.
+var finalCaptionCutShort = false
 
 /// Counts the line's time on screen, the time the pointer spends over it
 /// left out.
@@ -1678,8 +1856,10 @@ func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) 
         LP("Your trial has ended, captions will resume in %lld minutes.",
            one: "Your trial has ended, captions will resume in %lld minute.", rest),
         action: (L("Buy a License", "Button in the caption box when the trial's free minutes end: opens the store"),
-                 { NSWorkspace.shared.open(LicenseController.buyURL) }))
+                 { NSWorkspace.shared.open(LicenseController.buyURL) }),
+        hint: LF("%@ is in the Subtitles menu.", license.entitlement.menuTitle))
     finalCaptionTimer?.invalidate()
+    finalCaptionCutShort = false
     var shown: TimeInterval = 0
     var tickedAt = Date()
     // At frame rate: it moves the bar along the box's bottom edge, the same
@@ -1697,6 +1877,8 @@ func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) 
         let now = Date()
         if !overlay.isPointerOverBox { shown += now.timeIntervalSince(tickedAt) }
         tickedAt = now
+        // Escape: the hold ends now, the way it would have at its end.
+        if finalCaptionCutShort { shown = finalCaptionHold }
         overlay.setFinalCaptionProgress(CGFloat(shown / finalCaptionHold))
         guard shown >= finalCaptionHold else { return }
         timer.invalidate()
@@ -1754,6 +1936,8 @@ if isPaused {
         err("\(red)capture failed:\(reset) \(error)")
         exit(1)
     }
+    // Only now: the echo gate's tap comes after the microphone, never before.
+    syncEchoGate()
 }
 // [/main-edition]
 // [0bsd-edition]
@@ -1763,6 +1947,7 @@ if isPaused {
 //     err("\(red)capture failed:\(reset) \(error)")
 //     exit(1)
 // }
+// syncEchoGate()
 // [/0bsd-edition]
 err("listening. ctrl-C to stop.\n")
 

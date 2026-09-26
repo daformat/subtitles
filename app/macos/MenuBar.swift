@@ -156,6 +156,17 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// The original under the translation — see `OverlayController.showsBothLanguages`.
     var onToggleBothLanguages: (() -> Void)?
     var showsBothLanguages: () -> Bool = { false }
+    /// The translation read aloud — see `Speaker`.
+    var onSelectSpeechMode: ((Speaker.Mode) -> Void)?
+    var currentSpeechMode: () -> Speaker.Mode = { .withVoiceOver }
+    var onToggleLowersOriginal: (() -> Void)?
+    var lowersOriginal: () -> Bool = { true }
+    var speechActive: () -> Bool = { false }
+    var onStopOrRepeatSpeech: (() -> Void)?
+    /// There is a transcript to save: the menu offers it, whether or not the
+    /// box is asking.
+    var hasTranscript: () -> Bool = { false }
+    var onSaveTranscript: (() -> Void)?
     var onToggleReveal: (() -> Void)?
     var revealEnabled: () -> Bool = { true }
     /// The glow along the box with the sound: its look (nil for off) and
@@ -467,11 +478,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        // Saving the transcript, whenever there is one, in a group of its own
+        // under the news: the box only asks after a minute of speech, and here
+        // it can also be reached by someone who cannot reach the box.
+        if hasTranscript() {
+            let save = NSMenuItem(title: L("Save Transcript…"), action: #selector(saveTranscript), keyEquivalent: "")
+            save.target = self
+            menu.addItem(save)
+            menu.addItem(.separator())
+        }
+
         menu.addItem(sourceMenuItem())
         menu.addItem(modelMenuItem())
         if #available(macOS 15, *) {
             menu.addItem(translateMenuItem())
             menu.addItem(translationModeMenuItem())
+            menu.addItem(speechMenuItem())
         }
         // Divides what the recogniser does from what the overlay looks like. That
         // split holds with or without the translation entries, so it is not tied
@@ -832,6 +854,56 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         item.isEnabled = on
         return item
     }
+
+    /// Reading the translation aloud, for someone who cannot read the box.
+    ///
+    /// Left enabled with translation off, unlike Translation Timing: someone
+    /// setting the app up by VoiceOver should be able to turn this on first
+    /// and choose a language after, and a greyed item reads as unavailable.
+    @available(macOS 15, *)
+    private func speechMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: L("Speak Translation", "Menu: whether the translation is read aloud"), action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let current = currentSpeechMode()
+        for mode in Speaker.Mode.allCases {
+            let row = NSMenuItem(title: mode.displayName,
+                                 action: #selector(selectSpeechMode(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = mode.rawValue
+            row.state = mode == current ? .on : .off
+            sub.addItem(row)
+        }
+        sub.addItem(.separator())
+
+        let lower = NSMenuItem(title: L("Lower the Original While Speaking", "Speak Translation switch: the sound being translated gets quieter while the translation is read aloud"),
+                               action: #selector(toggleLowersOriginal), keyEquivalent: "")
+        lower.target = self
+        lower.state = lowersOriginal() ? .on : .off
+        lower.toolTip = L("The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.")
+        sub.addItem(lower)
+
+        // The global ⌥⌘. shown where it can be found, and usable from here too.
+        let active = speechActive()
+        let stop = NSMenuItem(title: L("Stop or Repeat Speech", "Speak Translation action: silences the voice, or reads the last line again when it is quiet"),
+                              action: active ? #selector(stopOrRepeatSpeech) : nil, keyEquivalent: ".")
+        stop.keyEquivalentModifierMask = [.command, .option]
+        stop.target = active ? self : nil
+        stop.isEnabled = active
+        sub.addItem(stop)
+
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func selectSpeechMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = Speaker.Mode(rawValue: raw) else { return }
+        onSelectSpeechMode?(mode)
+    }
+
+    @objc private func toggleLowersOriginal() { onToggleLowersOriginal?() }
+    @objc private func saveTranscript() { onSaveTranscript?() }
+    @objc private func stopOrRepeatSpeech() { onStopOrRepeatSpeech?() }
 
     @objc private func selectTranslation(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String else { return }

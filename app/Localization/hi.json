@@ -335,8 +335,6 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles आपके Mac पर चल रहे ऑडियो को ट्रांसक्राइब करता है, ताकि लाइव कैप्शन दिखा सके।",
   "InfoPlist|NSMicrophoneUsageDescription": "जब आप माइक्रोफ़ोन को स्रोत चुनते हैं, तो Subtitles उसकी सुनी बात ट्रांसक्राइब करता है, ताकि लाइव कैप्शन दिखा सके।",
   "Save Transcript…": "ट्रांसक्रिप्ट सहेजें…",
-  "Save a transcript of this session before it clears? (%@)": "इस सत्र की ट्रांसक्रिप्ट मिटने से पहले सहेजें? (%@)",
-  "about %@": "लगभग %@",
   "Transcript %@": "ट्रांसक्रिप्ट %@",
   "Speaker %lld": "वक्ता %lld",
   "Name speakers in saved transcripts": "सहेजी गई ट्रांसक्रिप्ट में वक्ताओं के नाम दें",
@@ -346,5 +344,14 @@
   "Plain Text": "सादा टेक्स्ट",
   "Markdown": "Markdown",
   "SubRip (SRT)": "SubRip (SRT)",
-  "Save a transcript of this session before it clears?": "इस सत्र की ट्रांसक्रिप्ट मिटने से पहले सहेजें?"
+  "Save a transcript of this session before it clears?": "इस सत्र की ट्रांसक्रिप्ट मिटने से पहले सहेजें?",
+  "Speak Translation": "अनुवाद पढ़कर सुनाएँ",
+  "speech|Off": "बंद",
+  "When VoiceOver Is On": "VoiceOver चालू होने पर",
+  "Always": "हमेशा",
+  "Lower the Original While Speaking": "पढ़ते समय मूल आवाज़ धीमी करें",
+  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "अनुवाद पढ़े जाने के दौरान मूल आवाज़ एक-चौथाई आवाज़ में सुनाई देती रहती है। माइक्रोफ़ोन पर लागू नहीं।",
+  "Stop or Repeat Speech": "पढ़ना रोकें या दोहराएँ",
+  "Save Transcript… is also in the Subtitles menu.": "“ट्रांसक्रिप्ट सहेजें…” Subtitles मेनू में भी है।",
+  "%@ is in the Subtitles menu.": "“%@” Subtitles मेनू में है।"
 }

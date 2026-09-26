@@ -726,7 +726,12 @@ final class SettingsPreview: NSView {
     static let displayHeight: CGFloat = 200
 
     private let stage = PreviewStage()
-    private let box = SubtitleView(frame: .zero)
+    private let box: SubtitleView = {
+        let box = SubtitleView(frame: .zero)
+        // A drawing of the box, like the rest of the preview.
+        box.isReadByVoiceOver = false
+        return box
+    }()
     /// The stack, in the same scroll view the overlay puts it in — so it
     /// overflows, scrolls and fades at the clipped edge the way the real one
     /// does rather than simply running out of room.
