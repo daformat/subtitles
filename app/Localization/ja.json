@@ -314,10 +314,22 @@
  "Your trial has ended, captions will resume in %lld minutes.": {
   "other": "試用期間が終了しました。字幕は %lld 分後に再開します。"
  },
- "Get a license key at subtitles-live.com": "ライセンスキーは subtitles-live.com で購入できます",
  "Your free trial runs for %lld days, and starts when the captions do.": {
   "other": "無料の試用期間は %lld 日間で、字幕を始めたときからスタートします。"
  },
  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles は、Mac で再生中の音声を文字起こしして、リアルタイムの字幕として表示します。",
- "InfoPlist|NSMicrophoneUsageDescription": "Subtitles は、マイクを入力元に選んだとき、マイクが拾った音声を文字起こしして、リアルタイムの字幕として表示します。"
+ "InfoPlist|NSMicrophoneUsageDescription": "Subtitles は、マイクを入力元に選んだとき、マイクが拾った音声を文字起こしして、リアルタイムの字幕として表示します。",
+  "Save Transcript…": "書き起こしを保存…",
+  "Save a transcript of this session before it clears? (%@)": "このセッションの書き起こしを、消去される前に保存しますか？（%@）",
+  "about %@": "約%@",
+  "Transcript %@": "書き起こし %@",
+  "Speaker %lld": "話者 %lld",
+  "Name speakers in saved transcripts": "保存した書き起こしに話者を表示",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "複数の人が話すと、発言ごとに「話者 1」「話者 2」…と付きますSRTファイルには含まれません。",
+  "Buy a License": "ライセンスを購入",
+  "Format:": "フォーマット:",
+  "Plain Text": "標準テキスト",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "このセッションの書き起こしを、消去される前に保存しますか？"
 }

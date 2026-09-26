@@ -63,12 +63,19 @@ enum WindowFit {
     /// possible: down from the top edge first, since that is the one a window
     /// grows away from.
     static func clamp(_ window: NSWindow) {
-        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
-        var frame = window.frame
-        if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
-        if frame.minY < visible.minY { frame.origin.y = visible.minY }
+        let frame = clamped(window.frame, on: window)
         guard frame.origin != window.frame.origin else { return }
         window.setFrame(frame, display: true, animate: false)
+    }
+
+    /// `frame` moved up or down to lie inside the screen `window` is on, for
+    /// a frame about to be given to it.
+    static func clamped(_ frame: NSRect, on window: NSWindow) -> NSRect {
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return frame }
+        var frame = frame
+        if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
+        if frame.minY < visible.minY { frame.origin.y = visible.minY }
+        return frame
     }
 
     /// Whether there is anything past the clip view's edge to reach.

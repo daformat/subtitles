@@ -94,7 +94,16 @@ echo "==> compiling swift app (SwiftPM)"
 # Do NOT pipe this through `grep ... || true`: that masks a failed build, and the
 # stale binary from the previous run then gets copied into the bundle and shipped.
 # Cost an hour of debugging a "fix" that was never compiled.
-if ! swift build -c release > "$OUT/swift-build.log" 2>&1; then
+#
+# DEV_BUILD compiles in what only a development copy has: Settings ▸ Debug.
+# release.sh sets SUBTITLES_RELEASE=1, and a shipped build is compiled
+# without it, so none of that code is in the binary at all.
+SWIFT_FLAGS=()
+if [ "${SUBTITLES_RELEASE:-0}" != 1 ]; then
+  SWIFT_FLAGS=(-Xswiftc -DDEV_BUILD)
+  echo "    development build (Settings ▸ Debug compiled in)"
+fi
+if ! swift build -c release ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} > "$OUT/swift-build.log" 2>&1; then
   grep -E "error:" "$OUT/swift-build.log" | head -20 >&2
   echo "!! swift build failed (full log: $OUT/swift-build.log)" >&2
   exit 1

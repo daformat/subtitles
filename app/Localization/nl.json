@@ -328,11 +328,23 @@
     "one": "Je proefperiode is voorbij. Over %lld minuut gaat de ondertiteling verder.",
     "other": "Je proefperiode is voorbij. Over %lld minuten gaat de ondertiteling verder."
   },
-  "Get a license key at subtitles-live.com": "Koop een licentiesleutel op subtitles-live.com",
   "Your free trial runs for %lld days, and starts when the captions do.": {
     "one": "Je gratis proefperiode duurt %lld dag en gaat in zodra de ondertiteling begint.",
     "other": "Je gratis proefperiode duurt %lld dagen en gaat in zodra de ondertiteling begint."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles zet het geluid dat je Mac afspeelt om in tekst, zodat het realtime ondertiteling kan tonen.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles zet wat de microfoon hoort om in tekst als je de microfoon als bron kiest, zodat het realtime ondertiteling kan tonen."
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles zet wat de microfoon hoort om in tekst als je de microfoon als bron kiest, zodat het realtime ondertiteling kan tonen.",
+  "Save Transcript…": "Transcript bewaren…",
+  "Save a transcript of this session before it clears? (%@)": "Een transcript van deze sessie bewaren voordat het wordt gewist? (%@)",
+  "about %@": "ca. %@",
+  "Transcript %@": "Transcript %@",
+  "Speaker %lld": "Spreker %lld",
+  "Name speakers in saved transcripts": "Sprekers benoemen in bewaarde transcripten",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Als meer dan één persoon spreekt, begint elke beurt met Spreker 1, Spreker 2… SRT-bestanden laten ze weg.",
+  "Buy a License": "Licentie kopen",
+  "Format:": "Structuur:",
+  "Plain Text": "Platte tekst",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Een transcript van deze sessie bewaren voordat het wordt gewist?"
 }

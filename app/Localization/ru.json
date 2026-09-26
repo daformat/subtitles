@@ -350,7 +350,6 @@
   "many": "Пробный период закончился, субтитры вернутся через %lld минут.",
   "other": "Пробный период закончился, субтитры вернутся через %lld минуты."
  },
- "Get a license key at subtitles-live.com": "Лицензионный ключ можно купить на subtitles-live.com",
  "Your free trial runs for %lld days, and starts when the captions do.": {
   "one": "Бесплатный пробный период: %lld день, отсчёт начнётся с первых субтитров.",
   "few": "Бесплатный пробный период: %lld дня, отсчёт начнётся с первых субтитров.",
@@ -364,5 +363,18 @@
  "Fade": "Растворение",
  "Forget the stack when idle": "Забывать стопку в тишине",
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Сколько строк заполняет блок, прежде чем очиститься и начать новый, насколько плотный фон под текстом и насколько размыто изображение под ним. Стопка ⌥ повторяет эти настройки, но её фон чуть прозрачнее.",
- "The stack's text is %lld%% as strong as the live box's.": "Текст в стопке насыщен на %lld %% от текста живого блока."
+ "The stack's text is %lld%% as strong as the live box's.": "Текст в стопке насыщен на %lld %% от текста живого блока.",
+  "Save Transcript…": "Сохранить расшифровку…",
+  "Save a transcript of this session before it clears? (%@)": "Сохранить расшифровку этого сеанса, пока она не очищена? (%@)",
+  "about %@": "около %@",
+  "Transcript %@": "Расшифровка %@",
+  "Speaker %lld": "Говорящий %lld",
+  "Name speakers in saved transcripts": "Указывать говорящих в сохранённых расшифровках",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Когда говорят несколько человек, каждая реплика начинается с «Говорящий 1», «Говорящий 2»… В файлах SRT их нет.",
+  "Buy a License": "Купить лицензию",
+  "Format:": "Формат:",
+  "Plain Text": "Простой текст",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Сохранить расшифровку этого сеанса, пока она не очищена?"
 }

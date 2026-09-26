@@ -745,6 +745,11 @@ actor FluidAudioEngine {
         wasSpeech = false
     }
 
+    /// The diarizer forgets every voice: the session the history held is over.
+    func forgetSpeakers() async {
+        if let speakers { await speakers.forgetSpeakers() }
+    }
+
     /// Everything in flight, gone: queued audio as well as the recogniser's state.
     ///
     /// `resetContext()` above deliberately leaves the queue alone — it fires when

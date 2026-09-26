@@ -148,6 +148,7 @@ enum Defaults {
     static let variant = "engine.variant"
     static let language = "engine.language"
     static let speakerBreaks = "engine.speakerBreaks"
+    static let namesSpeakers = "transcript.namesSpeakers"
     static let useVAD = "engine.vad"
     static let screenShare = "overlay.screenShare"
     /// See `Pill.IconStyle` and `Pill.TextAlignment`.
@@ -733,6 +734,9 @@ func applyVariant(_ variant: FluidVariant, initial: Bool = false) {
                 // those already drawn in the outgoing speaker's box.
                 DispatchQueue.main.async { renderer.overlay?.markSpeakerChange(at: time) }
             },
+            onSpeaker: { time, index in
+                DispatchQueue.main.async { renderer.overlay?.markSpeaker(index, at: time) }
+            },
             onStatus: { message in DispatchQueue.main.async { err(message) } })
         : nil
 
@@ -1214,8 +1218,10 @@ if useOverlay {
     controller.maxLines = max(
         UserDefaults.standard.object(forKey: Defaults.maxLines) as? Int
             ?? SubtitleView.defaultMaxLines, 1)
+    // Raised to the floor, which a plist from before it may be under.
     controller.historyExpiry = (UserDefaults.standard.object(forKey: Defaults.historyExpiry)
-        as? Double).map { max($0, 0) } ?? OverlayController.defaultHistoryExpiry
+        as? Double).map { max($0, OverlayController.minHistoryExpiry) }
+        ?? OverlayController.defaultHistoryExpiry
     controller.isHistoryExpiryEnabled =
         UserDefaults.standard.object(forKey: Defaults.historyExpires) as? Bool ?? true
     controller.historyTextOpacity = min(max(CGFloat(
@@ -1331,9 +1337,36 @@ if useOverlay {
     settings.modelsInUse = {
         ModelCache.inUse(variant: currentVariant, speakerBreaks: speakerBreaksEnabled)
     }
+    #if DEV_BUILD
+    // [main-edition]
+    // Shown as the trial shows it, then taken down again: a licensed copy
+    // has no pause to make at the end.
+    settings.onShowTrialEnded = {
+        guard !isPaused else { return }
+        endFreeMinutes(on: controller) { controller.clearAndHide() }
+    }
+    // [/main-edition]
+    settings.onShowTranscriptOffer = { controller.debugOfferTranscript() }
+    controller.showsSpeakerOnAppLabel = UserDefaults.standard.bool(forKey: "debug.speakerOnAppLabel")
+    settings.speakerOnAppLabel = { controller.showsSpeakerOnAppLabel }
+    settings.onSpeakerOnAppLabel = { on in
+        controller.showsSpeakerOnAppLabel = on
+        UserDefaults.standard.set(on, forKey: "debug.speakerOnAppLabel")
+    }
+    #endif
+    controller.onHistoryCleared = {
+        if let fluid = fluidEngine { Task { await fluid.forgetSpeakers() } }
+    }
+    controller.namesSpeakersInTranscript =
+        UserDefaults.standard.object(forKey: Defaults.namesSpeakers) as? Bool ?? true
+    settings.namesSpeakers = { controller.namesSpeakersInTranscript }
+    settings.onToggleNamesSpeakers = { on in
+        controller.namesSpeakersInTranscript = on
+        UserDefaults.standard.set(on, forKey: Defaults.namesSpeakers)
+    }
     settings.historyExpiry = { controller.historyExpiry }
     settings.onHistoryExpiry = { seconds in
-        controller.historyExpiry = max(seconds, 0)
+        controller.historyExpiry = max(seconds, OverlayController.minHistoryExpiry)
         UserDefaults.standard.set(seconds, forKey: Defaults.historyExpiry)
     }
     settings.historyExpires = { controller.isHistoryExpiryEnabled }
@@ -1375,6 +1408,7 @@ if useOverlay {
     playingApp.source = { tap.source }
     playingApp.isPaused = { isPaused }
     playingApp.onChange = { controller.playingApp = $0 }
+    playingApp.onSilence = { controller.isSourceSilent = $0 }
     playingApp.voice = { voiceDetector }
     playingApp.probe = { await fluidEngine?.wordProbe() }
     renderer.onWords = { playingApp.noteWords($0) }
@@ -1621,29 +1655,62 @@ license.onUnblocked = {
 }
 
 /// How long the line that ends the free minutes stays up before the pause.
-let finalCaptionHold: TimeInterval = 20
+let finalCaptionHold: TimeInterval = 15
+
+/// Counts the line's time on screen, the time the pointer spends over it
+/// left out.
+nonisolated(unsafe) var finalCaptionTimer: Timer?
 
 /// An expired trial's free window closed: the box says so, over the glow,
 /// which the tap goes on feeding while the recognizer hears nothing more;
 /// then the app pauses as the license pauses it.
-func endFreeMinutes(on overlay: OverlayController) {
+///
+/// The hold stands still while the pointer is over the box, as the offer to
+/// save the transcript does: someone reading it, or on their way to the link,
+/// is not letting it run out. `onHeld` runs if the hold ends with no pause
+/// to make, which only Settings ▸ Debug's preview does.
+func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) {
     holdingFinalCaption = true
     renderer.discardLine()
     if let fluid = fluidEngine { Task { await fluid.flush() } }
     let rest = Int(LicenseRecord.freeRest / 60)
     overlay.showFinalCaption(
         LP("Your trial has ended, captions will resume in %lld minutes.",
-           one: "Your trial has ended, captions will resume in %lld minute.", rest) + "\n"
-            + L("Get a license key at subtitles-live.com", "Shown in the caption box; subtitles-live.com becomes a link"),
-        link: ("subtitles-live.com", { NSWorkspace.shared.open(LicenseController.buyURL) }))
-    DispatchQueue.main.asyncAfter(deadline: .now() + finalCaptionHold) {
+           one: "Your trial has ended, captions will resume in %lld minute.", rest),
+        action: (L("Buy a License", "Button in the caption box when the trial's free minutes end: opens the store"),
+                 { NSWorkspace.shared.open(LicenseController.buyURL) }))
+    finalCaptionTimer?.invalidate()
+    var shown: TimeInterval = 0
+    var tickedAt = Date()
+    // At frame rate: it moves the bar along the box's bottom edge, the same
+    // bar as the offer to save the transcript, and a coarser tick steps it.
+    let tick: TimeInterval = 1.0 / 60
+    overlay.setFinalCaptionProgress(0)
+    let timer = Timer(timeInterval: tick, repeats: true) { timer in
         // A pause or a key in the meantime has already settled it.
-        guard holdingFinalCaption else { return }
+        guard holdingFinalCaption else {
+            timer.invalidate()
+            return
+        }
+        // The clock, not the tick count: a timer that fires late would
+        // otherwise stretch the hold.
+        let now = Date()
+        if !overlay.isPointerOverBox { shown += now.timeIntervalSince(tickedAt) }
+        tickedAt = now
+        overlay.setFinalCaptionProgress(CGFloat(shown / finalCaptionHold))
+        guard shown >= finalCaptionHold else { return }
+        timer.invalidate()
         holdingFinalCaption = false
-        guard !isPaused, !license.allowsTranscription else { return }
+        guard !isPaused, !license.allowsTranscription else {
+            onHeld?()
+            return
+        }
         togglePause()
         pausedByLicense = true
     }
+    // In `.common`, so the bar keeps moving while a menu is open.
+    RunLoop.main.add(timer, forMode: .common)
+    finalCaptionTimer = timer
 }
 // [/main-edition]
 

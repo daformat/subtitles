@@ -328,11 +328,23 @@
     "one": "Votre essai est terminé, les sous-titres reprendront dans %lld minute.",
     "other": "Votre essai est terminé, les sous-titres reprendront dans %lld minutes."
   },
-  "Get a license key at subtitles-live.com": "Obtenez une clé de licence sur subtitles-live.com",
   "Your free trial runs for %lld days, and starts when the captions do.": {
     "one": "Votre essai gratuit dure %lld jour et commence avec les premiers sous-titres.",
     "other": "Votre essai gratuit dure %lld jours et commence avec les premiers sous-titres."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transcrit le son que joue votre Mac pour afficher des sous-titres en temps réel.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transcrit ce que capte le micro quand vous le choisissez comme source, pour afficher des sous-titres en temps réel."
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transcrit ce que capte le micro quand vous le choisissez comme source, pour afficher des sous-titres en temps réel.",
+  "Save Transcript…": "Enregistrer la transcription…",
+  "Save a transcript of this session before it clears? (%@)": "Enregistrer une transcription de cette session avant qu'elle ne s'efface ? (%@)",
+  "about %@": "env. %@",
+  "Transcript %@": "Transcription %@",
+  "Speaker %lld": "Intervenant %lld",
+  "Name speakers in saved transcripts": "Nommer les intervenants dans les transcriptions enregistrées",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Quand plusieurs personnes parlent, chaque tour de parole commence par Intervenant 1, Intervenant 2… Les fichiers SRT ne les incluent pas.",
+  "Buy a License": "Acheter une licence",
+  "Format:": "Format :",
+  "Plain Text": "Texte brut",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Enregistrer une transcription de cette session avant qu'elle ne s'efface ?"
 }

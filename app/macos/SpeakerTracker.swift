@@ -13,6 +13,14 @@
 // segment began, on the same clock as the recognizer's words (both are fed the
 // same slices and reset together), and the overlay moves the words they had
 // already said out of the outgoing speaker's box and into theirs.
+//
+// The index is passed on as well, for one use: the saved transcript names
+// who said each box when more than one person spoke. For the index to mean the
+// same person all session, the diarizer is never reset between utterances. It
+// keeps its speaker memory and its own clock, and each utterance's times are
+// given from where that utterance began, on the recognizer's restarted clock.
+// A session ends where the history does, cleared by the idle expiry, a saved
+// transcript or a pause, and `forgetSpeakers` starts the diarizer over there.
 
 import CoreML
 import FluidAudio
@@ -23,7 +31,15 @@ actor SpeakerTracker {
     private var loaded = false
     private var currentSpeaker: Int?
 
+    /// Seconds of audio fed since the diarizer last really reset, and where
+    /// the current utterance began among them: the recognizer's zero.
+    private var fed: Float = 0
+    private var origin: Float = 0
+
     private let onChange: @Sendable (TimeInterval) -> Void
+    /// Who is talking, from `time` in the utterance's clock: the first voice
+    /// heard in each utterance, and each change after it.
+    private let onSpeaker: @Sendable (TimeInterval, Int) -> Void
     private let onStatus: @Sendable (String) -> Void
 
     /// How long a new speaker must have been talking before it counts. A
@@ -44,8 +60,10 @@ actor SpeakerTracker {
     private(set) var computeSeconds = 0.0
 
     init(onChange: @escaping @Sendable (TimeInterval) -> Void,
+         onSpeaker: @escaping @Sendable (TimeInterval, Int) -> Void,
          onStatus: @escaping @Sendable (String) -> Void) {
         self.onChange = onChange
+        self.onSpeaker = onSpeaker
         self.onStatus = onStatus
     }
 
@@ -68,6 +86,7 @@ actor SpeakerTracker {
         guard loaded else { return }
         let started = Date()
         diarizer.addAudio(samples)
+        fed += Float(samples.count) / Float(diarizer.config.sampleRate)
         do {
             guard let update = try diarizer.process() else { return }
             // The segment reaching furthest into the audio, finalized or not, so a
@@ -76,7 +95,9 @@ actor SpeakerTracker {
             // read the outgoing speaker's older segment as a change back to them.
             let latest = (update.finalizedSegments + update.tentativeSegments)
                 .max { ($0.endFrame, $0.startFrame) < ($1.endFrame, $1.startFrame) }
-            guard let latest else { return }
+            // The diarizer runs behind the audio, so a segment reported now
+            // may be all before this utterance: that is the last one's.
+            guard let latest, latest.endTime > origin else { return }
 
             if let current = currentSpeaker, current != latest.speakerIndex {
                 // Too short to count yet: the same segment is reported again
@@ -84,18 +105,22 @@ actor SpeakerTracker {
                 if latest.duration >= Self.minimumTurn {
                     let heard = Float(diarizer.numFramesProcessed)
                         * diarizer.config.frameDurationSeconds
-                    let time = max(latest.startTime, heard - Self.maximumReach)
+                    let time = max(latest.startTime, heard - Self.maximumReach, origin) - origin
                     if Self.debug {
                         FileHandle.standardError.write(String(
                             format: "[speaker] %d → %d, segment %.2f–%.2f s, heard %.2f s\n",
                             current, latest.speakerIndex, latest.startTime, latest.endTime, heard)
                             .data(using: .utf8)!)
                     }
+                    // Who first: the boxes the change closes are told apart
+                    // by which side of it they start.
+                    onSpeaker(TimeInterval(time), latest.speakerIndex)
                     onChange(TimeInterval(time))
                     currentSpeaker = latest.speakerIndex
                 }
-            } else {
+            } else if currentSpeaker == nil {
                 currentSpeaker = latest.speakerIndex
+                onSpeaker(TimeInterval(max(latest.startTime - origin, 0)), latest.speakerIndex)
             }
         } catch {
             onStatus("speaker detection error: \(error.localizedDescription)")
@@ -111,9 +136,24 @@ actor SpeakerTracker {
 
     /// At an utterance boundary the next speaker is unknown again; forgetting the
     /// previous one avoids a spurious break when the same person resumes.
+    ///
+    /// The diarizer itself carries on, so it still knows the voices: only the
+    /// clock is moved to where the recognizer's restarts.
     func reset() {
         currentSpeaker = nil
+        origin = fed
+    }
+
+    /// A new session: every voice forgotten, the next one heard numbered
+    /// first. The diarizer's clock restarts with it, and the utterance's
+    /// clock does not, so the origin is put where the two still agree.
+    func forgetSpeakers() {
+        guard loaded else { return }
+        let intoUtterance = fed - origin
         diarizer.reset()
+        fed = 0
+        origin = -intoUtterance
+        currentSpeaker = nil
     }
 
     func shutdown() {

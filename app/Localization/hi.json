@@ -328,11 +328,23 @@
     "one": "आपका ट्रायल ख़त्म हो गया है, कैप्शन %lld मिनट में फिर शुरू होंगे।",
     "other": "आपका ट्रायल ख़त्म हो गया है, कैप्शन %lld मिनट में फिर शुरू होंगे।"
   },
-  "Get a license key at subtitles-live.com": "subtitles-live.com से लाइसेंस कुंजी लें",
   "Your free trial runs for %lld days, and starts when the captions do.": {
     "one": "आपका मुफ़्त ट्रायल %lld दिन चलता है, और कैप्शन शुरू होते ही शुरू होता है।",
     "other": "आपका मुफ़्त ट्रायल %lld दिन चलता है, और कैप्शन शुरू होते ही शुरू होता है।"
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles आपके Mac पर चल रहे ऑडियो को ट्रांसक्राइब करता है, ताकि लाइव कैप्शन दिखा सके।",
-  "InfoPlist|NSMicrophoneUsageDescription": "जब आप माइक्रोफ़ोन को स्रोत चुनते हैं, तो Subtitles उसकी सुनी बात ट्रांसक्राइब करता है, ताकि लाइव कैप्शन दिखा सके।"
+  "InfoPlist|NSMicrophoneUsageDescription": "जब आप माइक्रोफ़ोन को स्रोत चुनते हैं, तो Subtitles उसकी सुनी बात ट्रांसक्राइब करता है, ताकि लाइव कैप्शन दिखा सके।",
+  "Save Transcript…": "ट्रांसक्रिप्ट सहेजें…",
+  "Save a transcript of this session before it clears? (%@)": "इस सत्र की ट्रांसक्रिप्ट मिटने से पहले सहेजें? (%@)",
+  "about %@": "लगभग %@",
+  "Transcript %@": "ट्रांसक्रिप्ट %@",
+  "Speaker %lld": "वक्ता %lld",
+  "Name speakers in saved transcripts": "सहेजी गई ट्रांसक्रिप्ट में वक्ताओं के नाम दें",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "जब एक से ज़्यादा लोग बोलते हैं, तो हर बारी वक्ता 1, वक्ता 2… से शुरू होती है SRT फ़ाइलों में ये नहीं होते।",
+  "Buy a License": "लाइसेंस खरीदें",
+  "Format:": "फ़ॉर्मैट:",
+  "Plain Text": "सादा टेक्स्ट",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "इस सत्र की ट्रांसक्रिप्ट मिटने से पहले सहेजें?"
 }

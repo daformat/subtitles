@@ -24,6 +24,7 @@
 import CSubs
 import AppKit
 import CaptionCore
+import UniformTypeIdentifiers
 
 // MARK: - Panel
 
@@ -77,7 +78,13 @@ final class SubtitleView: NSView {
     /// that paragraph is the translation. Follows the translation timing
     /// setting exactly as the caption does, since it is the same emission.
     var secondaryTentative = "" { didSet { if secondaryTentative != oldValue { needsDisplay = true } } }
-    var fontSize: CGFloat = 30 { didSet { needsDisplay = true } }
+    var fontSize: CGFloat = 30 {
+        didSet {
+            actionButton?.fontSize = fontSize
+            needsLayout = true
+            needsDisplay = true
+        }
+    }
 
     /// The Text Size menu's steps, smallest first.
     static var textSizes: [(label: String, size: CGFloat)] {
@@ -160,47 +167,119 @@ final class SubtitleView: NSView {
     /// Draws the dashed ring that says the box can be picked up right now. Set
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
-    /// Text in the caption drawn as a link, and what a click on the box does
-    /// while it shows. Only the app's own last line has one; the transcript
-    /// never does, and the panel passes clicks through whenever this is nil.
-    var link: (text: String, open: () -> Void)? {
+
+    /// A button inline after the text, and what pressing it does. Only the
+    /// offer to save the transcript has one. The panel takes clicks while it
+    /// shows, and the box around the button neither acts nor drags.
+    var action: (title: String, press: () -> Void)? {
         didSet {
+            actionButton?.removeFromSuperview()
+            actionButton = nil
+            if let action {
+                let button = ActionButton(title: action.title, target: self,
+                                          action: #selector(pressAction))
+                button.bezelStyle = .flexiblePush
+                button.fontSize = fontSize
+                addSubview(button)
+                actionButton = button
+            }
+            needsLayout = true
             needsDisplay = true
         }
     }
 
-    // The panel is never key, so cursor rects do not apply there: a tracking
-    // area that is always active sets the hand instead.
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if !trackingAreas.contains(where: { $0.owner === self && $0.options.contains(.cursorUpdate) }) {
-            addTrackingArea(NSTrackingArea(rect: .zero,
-                                           options: [.activeAlways, .cursorUpdate, .inVisibleRect],
-                                           owner: self))
+    /// The system's push button, in the bezel that takes any height, with
+    /// its title set a size under the caption's so it follows Text Size. The
+    /// fixed-height push button stayed one size beside a caption set large.
+    ///
+    /// The first click in a panel that never becomes key has to count. Under
+    /// ⇧ the button is not there to be hit, so the click picks the box up.
+    private final class ActionButton: NSButton {
+        var fontSize: CGFloat = 30 {
+            didSet {
+                font = .systemFont(ofSize: (fontSize * 0.6).rounded())
+                invalidateIntrinsicContentSize()
+            }
+        }
+
+        /// The bezel's own size for the title, with room either side, and a
+        /// caption line tall at the least.
+        var size: NSSize {
+            let own = intrinsicContentSize
+            return NSSize(width: ceil(own.width + fontSize * 0.6),
+                          height: ceil(max(own.height, Pill.lineHeight(ofSize: fontSize) * 0.9)))
+        }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            SubtitleView.isDragHeld ? nil : super.hitTest(point)
         }
     }
 
-    override func cursorUpdate(with event: NSEvent) {
-        if link != nil { NSCursor.pointingHand.set() } else { super.cursorUpdate(with: event) }
+    /// ⇧ is down: every box drags, the ones that take clicks included.
+    static var isDragHeld: Bool { NSEvent.modifierFlags.contains(.shift) }
+
+    private var actionButton: ActionButton?
+
+    @objc private func pressAction() { action?.press() }
+
+    /// Between the text and the button.
+    static let actionGap: CGFloat = 16
+
+    /// The width the button takes from the text's line, gap included.
+    private var actionRoom: CGFloat {
+        guard let actionButton else { return 0 }
+        return ceil(actionButton.size.width) + Self.actionGap
+    }
+
+    /// Where the text goes: the pill's text rect less the button's room on
+    /// the trailing side, and, when the button is taller than the text,
+    /// lowered so the two share a middle.
+    private func captionRect(for text: NSAttributedString) -> NSRect {
+        var rect = Pill.textRect(in: boxRect, room: iconRoom)
+        guard let actionButton else { return rect }
+        rect.size.width -= actionRoom
+        if isRightToLeft { rect.origin.x += actionRoom }
+        let used = Pill.metrics(text, textWidth: rect.width).used.height
+        let extra = rect.height - ceil(used)
+        if extra > 0, ceil(actionButton.size.height) > ceil(used) {
+            rect.size.height -= extra / 2
+        }
+        return rect
+    }
+
+    override func layout() {
+        super.layout()
+        guard let actionButton else { return }
+        let text = Pill.textRect(in: boxRect, room: iconRoom)
+        let size = actionButton.size
+        let x = isRightToLeft ? text.minX : text.maxX - ceil(size.width)
+        actionButton.frame = NSRect(x: x.rounded(), y: (text.midY - size.height / 2).rounded(),
+                                    width: ceil(size.width), height: ceil(size.height))
     }
 
     // The first click in a panel that never becomes key has to count.
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { link != nil }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { action != nil }
 
-    // A click on the link is a click, not the start of a drag.
-    override var mouseDownCanMoveWindow: Bool { link == nil }
+    /// Whether a click beside the button is swallowed rather than the start
+    /// of a drag. A box with a button still moves under ⇧, like any other.
+    private var takesClicks: Bool { action != nil && !Self.isDragHeld }
+
+    override var mouseDownCanMoveWindow: Bool { !takesClicks }
 
     override func mouseDown(with event: NSEvent) {
-        if link == nil { super.mouseDown(with: event) }
+        if !takesClicks { super.mouseDown(with: event) }
     }
 
-    override func mouseUp(with event: NSEvent) {
-        guard let link, bounds.contains(convert(event.locationInWindow, from: nil)) else {
-            super.mouseUp(with: event)
-            return
-        }
-        link.open()
+    /// How far along the bar on the pill's bottom edge is filled, 0 to 1; nil
+    /// draws no bar. Only the offer to save the transcript has one: it runs
+    /// out with the time left before the stack is forgotten.
+    var progress: CGFloat? {
+        didSet { if progress != oldValue { needsDisplay = true } }
     }
+
+    /// The bar's height. Inside the pill's bottom padding, clear of the text.
+    static let progressHeight: CGFloat = 3
 
     /// The borealis's frame to paint along the bottom of the pill; nil
     /// paints none. See AudioBorealis.
@@ -298,15 +377,8 @@ final class SubtitleView: NSView {
     /// engine survivable if the model is ever swapped.
     func attributed(committed: String, tentative: String,
                     measuring: Bool = false) -> NSAttributedString {
-        let text = Pill.attributed(committed: committed, tentative: tentative,
-                                   size: fontSize, measuring: measuring, alignment: textAlignment)
-        // Underlined, which changes no metric: the box measures the same.
-        guard let link, !measuring else { return text }
-        let range = (text.string as NSString).range(of: link.text)
-        guard range.location != NSNotFound else { return text }
-        let out = NSMutableAttributedString(attributedString: text)
-        out.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
-        return out
+        Pill.attributed(committed: committed, tentative: tentative,
+                        size: fontSize, measuring: measuring, alignment: textAlignment)
     }
 
     private func metrics(committed: String, tentative: String,
@@ -349,10 +421,18 @@ final class SubtitleView: NSView {
     ///
     /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
     func fittingSize(maxWidth: CGFloat) -> NSSize {
+        let room = actionRoom
         var size = Pill.fittingSize(attributed(committed: committed, tentative: tentative,
                                                measuring: true),
-                                    size: fontSize, maxWidth: maxWidth,
+                                    size: fontSize, maxWidth: maxWidth - room,
                                     maxLines: maxLines, pad: Self.pad, room: iconRoom)
+        // The button beside the text: the box wider by it, and at least as
+        // tall as it.
+        if size.height > 0, let actionButton {
+            size.width = min(size.width + room, maxWidth)
+            size.height = max(size.height, ceil(actionButton.size.height)
+                + (inset.height + Self.pad) * 2 + iconRoom.top + iconRoom.inside)
+        }
         // The original under the caption adds its block: the box is as tall as
         // both and as wide as the wider.
         if size.height > 0, let block = secondaryBlock(maxWidth: maxWidth) {
@@ -498,6 +578,22 @@ final class SubtitleView: NSView {
                          size: fontSize, rtl: rtl, scale: scale)
         }
 
+        // Full width along the bottom edge, clipped to the pill so its
+        // corners round the bar's ends. Fills from where the text starts.
+        if let progress {
+            NSGraphicsContext.saveGraphicsState()
+            Pill.pillPath(box, radius: corner, square: squareCorners).addClip()
+            let track = NSRect(x: box.minX, y: box.minY, width: box.width, height: Self.progressHeight)
+            Pill.ink.withAlphaComponent(0.15).setFill()
+            track.fill()
+            let width = (box.width * min(max(progress, 0), 1)).rounded()
+            let filled = NSRect(x: rtl ? track.maxX - width : track.minX, y: track.minY,
+                                width: width, height: track.height)
+            Pill.ink.withAlphaComponent(0.7).setFill()
+            filled.fill()
+            NSGraphicsContext.restoreGraphicsState()
+        }
+
         if showsDragOutline {
             // Just enough to say it can be picked up now: a hairline dashed ring
             // sitting off the pill, the same hint the web demo gives. Half a
@@ -538,7 +634,7 @@ final class SubtitleView: NSView {
             Pill.draw(icon: icon, name: appName, style: iconStyle, on: box,
                       size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale, filled: false)
         }
-        let textRect = Pill.textRect(in: box, room: iconRoom)
+        let textRect = captionRect(for: text)
         text.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
         // The original, in the room `fittingSize` added under the caption: the
         // bottom of the text rect, the gap above it left empty.
@@ -690,7 +786,11 @@ final class OverlayController {
 
     private func wearPlayingApp() {
         view.icon = playingApp.map { AppCatalog.shared.icon(for: $0) }
-        view.appName = playingApp.map { AppCatalog.shared.name(for: $0) }
+        view.appName = playingApp.map { app in
+            let name = AppCatalog.shared.name(for: app)
+            guard showsSpeakerOnAppLabel, let speaker else { return name }
+            return "\(name) · Speaker \(speaker + 1)"
+        }
         // The box makes room for the icon, so whatever is on screen re-fits.
         layout()
     }
@@ -872,39 +972,6 @@ final class OverlayController {
     /// see `showFinalCaption` — and nothing the recognizer or the translator
     /// still has in flight may replace it or fade it.
     private var holdsFinalCaption = false
-    /// Draws that line in a word at a time, as speech would.
-    private var finalCaptionTimer: Timer?
-
-    /// How long `word` takes to say, as the recognizer would time it: a
-    /// conversational four syllables a second, a beat between words, and a
-    /// breath at a comma or a full stop. Syllables are the word's vowel
-    /// groups, less an English silent e; a number is said as its digits'
-    /// words would be, near enough at two syllables for each pair.
-    private static func spokenDuration(of word: String) -> TimeInterval {
-        let letters = word.lowercased().filter(\.isLetter)
-        let syllables: Int
-        if letters.isEmpty {
-            syllables = max(1, word.filter(\.isNumber).count)
-        } else {
-            let vowels = Set("aeiouy")
-            var groups = 0
-            var inVowel = false
-            for c in letters {
-                let v = vowels.contains(c)
-                if v, !inVowel { groups += 1 }
-                inVowel = v
-            }
-            if letters.count > 2, letters.hasSuffix("e"), !letters.hasSuffix("le"), groups > 1 {
-                groups -= 1
-            }
-            syllables = max(1, groups)
-        }
-        var seconds = 0.08 + Double(syllables) * 0.24
-        if let last = word.last, ",;:".contains(last) { seconds += 0.35 }
-        if let last = word.last, ".!?".contains(last) { seconds += 0.5 }
-        // A brisker speaker than the figures above: 30% faster, three times.
-        return seconds / (1.3 * 1.3 * 1.3)
-    }
 
     // ── paging state ──
     // Broadcast subtitles never scroll a wall of text: they fill, clear, and
@@ -1003,6 +1070,60 @@ final class OverlayController {
         /// again — see `reviseStack`.
         let stream: CaptionStreams.Stream
         let ordinal: Int
+        /// The diarizer's index for who said it; nil with speaker breaks off.
+        let speaker: Int?
+        /// When its first and last words reached the screen, by the clock:
+        /// what a saved SubRip file is timed by.
+        let shown: Date
+        let lastWord: Date
+    }
+
+    /// When each word first arrived, by stream, audio start and text: the
+    /// audio times restart at every endpoint, so a box's words are looked up
+    /// here for the clock times it was on screen. Emptied with the stack.
+    private struct SeenWord: Hashable {
+        let stream: CaptionStreams.Stream
+        let start: TimeInterval
+        let text: String
+    }
+    private var wordSeenAt: [SeenWord: Date] = [:]
+
+    /// Who is talking, as the diarizer numbers them, and the last change:
+    /// where in the utterance's audio it fell and who was talking before. A
+    /// box is the one before the change when most of it is before it.
+    private var speaker: Int?
+    private var speakerChange: (time: TimeInterval, previous: Int?)?
+
+    /// Someone is talking from `time`, in audio time: the first voice of an
+    /// utterance, or a new one. Only the saved transcript uses it.
+    func markSpeaker(_ index: Int, at time: TimeInterval) {
+        speakerChange = (time, speaker)
+        speaker = index
+        if showsSpeakerOnAppLabel, !holdsFinalCaption, !offersTranscript { wearPlayingApp() }
+    }
+
+    /// Settings ▸ Models: a saved transcript says who spoke each turn, when
+    /// more than one voice is in it.
+    var namesSpeakersInTranscript = true
+
+    /// Settings ▸ Debug, in development builds: the app label also names
+    /// who the diarizer hears, by its own number counted from 1.
+    var showsSpeakerOnAppLabel = false {
+        didSet {
+            guard showsSpeakerOnAppLabel != oldValue, !holdsFinalCaption, !offersTranscript else { return }
+            wearPlayingApp()
+        }
+    }
+
+    /// Who said a box, from the last change and which side of it the box's
+    /// middle is. Not its first word: the diarizer's turn and the recognizer's
+    /// words disagree by a few tenths of a second, and the page breaks on a
+    /// word near the change, so the new speaker's first box often starts just
+    /// before the time reported. Read by its start, that box went to the
+    /// speaker before, and the new name appeared a box late.
+    private func speaker(from start: TimeInterval, to end: TimeInterval) -> Int? {
+        guard let speakerChange, (start + end) / 2 < speakerChange.time else { return speaker }
+        return speakerChange.previous
     }
 
     private var stack: [StackBox] = []
@@ -1034,9 +1155,15 @@ final class OverlayController {
             let boxes = streams.boxes(stream)
             let fresh = boxes.suffix(min(unseen, boxes.count))
             for (offset, box) in fresh.enumerated() {
+                let seen = { (word: TimedWord?) in
+                    word.flatMap { self.wordSeenAt[SeenWord(stream: stream, start: $0.start, text: $0.text)] }
+                        ?? Date()
+                }
                 stack.append(StackBox(text: box.text, under: "", app: box.app,
                                       below: stream == .source, start: box.start, end: box.end,
-                                      stream: stream, ordinal: total - fresh.count + offset))
+                                      stream: stream, ordinal: total - fresh.count + offset,
+                                      speaker: speaker(from: box.start, to: box.end),
+                                      shown: seen(box.words.first), lastWord: seen(box.words.last)))
                 if Self.debugPaging {
                     FileHandle.standardError.write(
                         "[stack] + \(stream) \"\(box.text)\"\n".data(using: .utf8)!)
@@ -1103,7 +1230,18 @@ final class OverlayController {
         stack.removeAll()
         recorded = [:]
         recentEmissions = []
+        // A new session starts here, and its first voice is Speaker 1 again.
+        speaker = nil
+        speakerChange = nil
+        wordSeenAt = [:]
+        offeredSinceText = false
+        onHistoryCleared?()
     }
+
+    /// Fired whenever the whole stack goes: the idle expiry, a transcript
+    /// saved, and a pause, model or source switch. The diarizer starts over
+    /// with it, so the voices it numbers belong to the session the stack holds.
+    var onHistoryCleared: (() -> Void)?
 
     /// The stack as shown, each box wearing the icon of the app it came from.
     /// Under ⌃ each box shows its other language, the way the live box shows
@@ -1169,6 +1307,40 @@ final class OverlayController {
     /// Half a minute. Long enough to cover a pause in the conversation, short
     /// enough that the stack is about what was *just* said.
     static let defaultHistoryExpiry: TimeInterval = 30
+
+    /// How long before the stack is forgotten the box offers to save it: the
+    /// offer's whole life, which its bar counts down.
+    static let transcriptOfferLead: TimeInterval = 10
+
+    /// The shortest Clear after there is. Twice the offer's lead, so the
+    /// captions have been quiet for ten seconds before it asks, rather than
+    /// asking over the box that has only just faded.
+    static let minHistoryExpiry: TimeInterval = 20
+
+    /// The box is showing the offer to save the transcript. See
+    /// `offerTranscriptIfIdle`.
+    private var offersTranscript = false
+    /// The save panel is up. The stack is kept while it is, whatever the
+    /// timer says: it is what is being saved.
+    private var savingTranscript = false
+    /// How long the offer has been up, the time the pointer spent over it
+    /// left out. It lasts `transcriptOfferLead`, wherever it came up.
+    private var offerElapsed: TimeInterval = 0
+    /// The offer has been made since the last words: once per quiet spell,
+    /// so one that came up on silence and ran out does not come back at the
+    /// tail.
+    private var offeredSinceText = false
+    /// The offer came up ahead of the tail, on silence, so the stack outlasts
+    /// it and the question says for how long. At the tail the two end
+    /// together, and the bar already says it.
+    private var offerCountsDown = false
+
+    /// Whether the source has stopped making sound, as Core Audio tells it:
+    /// nothing playing, or the chosen app not playing. Nil when there is no
+    /// telling, for the microphone. See `PlayingAppMonitor.onSilence`.
+    var isSourceSilent: Bool?
+    /// When the offer's bar last ticked, for holding it while hovered.
+    private var offerTickedAt: Date?
 
     /// Whether ⌥ brings the last few boxes back. Menu-controlled, like the
     /// pointer reveal.
@@ -1281,6 +1453,7 @@ final class OverlayController {
         idleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.fadeIfTextIdle()
             self?.expireHistoryIfIdle()
+            self?.offerTranscriptIfIdle()
         }
 
         // ⇧ toggles grabbable. Polled, not monitored — see the file header.
@@ -1302,7 +1475,7 @@ final class OverlayController {
             let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
-                self.panel.ignoresMouseEvents = !wantsDrag && self.view.link == nil
+                self.panel.ignoresMouseEvents = !wantsDrag && self.view.action == nil
                 self.view.showsDragOutline = wantsDrag
                 // Nudge visible while it can be grabbed, so it is obvious the
                 // overlay is now catching clicks instead of passing them through.
@@ -1323,6 +1496,7 @@ final class OverlayController {
             self?.updateHistory()
             self?.updateMask()
             self?.tickAudioBorealis()
+            self?.tickTranscriptOffer()
         }
         RunLoop.main.add(cursor, forMode: .common)
         cursorTimer = cursor
@@ -1382,7 +1556,10 @@ final class OverlayController {
     /// Only while the box is up and the glow is wanted; otherwise the glow
     /// is dropped and the driver rests, so it opens from silence.
     private func tickAudioBorealis() {
-        guard let voiceMeter, isBorealisEnabled, panel.alphaValue > 0, !boxIsCleared else {
+        // The offer to save the transcript glows too, like the trial's last
+        // line: it sits on a box emptied by the fade, but it is on screen.
+        guard let voiceMeter, isBorealisEnabled, panel.alphaValue > 0,
+              !boxIsCleared || offersTranscript else {
             if view.borealis != nil {
                 view.borealis = nil
                 borealis.reset()
@@ -1417,6 +1594,7 @@ final class OverlayController {
         let flags = NSEvent.modifierFlags
         guard isRevealEnabled,
               !holdsFinalCaption,
+              !offersTranscript,
               panel.alphaValue > 0,
               !flags.contains(.shift),
               !flags.contains(.option),
@@ -1453,6 +1631,10 @@ final class OverlayController {
 
     func setTentative(_ text: String) {
         guard !holdsFinalCaption else { return }
+        if !(pendingCommit.isEmpty && text.isEmpty) {
+            offeredSinceText = false
+            withdrawTranscriptOffer(fading: false)
+        }
         tentative = text
         if startFreshOnNextText, !(pendingCommit.isEmpty && text.isEmpty) {
             startFreshOnNextText = false
@@ -1640,6 +1822,11 @@ final class OverlayController {
         // turns on whichever of the two fills first, and the hold is sized on
         // whichever takes longer to read.
         let captionBefore = streams.currentWords(stream).map(\.text).joined(separator: " ")
+        let now = Date()
+        for word in words {
+            let key = SeenWord(stream: stream, start: word.start, text: word.text)
+            if wordSeenAt[key] == nil { wordSeenAt[key] = now }
+        }
         let underBefore = onScreen ? view.secondary + view.secondaryTentative : ""
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
                                    depth: effectiveHistoryDepth, allowCarry: allowsCarry,
@@ -1778,6 +1965,8 @@ final class OverlayController {
         else { return }
         lastShownText = text
         lastTextAt = Date()
+        offeredSinceText = false
+        withdrawTranscriptOffer(fading: false)
         // A new page: the first draw is when its reading time starts. A box
         // coming back from empty is a new page too.
         if pendingPageChange || boxIsCleared {
@@ -2023,7 +2212,8 @@ final class OverlayController {
         // Both stacks, not the one on screen: with a target chosen the visible one
         // can be empty while the other still holds a session's worth of boxes, and
         // guarding on the visible one alone left that never expiring.
-        guard isHistoryExpiryEnabled, !streams.isEmpty || !stack.isEmpty else { return }
+        guard isHistoryExpiryEnabled, !savingTranscript,
+              !streams.isEmpty || !stack.isEmpty else { return }
         // Not while it is on screen. Someone holding ⌥ is reading it, and a
         // stack that empties under their eyes because nobody spoke for a minute
         // is the one moment this must not fire.
@@ -2031,10 +2221,300 @@ final class OverlayController {
         guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
         streams.clear()
         forgetStack()
+        withdrawTranscriptOffer(fading: true)
+    }
+
+    /// Once the source has stopped making sound, or `transcriptOfferLead`
+    /// seconds before the stack is forgotten if that comes first, the box
+    /// asks whether to save it, for `transcriptOfferLead` seconds, and takes
+    /// clicks while it asks. Its bar fills over those seconds. Up at the tail,
+    /// it ends as the stack goes; up earlier on silence, it fades on its own
+    /// and the stack stays until Clear after. New words take the box back at
+    /// once. Silence is the better moment: the video or the call is over, and
+    /// the person is still there to answer.
+    ///
+    /// Only over a box that has already faded, and never over the ⌥ stack,
+    /// a line of the app's own or a box being dragged. Once up it stays, sound
+    /// or no sound, until words, the timer or a click take it; withdrawn,
+    /// faded, if Clear after is turned off in the meantime.
+    private func offerTranscriptIfIdle() {
+        let idle = Date().timeIntervalSince(lastTextAt)
+        let due = isSourceSilent == true || idle >= historyExpiry - Self.transcriptOfferLead
+        let wanted = isHistoryExpiryEnabled && !savingTranscript && !isSuppressed
+            && !holdsFinalCaption && !stack.isEmpty
+            && (offersTranscript || (due && !offeredSinceText))
+        guard wanted else {
+            withdrawTranscriptOffer(fading: true)
+            return
+        }
+        guard !offersTranscript, boxIsCleared, panel.alphaValue == 0,
+              !isDraggable, history.shown.isEmpty else { return }
+
+        offersTranscript = true
+        offeredSinceText = true
+        offerElapsed = 0
+        // Half a second of slack: the poll that brings it up at the tail can
+        // run that far ahead of the exact moment.
+        offerCountsDown = historyExpiry - idle > Self.transcriptOfferLead + 0.5
+        // Said by Subtitles, like the trial's last line.
+        view.icon = NSApp.applicationIconImage
+        view.appName = "Subtitles"
+        view.committed = transcriptOfferText
+        view.tentative = ""
+        view.secondary = ""
+        view.secondaryTentative = ""
+        view.action = (L("Save Transcript…", "Button in the caption box: saves the session's recent boxes to a text file"),
+                       { [weak self] in self?.saveTranscript() })
+        panel.ignoresMouseEvents = false
+        tickTranscriptOffer()
+        layout()
+        show()
+    }
+
+    /// The pointer is over the box on screen, the transparent margin round it
+    /// left out. What a line that times out holds still for: someone reading
+    /// it, or reaching for what it offers.
+    var isPointerOverBox: Bool {
+        guard panel.alphaValue > 0 else { return false }
+        return panel.frame.insetBy(dx: SubtitleView.pad, dy: SubtitleView.pad)
+            .contains(NSEvent.mouseLocation)
+    }
+
+    /// The bar under the app's own last line, 0 to 1, for a caller that
+    /// counts its hold: the trial's end. Only while that line is up; taken
+    /// down with it.
+    func setFinalCaptionProgress(_ progress: CGFloat) {
+        guard holdsFinalCaption else { return }
+        view.progress = min(max(progress, 0), 1)
+    }
+
+    #if DEV_BUILD
+    /// Settings ▸ Debug: bring the offer up now, as if the captions had been
+    /// quiet until ten seconds before Clear after. A box on screen fades
+    /// first, as it would. With nothing said yet, two sample boxes stand in
+    /// for the session, so there is something to save. Needs Clear after on,
+    /// and not paused, as the real one does.
+    func debugOfferTranscript() {
+        guard isHistoryExpiryEnabled, !isSuppressed else { return }
+        if stack.isEmpty {
+            let samples = ["A sample box, so the offer has something to save.",
+                           "Nothing had been said since the history last cleared."]
+            // Ordinals below zero: no pager revision can reach them.
+            let now = Date()
+            stack = samples.enumerated().map { index, text in
+                StackBox(text: text, under: "", app: playingApp, below: true,
+                         start: Double(index), end: Double(index) + 1,
+                         stream: .source, ordinal: -1 - index, speaker: nil,
+                         shown: now.addingTimeInterval(Double(index * 3) - 6),
+                         lastWord: now.addingTimeInterval(Double(index * 3) - 4))
+            }
+        }
+        if panel.alphaValue == 0 { boxIsCleared = true }
+        offeredSinceText = false
+        lastTextAt = Date().addingTimeInterval(-(historyExpiry - Self.transcriptOfferLead))
+    }
+    #endif
+
+    /// The offer's question, with how long is left before the stack goes in
+    /// brackets after it: to the second under a minute, "(18s)", and past
+    /// one, "(about 4m)", rounded, where "4m 40s" would be reading for its
+    /// own sake. In the language's own abbreviations.
+    private var transcriptOfferText: String {
+        let question = L("Save a transcript of this session before it clears?",
+                         "Asked in the caption box before the recent boxes are forgotten")
+        guard offerCountsDown else { return question }
+        let left = max(historyExpiry - Date().timeIntervalSince(lastTextAt), 0).rounded(.up)
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        var calendar = Calendar.current
+        calendar.locale = AppLanguage.locale
+        formatter.calendar = calendar
+        let time: String
+        if left < 60 {
+            formatter.allowedUnits = [.second]
+            time = formatter.string(from: left) ?? ""
+        } else {
+            formatter.allowedUnits = [.minute]
+            time = LF("about %@", formatter.string(from: (left / 60).rounded() * 60) ?? "")
+        }
+        return LF("Save a transcript of this session before it clears? (%@)", time)
+    }
+
+    /// The offer's bar, over its own ten seconds, and its end when they are
+    /// up. At the tail those are the last ten before the stack goes.
+    ///
+    /// Frozen while the pointer is over the box: someone reading the
+    /// question, or reaching for the button, is not letting the time run
+    /// out. The silence is moved on by the time spent there too, so the
+    /// expiry stops with the bar and picks up where it was.
+    private func tickTranscriptOffer() {
+        let now = Date()
+        defer { offerTickedAt = offersTranscript ? now : nil }
+        guard offersTranscript else { return }
+        if let last = offerTickedAt {
+            let step = now.timeIntervalSince(last)
+            if isPointerOverBox { lastTextAt += step } else { offerElapsed += step }
+        }
+        view.progress = CGFloat(min(offerElapsed / Self.transcriptOfferLead, 1))
+        // The time left, a second at a time.
+        let text = transcriptOfferText
+        if text != view.committed {
+            view.committed = text
+            layout()
+        }
+        // At the tail, the expiry takes it down with the stack; the poll
+        // that runs it is at most half a second behind.
+        if offerElapsed >= Self.transcriptOfferLead,
+           Date().timeIntervalSince(lastTextAt) < historyExpiry - 0.5 {
+            withdrawTranscriptOffer(fading: true)
+        }
+    }
+
+    /// Take the offer down. `fading` for the box going with it; otherwise
+    /// the caller is putting words in it straight away.
+    private func withdrawTranscriptOffer(fading: Bool) {
+        guard offersTranscript else { return }
+        offersTranscript = false
+        view.action = nil
+        view.progress = nil
+        if !isDraggable { panel.ignoresMouseEvents = true }
+        guard fading else {
+            view.committed = ""
+            wearPlayingApp()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.4
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            // Words may have taken the box in the meantime; they keep it.
+            guard let self, !self.offersTranscript, self.boxIsCleared,
+                  !self.holdsFinalCaption else { return }
+            self.view.committed = ""
+            self.wearPlayingApp()
+        })
+    }
+
+    /// The stack as a transcript's entries: each box's app by its name, and
+    /// with more than one voice in it, who spoke, numbered in the order they
+    /// are first heard here: the diarizer's own numbers mean nothing to a
+    /// reader.
+    private var transcriptEntries: [TranscriptEntry] {
+        var numbers: [Int: Int] = [:]
+        for case let index? in stack.map(\.speaker) where numbers[index] == nil {
+            numbers[index] = numbers.count + 1
+        }
+        let named = namesSpeakersInTranscript && numbers.count > 1
+        return stack.map { box in
+            TranscriptEntry(text: box.text, under: box.under,
+                            app: box.app.map { AppCatalog.shared.name(for: $0) },
+                            speaker: named ? box.speaker.flatMap { numbers[$0] } : nil,
+                            shown: box.shown, lastWord: box.lastWord)
+        }
+    }
+
+    /// The format last saved in, offered first next time.
+    private static let transcriptFormatKey = "transcript.format"
+
+    /// The offer taken: ask where, write the file, and forget the stack, as
+    /// the timer would have. Cancelled, the timer takes it from there.
+    ///
+    /// What is saved is the stack as it was clicked. Should someone speak
+    /// while the panel is up, only the boxes saved are forgotten.
+    private func saveTranscript() {
+        guard offersTranscript else { return }
+        let entries = transcriptEntries
+        let saved = stack.count
+        let clickedAt = Date()
+        savingTranscript = true
+        withdrawTranscriptOffer(fading: true)
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm"
+        // The date and time go into the name as numbers, sorting as they read.
+        let title = LF("Transcript %@", formatter.string(from: clickedAt))
+        let save = NSSavePanel()
+        let picker = TranscriptFormatPicker(panel: save)
+        save.accessoryView = picker.view
+        save.nameFieldStringValue = title + "." + picker.format.fileExtension
+        save.directoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        save.isExtensionHidden = false
+        // Over a full-screen video, where the click came from, rather than
+        // on a desktop the click would switch to.
+        save.collectionBehavior.insert([.moveToActiveSpace, .fullScreenAuxiliary])
+        NSApp.activate(ignoringOtherApps: true)
+        save.begin { [weak self] response in
+            guard let self else { return }
+            self.savingTranscript = false
+            guard response == .OK, let url = save.url else { return }
+            let format = picker.format
+            UserDefaults.standard.set(format.rawValue, forKey: Self.transcriptFormatKey)
+            let text = TranscriptExport.render(entries, as: format, title: title) {
+                LF("Speaker %lld", $0)
+            }
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                NSAlert(error: error).runModal()
+                return
+            }
+            if self.lastTextAt <= clickedAt {
+                self.streams.clear()
+                self.forgetStack()
+            } else {
+                self.stack.removeFirst(min(saved, self.stack.count))
+            }
+        }
+    }
+
+    /// The save panel's Format popup: plain text, Markdown or SubRip. A
+    /// choice sets the panel's type, which puts the matching extension on the
+    /// name as it stands.
+    private final class TranscriptFormatPicker: NSObject {
+        let view: NSView
+        private let popup = NSPopUpButton()
+        private weak var panel: NSSavePanel?
+
+        init(panel: NSSavePanel) {
+            self.panel = panel
+            let label = NSTextField(labelWithString: L("Format:", "Save panel: label before the popup choosing the transcript's file format"))
+            popup.addItems(withTitles: [
+                L("Plain Text", "Transcript format: a .txt file"),
+                L("Markdown", "Transcript format: a .md file"),
+                L("SubRip (SRT)", "Transcript format: a .srt subtitle file, with each box's times; SubRip is the format's name"),
+            ])
+            let stack = NSStackView(views: [label, popup])
+            stack.orientation = .horizontal
+            stack.spacing = 8
+            stack.edgeInsets = NSEdgeInsets(top: 10, left: 20, bottom: 10, right: 20)
+            view = stack
+            super.init()
+            let stored = UserDefaults.standard.string(forKey: OverlayController.transcriptFormatKey)
+                .flatMap(TranscriptFormat.init(rawValue:)) ?? .text
+            popup.selectItem(at: TranscriptFormat.allCases.firstIndex(of: stored) ?? 0)
+            popup.target = self
+            popup.action = #selector(chosen)
+            apply()
+        }
+
+        var format: TranscriptFormat { TranscriptFormat.allCases[max(popup.indexOfSelectedItem, 0)] }
+
+        @objc private func chosen(_ sender: NSPopUpButton) { apply() }
+
+        private func apply() {
+            guard let panel else { return }
+            let type = UTType(filenameExtension: format.fileExtension) ?? .plainText
+            panel.allowedContentTypes = [type]
+            // The name's extension follows the type only when it had one the
+            // type knew; set it outright.
+            let name = (panel.nameFieldStringValue as NSString).deletingPathExtension
+            if !name.isEmpty { panel.nameFieldStringValue = name + "." + format.fileExtension }
+        }
     }
 
     private func fadeIfTextIdle() {
-        guard !isDraggable, !holdsFinalCaption, panel.alphaValue > 0 else { return }
+        guard !isDraggable, !holdsFinalCaption, !offersTranscript, panel.alphaValue > 0 else { return }
         guard Date().timeIntervalSince(lastTextAt) >= textIdleTimeout else { return }
 
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -2148,13 +2628,18 @@ final class OverlayController {
     }
 
     /// Put `text` in the box as the last caption of a run: the trial's free
-    /// minutes ending. Drawn like any caption, a word at a time, glow and all,
-    /// and held there against the transcript and the idle fade until
+    /// minutes ending. Drawn whole, over the glow like any caption, and held
+    /// there against the transcript and the idle fade until
     /// `setPaused` or `clearAndHide` takes it down.
-    func showFinalCaption(_ text: String, link: (text: String, open: () -> Void)? = nil) {
+    /// `action` is a button inline after the text, as the offer to save the
+    /// transcript has.
+    func showFinalCaption(_ text: String, action: (title: String, press: () -> Void)? = nil) {
         guard !isSuppressed else { return }
         history.dismiss()
         cancelHold()
+        offersTranscript = false
+        view.action = nil
+        view.progress = nil
         holdsFinalCaption = true
         // Said by Subtitles, not by the app playing: the box wears this app's
         // name and icon for it.
@@ -2166,70 +2651,33 @@ final class OverlayController {
         view.tentative = ""
         view.secondary = ""
         view.secondaryTentative = ""
-        view.link = link
-        // Clicks reach the box while the link is up, and only then.
-        panel.ignoresMouseEvents = link == nil
-        // A line break in `text` stays one: the word after it opens a line.
-        var words: [String] = []
-        var opensLine: Set<Int> = []
-        for (i, part) in text.split(separator: "\n").enumerated() {
-            if i > 0 { opensLine.insert(words.count) }
-            words += part.split(separator: " ").map(String.init)
-        }
-        var shown = 0
-        var pageStart = 0
-        func joined() -> String {
-            var out = ""
-            for i in pageStart..<shown {
-                if i > pageStart { out += opensLine.contains(i) ? "\n" : " " }
-                out += words[i]
-            }
-            return out
-        }
-        func step() {
-            shown += 1
-            var line = joined()
-            // Pages like a caption: a word that would overflow the box opens
-            // the next one.
-            if shown - 1 > pageStart,
-               view.lineCount(committed: line, tentative: "", width: maxWidth) > view.maxLines {
-                pageStart = shown - 1
-                line = joined()
-            }
-            boxIsCleared = false
-            lastShownText = line
-            lastTextAt = Date()
-            page = line
-            view.committed = line
-            layout()
-            show()
-            finalCaptionTimer?.invalidate()
-            finalCaptionTimer = nil
-            guard shown < words.count else { return }
-            // The next word lands once this one has been said.
-            finalCaptionTimer = Timer.scheduledTimer(
-                withTimeInterval: Self.spokenDuration(of: words[shown - 1]),
-                repeats: false) { [weak self] _ in
-                    guard let self, self.holdsFinalCaption else { return }
-                    step()
-                }
-        }
-        step()
+        view.action = action
+        // Clicks reach the box while the button is up, and only then.
+        panel.ignoresMouseEvents = action == nil
+        // All of it at once, not a word at a time: it is the app talking, and
+        // someone reading it wants the whole line, not to watch it typed out.
+        boxIsCleared = false
+        lastShownText = text
+        lastTextAt = Date()
+        page = text
+        view.committed = text
+        layout()
+        show()
     }
 
     /// Wipe the box and fade it out, leaving it free to come back on the next
     /// word. Used when the engine underneath changes — model or source switch.
     func clearAndHide() {
-        if view.link != nil {
-            view.link = nil
+        if view.action != nil {
+            view.action = nil
             if !isDraggable { panel.ignoresMouseEvents = true }
         }
         // The app's name comes back once the box is out of sight, not while
         // the line Subtitles said is still fading under it.
-        let rewear = holdsFinalCaption
+        let rewear = holdsFinalCaption || offersTranscript
         holdsFinalCaption = false
-        finalCaptionTimer?.invalidate()
-        finalCaptionTimer = nil
+        offersTranscript = false
+        view.progress = nil
         // The history goes with it. It survives the idle fade on purpose, but a
         // pause or a model switch is the user saying this transcript is over, and
         // ⌥ offering the last thing a since-replaced model heard is a puzzle.

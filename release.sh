@@ -116,7 +116,14 @@ if [ "$NOTARIZE" = yes ] && [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-./build.sh
+SUBTITLES_RELEASE=1 ./build.sh
+
+# The debug pane is compiled out of a release; its settings key standing in
+# the binary means it was not.
+if strings build/Subtitles.app/Contents/MacOS/subtitles | grep -q "debug.speakerOnAppLabel"; then
+  echo "!! the binary has development-only code in it (DEV_BUILD); not shipping it" >&2
+  exit 1
+fi
 
 # build.sh falls back to ad-hoc signing when the certificate is missing, and says
 # so — but it says so in the middle of a lot of other output. Notarization would

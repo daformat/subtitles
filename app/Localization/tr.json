@@ -326,7 +326,6 @@
     "one": "Denemeniz sona erdi; altyazılar %lld dakika sonra yeniden başlayacak.",
     "other": "Denemeniz sona erdi; altyazılar %lld dakika sonra yeniden başlayacak."
   },
-  "Get a license key at subtitles-live.com": "Lisans anahtarını subtitles-live.com adresinden alın",
   "Your free trial runs for %lld days, and starts when the captions do.": {
     "one": "Ücretsiz deneme süreniz %lld gün; altyazılar başladığında başlar.",
     "other": "Ücretsiz deneme süreniz %lld gün; altyazılar başladığında başlar."
@@ -334,5 +333,18 @@
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles, canlı altyazı gösterebilmek için Mac'inizin çaldığı sesi yazıya döker.",
   "InfoPlist|NSMicrophoneUsageDescription": "Subtitles, mikrofonu kaynak olarak seçtiğinizde canlı altyazı gösterebilmek için mikrofonun duyduklarını yazıya döker.",
   "Nemotron · %lld ms": "Nemotron · %lld ms",
-  "Parakeet EOU · %lld ms": "Parakeet EOU · %lld ms"
+  "Parakeet EOU · %lld ms": "Parakeet EOU · %lld ms",
+  "Save Transcript…": "Dökümü Kaydet…",
+  "Save a transcript of this session before it clears? (%@)": "Bu oturumun dökümü silinmeden önce kaydedilsin mi? (%@)",
+  "about %@": "yaklaşık %@",
+  "Transcript %@": "Döküm %@",
+  "Speaker %lld": "Konuşmacı %lld",
+  "Name speakers in saved transcripts": "Kaydedilen dökümlerde konuşmacıları belirt",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Birden fazla kişi konuştuğunda her söz sırası Konuşmacı 1, Konuşmacı 2… ile başlar SRT dosyalarında yer almaz.",
+  "Buy a License": "Lisans Satın Al",
+  "Format:": "Biçim:",
+  "Plain Text": "Düz Metin",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Bu oturumun dökümü silinmeden önce kaydedilsin mi?"
 }

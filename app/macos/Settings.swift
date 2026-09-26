@@ -74,6 +74,20 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Whether a speaker change starts a new box. Also changed only from here.
     var speakerBreaksEnabled: () -> Bool = { false }
     var onToggleSpeakerBreaks: ((Bool) -> Void)?
+    /// Whether a saved transcript says who spoke each turn. Only with speaker
+    /// changes on, which is where the voices come from.
+    var namesSpeakers: () -> Bool = { true }
+    var onToggleNamesSpeakers: ((Bool) -> Void)?
+#if DEV_BUILD
+    /// Settings ▸ Debug, in development builds only: the live box's app
+    /// label also names the speaker the diarizer hears.
+    var speakerOnAppLabel: () -> Bool = { false }
+    var onSpeakerOnAppLabel: ((Bool) -> Void)?
+    /// Shows the trial's last line in the caption box. No button without it.
+    var onShowTrialEnded: (() -> Void)?
+    /// Brings up the offer to save the transcript now.
+    var onShowTranscriptOffer: (() -> Void)?
+#endif
     /// Put every overlay setting back to its default. The window rebuilds itself
     /// afterwards, so this only has to change the values.
     var onResetDefaults: (() -> Void)?
@@ -117,11 +131,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// selected, then full contrast", and in `.preference` style it lays its
     /// items on a material a shade off the window beneath. Fifty lines of view
     /// buys exact control of both.
-    private static var panes: [(label: String, symbol: String)] { [
-        (L("UI", "Settings tab: how the caption boxes look and behave"), "captions.bubble"),
-        (L("Models", "Settings tab: the speech recognition models"), "cpu"),
-        (L("Language", "Settings tab: the language of the app's own menus and windows"), "globe"),
-    ] }
+    private static var panes: [(label: String, symbol: String)] {
+        var panes = [
+            (L("UI", "Settings tab: how the caption boxes look and behave"), "captions.bubble"),
+            (L("Models", "Settings tab: the speech recognition models"), "cpu"),
+            (L("Language", "Settings tab: the language of the app's own menus and windows"), "globe"),
+        ]
+        #if DEV_BUILD
+        // Development copies only, and in English: nobody else ever sees it.
+        panes.append(("Debug", "ladybug"))
+        #endif
+        return panes
+    }
 
     private var stacks: [NSStackView] = []
     private var buttons: [PaneButton] = []
@@ -133,6 +154,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// row is gone by the time the switch is flipped, and nothing hears it.
     private var vadRow: ToggleRow?
     private var speakerRow: ToggleRow?
+    private var namesRow: ToggleRow?
     /// The rows each switch governs, dimmed with it.
     private var revealRows: [SliderRow] = []
     private var historyRows: [SliderRow] = []
@@ -189,6 +211,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         expiryToggle = nil
         vadRow = nil
         speakerRow = nil
+        namesRow = nil
         removable = []
     }
 
@@ -343,10 +366,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// anything outside it.
     ///
     /// The field is the value, not a readout of the slider. The slider covers
-    /// 5 seconds to 5 minutes, which is the range anyone actually reaches for;
-    /// someone who wants an hour, or nought, types it, and the slider then sits
-    /// at its nearest end rather than pretending to hold a number it cannot
-    /// reach.
+    /// 20 seconds to 5 minutes, which is the range anyone actually reaches for;
+    /// someone who wants an hour types it, and the slider then sits at its
+    /// nearest end rather than pretending to hold a number it cannot reach.
+    /// Nothing goes under `OverlayController.minHistoryExpiry`, typed or
+    /// stepped: the box offers to save the transcript for the last ten seconds
+    /// before the stack goes, and needs a quiet spell ahead of that.
     private final class SecondsRow: NSObject, NSTextFieldDelegate {
         let title = NSTextField(labelWithString: L("Clear after", "Settings slider label: how long the recent boxes are kept after nothing is said"))
         let slider = NSSlider()
@@ -392,10 +417,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         init(seconds: Double, apply: @escaping (Double) -> Void) {
             self.apply = apply
-            self.seconds = max(seconds.rounded(), 0)
+            self.seconds = max(seconds.rounded(), OverlayController.minHistoryExpiry)
             super.init()
 
-            slider.minValue = 5
+            slider.minValue = OverlayController.minHistoryExpiry
             slider.maxValue = 300
             slider.isContinuous = true
             slider.target = self
@@ -413,7 +438,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             field.action = #selector(fieldCommitted)
             field.widthAnchor.constraint(equalToConstant: 40).isActive = true
 
-            stepper.minValue = 0
+            stepper.minValue = OverlayController.minHistoryExpiry
             stepper.maxValue = 86_400
             stepper.increment = 1
             stepper.valueWraps = false
@@ -439,9 +464,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         /// One place where all three controls agree.
         ///
         /// The slider parks at whichever end it can reach and the field keeps the
-        /// real number, so a value outside 5–300 still shows honestly.
+        /// real number, so a value over 300 still shows honestly. One under the
+        /// floor is raised to it, and the field shows the floor.
         private func set(_ value: Double, notify: Bool = true) {
-            seconds = max(value.rounded(), 0)
+            seconds = max(value.rounded(), OverlayController.minHistoryExpiry)
             field.stringValue = Self.text(seconds)
             stepper.doubleValue = seconds
             slider.doubleValue = min(max(seconds, slider.minValue), slider.maxValue)
@@ -455,7 +481,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         @objc private func fieldCommitted(_ sender: NSTextField) {
             let typed = sender.stringValue.trimmingCharacters(in: .whitespaces)
             // Cleared and left cleared: put back what was there, rather than
-            // reading an empty field as a request for nought.
+            // reading an empty field as a request for the floor.
             set(typed.isEmpty ? seconds : sender.doubleValue)
         }
 
@@ -497,6 +523,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// construction, so the only way to show new ones is to build new rows.
     private func install(into window: NSWindow) {
         stacks = [buildUIStack(), buildModelsStack(), buildLanguageStack()]
+        #if DEV_BUILD
+        stacks.append(buildDebugStack())
+        #endif
         buttons = Self.panes.enumerated().map { index, pane in
             PaneButton(label: pane.label, symbol: pane.symbol) { [weak self] in
                 guard let self, let window = self.window else { return }
@@ -533,6 +562,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         paneScroll.translatesAutoresizingMaskIntoConstraints = false
         body.addSubview(paneScroll)
         let height = body.heightAnchor.constraint(equalToConstant: 0)
+        // Under `windowSizeStayPut`, so the constraint never moves the window
+        // itself: at any priority above it, Auto Layout resized the window to
+        // a taller pane before the animation could, and fought every frame of
+        // one to a shorter pane. The window is sized in `show(pane:)`, animated
+        // the way the update window's states are, and while it moves the body
+        // gives way; nothing else in the column does (see the hugging below).
+        // `fittingSize` still counts it: it measures down to priority 50.
+        height.priority = NSLayoutConstraint.Priority(rawValue:
+            NSLayoutConstraint.Priority.windowSizeStayPut.rawValue - 10)
         bodyHeight = height
         NSLayoutConstraint.activate([
             paneScroll.topAnchor.constraint(equalTo: body.topAnchor),
@@ -542,6 +580,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             height,
         ])
 
+        for fixed in [headerBar, divider] {
+            fixed.setContentHuggingPriority(.required, for: .vertical)
+            fixed.setContentCompressionResistancePriority(.required, for: .vertical)
+        }
         let root = NSStackView(views: [headerBar, divider, body])
         root.orientation = .vertical
         root.spacing = 0
@@ -599,19 +641,25 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let wanted = stack.fittingSize.height
         bodyHeight.constant = min(wanted, room)
 
-        // `setContentSize` does the titlebar arithmetic; restoring the top edge
-        // afterwards is what stops the window walking up and down the screen as
+        // `frameRect(forContentRect:)` does the titlebar arithmetic; keeping the
+        // top edge is what stops the window walking up and down the screen as
         // panes of different heights are selected.
-        window.layoutIfNeeded()
-        let top = window.frame.maxY
-        window.setContentSize(NSSize(width: Self.width,
-                                     height: window.contentView?.fittingSize.height ?? 0))
-        var frame = window.frame
-        frame.origin.y = top - frame.height
-        window.setFrame(frame, display: true, animate: false)
+        let content = NSRect(x: 0, y: 0, width: Self.width,
+                             height: window.contentView?.fittingSize.height ?? 0)
+        var frame = window.frameRect(forContentRect: content)
+        frame.origin.x = window.frame.minX
+        frame.origin.y = window.frame.maxY - frame.height
         // Holding the top edge is right until it puts the bottom off the screen,
         // which on a short display is exactly what it does.
-        WindowFit.clamp(window)
+        frame = WindowFit.clamped(frame, on: window)
+        // Animated from one pane's height to the next once the window is up;
+        // opened, it simply starts at its size.
+        let animates = window.isVisible && frame != window.frame
+        // No scroller flashing in and out as the pane passes through heights
+        // it would scroll at; `syncScrolling` puts it back as it should be.
+        if animates { paneScroll.hasVerticalScroller = false }
+        window.setFrame(frame, display: true, animate: animates)
+        paneScroll.hasVerticalScroller = true
         window.layoutIfNeeded()
         // A pane that fits does not scroll at all.
         WindowFit.syncScrolling(paneScroll)
@@ -900,11 +948,22 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             L("New box on speaker change", "Settings switch: a new caption box starts when a different person speaks"), detail: L("Runs a second model on the Neural Engine."),
             value: speakerBreaksEnabled(), width: rowWidth) { [weak self] in
                 self?.onToggleSpeakerBreaks?($0)
+                self?.namesRow?.isEnabled = $0
             }
+        let names = ToggleRow(
+            L("Name speakers in saved transcripts", "Settings switch: a saved transcript marks each turn with Speaker 1, Speaker 2 and so on"),
+            detail: L("When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out."),
+            value: namesSpeakers(), width: rowWidth) { [weak self] in
+                self?.onToggleNamesSpeakers?($0)
+            }
+        // The voices come from speaker changes; without them there is nobody
+        // to name.
+        names.isEnabled = speakerBreaksEnabled()
         vadRow = vad
         speakerRow = speakers
+        namesRow = names
 
-        let toggles = NSStackView(views: [vad.view, speakers.view])
+        let toggles = NSStackView(views: [vad.view, speakers.view, names.view])
         toggles.orientation = .vertical
         toggles.alignment = .leading
         toggles.spacing = 10
@@ -954,6 +1013,53 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 languagePopup, nil)
         return stack
     }
+
+    #if DEV_BUILD
+    // MARK: - Debug
+
+    /// Kept for the row's closure, like the other panes' rows.
+    private var debugRows: [ToggleRow] = []
+
+    private func buildDebugStack() -> NSStackView {
+        let (stack, section) = Self.makeStack()
+        let speaker = ToggleRow(
+            "Speaker on the app label",
+            detail: "The live box's app name also says which speaker the diarizer hears.",
+            value: speakerOnAppLabel(), width: Self.contentWidth) { [weak self] in
+                self?.onSpeakerOnAppLabel?($0)
+            }
+        debugRows = [speaker]
+        section("Diarization",
+                "Needs New box on speaker change, under Models. The number is the "
+                + "diarizer's own, counted from 1.",
+                speaker.view, nil)
+
+        let offer = NSButton(title: "Show Save Transcript Offer", target: self,
+                             action: #selector(showTranscriptOffer))
+        offer.bezelStyle = .push
+        var buttons: [NSView] = [offer]
+        if onShowTrialEnded != nil {
+            let trial = NSButton(title: "Show Trial Ended Caption", target: self,
+                                 action: #selector(showTrialEnded))
+            trial.bezelStyle = .push
+            buttons.append(trial)
+        }
+        let row = NSStackView(views: buttons)
+        row.orientation = .vertical
+        row.alignment = .leading
+        row.spacing = 8
+        section("Captions",
+                "The offer to save the transcript, as if Clear after were ten seconds "
+                + "away; with nothing said yet, two sample boxes stand in. Needs Clear "
+                + "after on. And the line an expired trial ends with, button and hold "
+                + "included, taken down when the hold runs out; nothing is paused.",
+                row, nil)
+        return stack
+    }
+
+    @objc private func showTrialEnded() { onShowTrialEnded?() }
+    @objc private func showTranscriptOffer() { onShowTranscriptOffer?() }
+    #endif
 
     /// Switched at once, this window included: rebuilt in the new language
     /// on the same pane, after the popup's menu has finished with it.

@@ -354,7 +354,6 @@
   "many": "Пробний період завершився, субтитри повернуться через %lld хвилин.",
   "other": "Пробний період завершився, субтитри повернуться через %lld хвилини."
  },
- "Get a license key at subtitles-live.com": "Ліцензійний ключ можна придбати на subtitles-live.com",
  "Your free trial runs for %lld days, and starts when the captions do.": {
   "one": "Безкоштовний пробний період триває %lld день і починається з першими субтитрами.",
   "few": "Безкоштовний пробний період триває %lld дні й починається з першими субтитрами.",
@@ -364,5 +363,18 @@
  "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles розпізнає звук, який відтворює ваш Mac, щоб показувати субтитри в реальному часі.",
  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles розпізнає те, що чує мікрофон, коли ви вибираєте його джерелом звуку, щоб показувати субтитри в реальному часі.",
  "Nemotron · %lld ms": "Nemotron · %lld мс",
- "Parakeet EOU · %lld ms": "Parakeet EOU · %lld мс"
+ "Parakeet EOU · %lld ms": "Parakeet EOU · %lld мс",
+  "Save Transcript…": "Зберегти розшифровку…",
+  "Save a transcript of this session before it clears? (%@)": "Зберегти розшифровку цього сеансу, доки її не очищено? (%@)",
+  "about %@": "близько %@",
+  "Transcript %@": "Розшифровка %@",
+  "Speaker %lld": "Мовець %lld",
+  "Name speakers in saved transcripts": "Позначати мовців у збережених розшифровках",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Коли говорить кілька людей, кожна репліка починається з «Мовець 1», «Мовець 2»… У файлах SRT їх немає.",
+  "Buy a License": "Купити ліцензію",
+  "Format:": "Формат:",
+  "Plain Text": "Простий текст",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Зберегти розшифровку цього сеансу, доки її не очищено?"
 }

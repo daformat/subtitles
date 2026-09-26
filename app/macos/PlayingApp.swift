@@ -142,6 +142,12 @@ final class PlayingAppMonitor {
     /// without one, and until the model is loaded; then a voice is taken for
     /// the words' source, as it was before the probe had a say.
     var probe: () async -> WordProbe? = { nil }
+    /// Whether the source has gone quiet, by Core Audio's account, on every
+    /// poll: nothing playing under all system audio, the chosen app not
+    /// playing. Nil for the microphone, which Core Audio says nothing about.
+    /// An app's own word for it, so a browser holds its output open for ten
+    /// seconds past a pause and is quiet only then.
+    var onSilence: (Bool?) -> Void = { _ in }
 
     private(set) var app: String?
     private var picker: PlayingAppPicker
@@ -232,8 +238,16 @@ final class PlayingAppMonitor {
         switch source {
         case let .app(id, _):
             deliver(id, why: "the source")
+            queue.async { [self] in
+                let playing = SystemAudioTap.audioSources().contains { $0.id == id && $0.isPlaying }
+                DispatchQueue.main.async { [self] in
+                    guard lastSource == source else { return }
+                    onSilence(!playing)
+                }
+            }
         case .microphone:
             deliver(AudioSource.microphoneID, why: "the source")
+            onSilence(nil)
         case .allSystemAudio:
             // A poll still on its way is left to finish; the next is a second off.
             guard !inFlight else { return }
@@ -245,6 +259,7 @@ final class PlayingAppMonitor {
                     // The source or the pause may have changed underneath, and
                     // an answer about all system audio says nothing about an app.
                     guard lastSource == .allSystemAudio, !isPaused() else { return }
+                    onSilence(playing.isEmpty)
                     let previous = picker.pick
                     let next = picker.update(playing: playing, at: now)
                     inconclusive = inconclusive.filter { picker.age(of: $0) != nil }

@@ -314,10 +314,22 @@
   "Your trial has ended, captions will resume in %lld minutes.": {
     "other": "Đã hết hạn dùng thử, phụ đề sẽ chạy lại sau %lld phút."
   },
-  "Get a license key at subtitles-live.com": "Mua khoá bản quyền tại subtitles-live.com",
   "Your free trial runs for %lld days, and starts when the captions do.": {
     "other": "Bạn được dùng thử miễn phí %lld ngày, bắt đầu tính từ khi phụ đề chạy."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles chuyển âm thanh máy Mac của bạn đang phát thành chữ để hiện phụ đề theo thời gian thực.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Khi bạn chọn micrô làm nguồn, Subtitles chuyển những gì micrô nghe được thành chữ để hiện phụ đề theo thời gian thực."
+  "InfoPlist|NSMicrophoneUsageDescription": "Khi bạn chọn micrô làm nguồn, Subtitles chuyển những gì micrô nghe được thành chữ để hiện phụ đề theo thời gian thực.",
+  "Save Transcript…": "Lưu bản ghi…",
+  "Save a transcript of this session before it clears? (%@)": "Lưu bản ghi của phiên này trước khi bị xóa? (%@)",
+  "about %@": "khoảng %@",
+  "Transcript %@": "Bản ghi %@",
+  "Speaker %lld": "Người nói %lld",
+  "Name speakers in saved transcripts": "Ghi tên người nói trong bản ghi đã lưu",
+  "When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out.": "Khi có nhiều người nói, mỗi lượt bắt đầu bằng Người nói 1, Người nói 2… Tệp SRT không có phần này.",
+  "Buy a License": "Mua giấy phép",
+  "Format:": "Định dạng:",
+  "Plain Text": "Văn bản thường",
+  "Markdown": "Markdown",
+  "SubRip (SRT)": "SubRip (SRT)",
+  "Save a transcript of this session before it clears?": "Lưu bản ghi của phiên này trước khi bị xóa?"
 }
