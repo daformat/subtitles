@@ -4,6 +4,27 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.12.0 · 2026-09-26
+
+- **Save the session's transcript.** Once the audio stops, or ten seconds
+  before Clear after would forget the recent boxes, the caption box asks
+  whether to save them, with a Save Transcript… button and a bar counting
+  down its ten seconds. Hovering the box holds the countdown. Save as plain
+  text, Markdown or SubRip subtitles (SRT), timed as the captions appeared
+  on screen; saving clears the history. Nothing is written to disk unless
+  you save.
+- **Speakers named in saved transcripts.** With New box on speaker change
+  turned on, a text or Markdown transcript marks each turn Speaker 1,
+  Speaker 2 and so on when more than one person spoke. A switch in Settings ▸
+  Models turns it off, and SRT files leave the names out. Speakers are now
+  told apart across the whole session rather than sentence by sentence,
+  starting over when the history clears or captions pause.
+- **Clear after is at least 20 seconds,** which leaves room for the offer
+  before the history goes.
+- The trial's last line shows at once, with a Buy a License button and a
+  bar for its 15 seconds, which hovering holds too.
+- Settings animates between panes of different heights.
+
 ## 1.11.0 · 2026-09-25
 
 - **Subtitles in your language.** The menu, Settings, the welcome window,
