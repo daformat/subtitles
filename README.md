@@ -14,13 +14,13 @@ at roughly 0.15 real-time factor.
 
 **[subtitles-live.com](https://subtitles-live.com)** is the app itself: built,
 <!-- [main-edition] -->
-signed and notarised, so the audio permission survives updates. The download
-is a free seven-day trial, and a licence key from Gumroad keeps it going.
+signed and notarized, so the audio permission survives updates. The download
+is a free seven-day trial, and a license key from Gumroad keeps it going.
 Everything needed to build your own copy is in this repository, and `build.sh`
 below does exactly that.
 <!-- [/main-edition] -->
 <!-- [0bsd-edition]
-signed and notarised, so the audio permission survives updates. Everything
+signed and notarized, so the audio permission survives updates. Everything
 needed to build your own copy is in this repository, and `build.sh` below does
 exactly that.
 [/0bsd-edition] -->
@@ -70,14 +70,14 @@ So:
   to know.
 - **Always launch via `./run.sh`.** Running the binary directly makes your terminal
   the TCC-responsible process, and the grant will not apply — you get the silent
-  all-zero behaviour above.
+  all-zero behavior above.
 - **The grant now survives rebuilds.** `build.sh` signs with a Developer ID
   certificate, so the app keeps one stable identity and TCC keeps its answer.
   This used to be the reverse: ad-hoc signing gave every build a new cdhash,
   which is what macOS identifies an ad-hoc app by, so every single rebuild
   prompted again. Expect one last prompt on the first Developer ID build.
   Machines without the certificate fall back to ad-hoc and get the old
-  behaviour — `build.sh` says so when it happens.
+  behavior — `build.sh` says so when it happens.
 
 ## Using it
 
@@ -125,7 +125,7 @@ defaults, so a reinstall changes nothing; a copy with preferences from a build
 older than 1.6 is licensed as it is, since every such copy was bought.
 `--verify URL` points key verification at another server, as `--feed` does for
 updates, and `tools/license-window-harness` shows every state of the window
-without one. All of it is honour-system by construction: the source is public,
+without one. All of it is honor-system by construction: the source is public,
 the check applies to every build including this one, and there is deliberately
 no flag to skip it — a copy built from source that should not ask is one line
 deleted in `License.swift`.
@@ -150,7 +150,7 @@ the models other than Multilingual), so a playlist never takes it from a call.
 Each box in the ⌥ stack keeps the app
 its words came from. Text starts from its script's edge, the left or, for
 Arabic and Hebrew, the right, because a line that grows from a fixed edge is
-easier to follow as the words arrive; **Text Size and Alignment** can centre it
+easier to follow as the words arrive; **Text Size and Alignment** can center it
 instead.
 
 **Settings** (⌘, from the menu) holds the dials the menu has no room for, in two
@@ -163,7 +163,7 @@ panes:
   minutes, a field for anything else, or off to keep them until you pause or
   quit. Every control applies to the overlay as you drag it, and the pane opens
   onto a small screen of its own that shows what each one does.
-- **Models** — whether non-speech is skipped before it reaches the recogniser,
+- **Models** — whether non-speech is skipped before it reaches the recognizer,
   whether a speaker change starts a new box, and a **Clear Model Cache** button.
   Every model you try stays downloaded; this removes the ones nothing is using
   and never the one in use. `subtitles --list-models` prints the same answer
@@ -226,7 +226,7 @@ The overlay fades four seconds after the last *new* text, not after the audio go
 quiet — so a backing track no longer pins a stale subtitle on screen.
 
 **Skip non-speech**, under Models in Settings, runs Silero ahead of the
-recogniser so music never reaches it — without this, a backing track fills the
+recognizer so music never reaches it — without this, a backing track fills the
 encoder's context and the first words after it are lost. Measured at ~0.01 RTF,
 and it identified a 12 s tone as non-speech to within one percent. On by
 default. The status line shows what fraction of the audio it considers speech.
@@ -248,7 +248,7 @@ first time it is chosen, not before; choosing it again hands capture back to
 the source it replaced. With a language in **Translate To** and **Show Both
 Languages** on, the microphone makes the box a live two-way conversation: each
 person speaks their own language and reads the other's under it. Switching
-clears whatever is on screen and resets the recogniser, so the new source
+clears whatever is on screen and resets the recognizer, so the new source
 starts a fresh sentence rather than continuing the last one.
 
 **Speak Translation** reads the translation aloud as each sentence settles,
@@ -270,7 +270,7 @@ leaves the room captioned.
                    | unified | multilingual
 --headless         no overlay, terminal output only
 --font-size N      overlay text size
---reset-position   recentre the overlay
+--reset-position   recenter the overlay
 --list-sources     print audio sources and exit (needs no permission)
 --quiet            suppress status lines
 ```
@@ -312,7 +312,7 @@ Two choices worth knowing about:
 core/          Rust: ring buffer, resampler, voice gate, pre-roll, C ABI
 app/macos/     Swift: process tap, FluidAudio engine, overlay, menu bar, hotkey
 app/captions/  Swift: the caption pipeline's pure parts (CaptionCore), tested
-app/license/   Swift: the trial and licence rules (LicenseCore), pure, tested
+app/license/   Swift: the trial and license rules (LicenseCore), pure, tested
 spike/         throwaway probes from the measurement phase
 PLAN.md        design decisions, measurements, and everything that went wrong
 ```
@@ -331,7 +331,7 @@ PLAN.md        design decisions, measurements, and everything that went wrong
 
 ```bash
 cargo test --manifest-path core/Cargo.toml   # 11 tests
-swift test                                   # CaptionCore, and the licence in the main edition
+swift test                                   # CaptionCore, and the license in the main edition
 ./build.sh && ./probe.sh && ./run.sh
 tail -f build/subtitles.log
 ```
@@ -405,7 +405,7 @@ Bump `VERSION` (and `BUILD`, which must only ever increase) at the top of
 [PLAN.md](PLAN.md) has the measurements, the design decisions, and an honest log of
 the things that turned out to be wrong.
 
-## Licence
+## License
 
 <!-- [main-edition] -->
 [FSL-1.1-ALv2](LICENSE) — the [Functional Source License](https://fsl.software).
@@ -425,7 +425,7 @@ public-domain-equivalent grant with a warranty disclaimer attached.
 
 This is the 0BSD edition of [Subtitles](https://github.com/daformat/subtitles),
 generated from it by `tools/edition-0bsd.py` there: the same app without the
-in-app updater and without the trial and licence key. It checks for nothing
+in-app updater and without the trial and license key. It checks for nothing
 and asks for nothing. Version numbers follow the main edition's, so a release
 here that changes nothing says so in the changelog.
 [/0bsd-edition] -->
@@ -433,7 +433,7 @@ here that changes nothing says so in the changelog.
 That covers the code in this repository. Everything fetched at run time keeps its
 own terms — FluidAudio is Apache-2.0, and the models are third-party weights:
 
-| fetched | licence |
+| fetched | license |
 |---|---|
 | FluidAudio | Apache-2.0 |
 | Parakeet EOU 120M, Nemotron Streaming EN | NVIDIA Open Model License |
@@ -447,7 +447,7 @@ requirement not to strip safety guardrails, and defensive patent-termination
 clauses in the NVIDIA and OpenMDW terms. Read the model card for whichever
 variants you actually ship; this table is a summary, not advice.
 
-Only FluidAudio is compiled in, so it is the only one whose licence has to travel
+Only FluidAudio is compiled in, so it is the only one whose license has to travel
 with the app: `build.sh` assembles `THIRD-PARTY-NOTICES.txt` into the bundle from
 the checkout itself — a copy kept here would go stale the next time the dependency
 is bumped — and the **Acknowledgements** button in the About window shows it.
