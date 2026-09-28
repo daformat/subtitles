@@ -2424,6 +2424,9 @@ kbd {
    gray. And Listen To's other face, Don't Listen To, in its place while ⌥
    is held with the menu up, as AppKit swaps an alternate item. */
 .mn-note.is-hint { font-size: 0.85em; color: rgb(var(--ink) / 0.5); }
+/* The check stays on the first line; the submenu's chevron is centered on
+   the whole row, as AppKit draws it. */
+.mn-row:has(.mn-note) > .mn-more { align-self: center; }
 .mn-row.is-hot .mn-note.is-hint { color: rgb(255 255 255 / 0.75); }
 .mn-row.mn-alt, .mn-root.is-alt .mn-row[data-id="listen"] { display: none; }
 .mn-root.is-alt .mn-row.mn-alt { display: flex; }

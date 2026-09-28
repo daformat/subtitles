@@ -139,9 +139,9 @@ expect "the end of the demo styles" "$(extract styles.css 3219 3223)" 'sections'
 # styled with the landing pages' windows rather than in the demo section,
 # because those pages drop the same menu. Vendored without it the menu is a
 # bare list of ticks and words.
-CSS_MENU=$(slice styles.css 4676 4845)
+CSS_MENU=$(slice styles.css 4676 4848)
 expect "the menu's styles" "$CSS_MENU" '^\.mn-root {'
-expect "the end of the menu's styles" "$(extract styles.css 4846 4846)" 'landing pages'
+expect "the end of the menu's styles" "$(extract styles.css 4849 4849)" 'landing pages'
 # The frame is the redesign's box around the screen and lives with the hero's
 # styles, a long way past the demo section. It changes nothing at this window's
 # width, but it is the demo's own rule and belongs with the rest.
@@ -151,23 +151,23 @@ expect "the end of the demo frame" "$(extract styles.css 4140 4142)" 'works with
 # The Notes window is drawn as Notes: the toolbar in its title bar, the three
 # columns under it. Those styles sit with the landing pages' windows, further
 # past the demo section again, because the landing demos draw the same window.
-CSS_NOTES=$(slice styles.css 5177 5298)
+CSS_NOTES=$(slice styles.css 5180 5301)
 expect "the Notes window's styles" "$CSS_NOTES" '^/\* ── Notes'
 expect "the Notes window's columns" "$CSS_NOTES" '^\.nt-side {'
-expect "the end of the Notes window's styles" "$(extract styles.css 5299 5301)" 'Visual Studio Code'
+expect "the end of the Notes window's styles" "$(extract styles.css 5302 5304)" 'Visual Studio Code'
 # The Tahoe pass: the windows drawn the way macOS 26 draws them — rounder
 # frames with a rim, sidebars as glass panes with the traffic lights in them,
 # the call's controls as a capsule over the tiles, the menu on the same glass.
 # It restyles the demo's windows from the end of the stylesheet, after every
 # page's own rules, and without it the windows are the old squarer ones under
 # the new markup.
-CSS_TAHOE=$(slice styles.css 5650 5901)
+CSS_TAHOE=$(slice styles.css 5653 5904)
 expect "the Tahoe styles" "$CSS_TAHOE" '^/\* .* Tahoe '
 expect "the Tahoe menu" "$CSS_TAHOE" '^\.mn-panel {'
 # It is the last thing in the file, so what says it still ends where it did is
 # that nothing follows it: a section added after it would move the end, and
 # so would rules added to it.
-[ -z "$(extract styles.css 5902 100797)" ] || {
+[ -z "$(extract styles.css 5905 100800)" ] || {
   echo "!! styles.css no longer ends with the Tahoe styles — the site's line numbers have moved." >&2
   echo "   Re-check the ranges in $0 against $SITE." >&2
   exit 1
