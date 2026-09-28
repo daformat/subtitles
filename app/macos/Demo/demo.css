@@ -2420,6 +2420,13 @@ kbd {
   padding-block: calc(0.45 * var(--u));
   line-height: calc(1.55 * var(--u));
 }
+/* A hint under a row's name, as the app draws Listen To's: smaller and
+   gray. And Listen To's other face, Don't Listen To, in its place while ⌥
+   is held with the menu up, as AppKit swaps an alternate item. */
+.mn-note.is-hint { font-size: 0.85em; color: rgb(var(--ink) / 0.5); }
+.mn-row.is-hot .mn-note.is-hint { color: rgb(255 255 255 / 0.75); }
+.mn-row.mn-alt, .mn-root.is-alt .mn-row[data-id="listen"] { display: none; }
+.mn-root.is-alt .mn-row.mn-alt { display: flex; }
 .mn-row.is-dim { color: rgb(var(--ink) / 0.38); }
 .mn-row.is-dim .mn-key, .mn-row.is-dim .mn-more { color: rgb(var(--ink) / 0.3); }
 .mn-row.is-hot { background: var(--menu-accent); color: #fff; }

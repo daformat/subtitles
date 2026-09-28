@@ -1728,7 +1728,9 @@ const statusMenu = {
     const cool = () => root.querySelectorAll('.mn-row.is-hot').forEach((r) => r.classList.remove('is-hot'));
     // Listen To, as the app builds it on each opening: the source, then what
     // is playing now with a dot, then the other apps that could be. The
-    // demo says which from its windows, see `audio` in the callers.
+    // demo says which from its windows, see `audio` in the callers. Don't
+    // Listen To, under ⌥, lists the same apps and nothing else.
+    const listed = (sub) => sub.dataset.for === 'listen' || sub.dataset.for === 'ignore';
     const listen = (sub) => {
       if (!opts.audio) return;
       sub.querySelectorAll('.is-live').forEach((el) => el.remove());
@@ -1750,13 +1752,16 @@ const statusMenu = {
       };
       group(I18N('menu.playing', 'Playing now'), apps.filter((a) => a.playing), ' ●');
       group(I18N('menu.other', 'Other audio apps'), apps.filter((a) => !a.playing), '');
+      // With no source rows above it, the first group needs no separator.
+      const first = holder(sub).firstElementChild;
+      if (first && first.classList.contains('mn-sep')) first.remove();
     };
     // And it follows the demo while it is up: a window fronted or the sound
     // handed over shows in the windows' classes, and the rows redraw.
     if (opts.watch) {
       const live = new MutationObserver(() => {
-        const sub = root.querySelector('.mn-sub[data-for="listen"].is-open');
-        if (sub) { listen(sub); place(sub, rowFor('listen')); }
+        const sub = [...root.querySelectorAll('.mn-sub.is-open')].find(listed);
+        if (sub) { listen(sub); place(sub, rowFor(sub.dataset.for)); }
       });
       opts.watch.forEach((w) => live.observe(w, { attributes: true, attributeFilter: ['class'] }));
     }
@@ -1786,7 +1791,7 @@ const statusMenu = {
       closeSubs(sub);
       rows(panelOf(row)).forEach((r) => { if (r !== row) r.classList.remove('is-hot'); });
       row.classList.add('is-hot');
-      if (sub.dataset.for === 'listen') listen(sub);
+      if (listed(sub)) listen(sub);
       if (!sub.classList.contains('is-open')) track.length = 0;
       sub.classList.add('is-open');
       place(sub, row);
@@ -1807,7 +1812,7 @@ const statusMenu = {
       clearTimeout(aim);
       aim = 0;
       track.length = 0;
-      root.classList.remove('is-open', 'is-manual');
+      root.classList.remove('is-open', 'is-manual', 'is-alt');
       holder(root).scrollTop = 0;
       if (glyph) glyph.classList.remove('is-menu');
       closeSubs(null);
@@ -1861,6 +1866,23 @@ const statusMenu = {
       if (subFor(row)) openSub(row);
       else closeSubs(null, panel);
     };
+    // ⌥ held with the menu up puts Don't Listen To in Listen To's place, as
+    // AppKit swaps an alternate item, and letting go puts it back. The row
+    // under the pointer stays lit as the other, its submenu swapped with it.
+    const alternate = (on) => {
+      if (!root.classList.contains('is-open') || root.classList.contains('is-alt') === on) return;
+      const from = rowFor(on ? 'listen' : 'ignore');
+      const to = rowFor(on ? 'ignore' : 'listen');
+      root.classList.toggle('is-alt', on);
+      if (!from || !to || !from.classList.contains('is-hot')) return;
+      from.classList.remove('is-hot');
+      closeSubs(null);
+      settle(to);
+    };
+    window.addEventListener('keydown', (e) => { if (e.key === 'Alt') alternate(true); });
+    window.addEventListener('keyup', (e) => { if (e.key === 'Alt') alternate(false); });
+    window.addEventListener('blur', () => alternate(false));
+
     // The pointer on its way to an open submenu crosses the rows between,
     // and macOS gives it the benefit of the doubt: while it is heading for
     // the submenu, the row it is crossing is not taken as the one it wants.
