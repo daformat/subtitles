@@ -13,7 +13,7 @@ and the DMG name show.
   app's helpers, Safari's web content among them, holds for an app that
   launches later, and keeps an app that has quit in the list so it can be
   put back. Picked by name under Listen To, a checked app is still
-  captioned.
+  captioned. Listen To says so under its name.
 
 ## 1.13.0 · 2026-09-26
 

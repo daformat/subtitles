@@ -128,6 +128,7 @@
   "Listen To": "들을 소리",
   "Don't Listen To": "듣지 않을 소리",
   "Never captioned while listening to all system audio": "시스템 오디오 전체를 들을 때도 자막으로 만들지 않습니다",
+  "Hold ⌥ for %@": "⌥ 키를 누르고 있으면 '%@'",
   "All system audio": "시스템 오디오 전체",
   "Playing now": "지금 재생 중",
   "Other audio apps": "기타 오디오 앱",

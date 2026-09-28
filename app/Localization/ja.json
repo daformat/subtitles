@@ -128,6 +128,7 @@
  "Listen To": "字幕にする音",
  "Don't Listen To": "字幕にしない音",
  "Never captioned while listening to all system audio": "システム音声全体を聞くときも字幕にしません",
+ "Hold ⌥ for %@": "⌥ を押し続けると「%@」",
  "All system audio": "システム音声全体",
  "Playing now": "再生中",
  "Other audio apps": "その他のオーディオアプリ",

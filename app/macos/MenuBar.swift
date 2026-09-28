@@ -558,6 +558,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func sourceMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: L("Listen To", "Menu: which sound to caption (all of the Mac, one app, or the microphone)"), action: nil, keyEquivalent: "")
+        // Where the ⌥ face of this row is found: nothing else on screen says
+        // it exists. Under the name, as Multilingual gives its size.
+        item.attributedTitle = twoLineTitle(item.title, LF("Hold ⌥ for %@", L("Don't Listen To")))
         let sub = NSMenu()
         let current = currentSource()
 
@@ -588,6 +591,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             for p in idle.prefix(12) { sub.addItem(processItem(p, current: current, marker: "")) }
         }
 
+
         item.submenu = sub
         return item
     }
@@ -600,6 +604,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                               action: nil, keyEquivalent: "")
         item.keyEquivalentModifierMask = [.option]
         item.isAlternate = true
+        // Two lines like Listen To's, so the row keeps its height as they swap.
+        item.attributedTitle = twoLineTitle(item.title, L("Never captioned while listening to all system audio"))
         let sub = NSMenu()
         let ignored = ignoredApps()
 
@@ -629,13 +635,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }
 
+    /// A menu row's name over a smaller, gray line that says more about it.
+    private func twoLineTitle(_ title: String, _ detail: String) -> NSAttributedString {
+        let out = NSMutableAttributedString(string: title + "\n", attributes: [.font: NSFont.menuFont(ofSize: 0)])
+        out.append(NSAttributedString(string: detail, attributes: [
+            .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]))
+        return out
+    }
+
     private func ignoreItem(id: String, name: String, marker: String,
                             ignored: [String: String]) -> NSMenuItem {
         let item = NSMenuItem(title: name + marker, action: #selector(toggleIgnoredApp(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = [id, name]
         item.state = ignored[id] != nil ? .on : .off
-        item.toolTip = L("Never captioned while listening to all system audio")
         return item
     }
 
