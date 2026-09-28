@@ -4,6 +4,17 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.14.0 · 2026-09-28
+
+- **Don't Listen To.** Hold ⌥ with the menu open and Listen To becomes
+  Don't Listen To: the same apps, each one checked to leave it out when
+  listening to all system audio. A checked app's sound is never captioned
+  or translated, and the box never wears its name. The choice covers the
+  app's helpers, Safari's web content among them, holds for an app that
+  launches later, and keeps an app that has quit in the list so it can be
+  put back. Picked by name under Listen To, a checked app is still
+  captioned.
+
 ## 1.13.0 · 2026-09-26
 
 - **Hear the translation.** A new Speak Translation menu reads the

@@ -251,6 +251,13 @@ person speaks their own language and reads the other's under it. Switching
 clears whatever is on screen and resets the recognizer, so the new source
 starts a fresh sentence rather than continuing the last one.
 
+Holding ⌥ turns **Listen To** into **Don't Listen To**, the same apps as a
+checklist: each checked family is added to the all-audio tap's exclusion list
+(beside the app itself and VoiceOver), left out of the playing-app picker that
+names the box, and not counted by the silence watchdog. The tap is made again
+when one is checked or unchecked, and when a checked app starts playing after
+the tap was made. It has no effect on a source picked by name.
+
 **Speak Translation** reads the translation aloud as each sentence settles,
 in the best installed voice for the target language: on whenever VoiceOver is
 (the default), Always, or Off. Nothing is skipped or sped up; ⌥⌘. stops the
