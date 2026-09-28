@@ -129,6 +129,8 @@
   "Reset Overlay Position": "Kaplama Konumunu Sıfırla",
   "Quit Subtitles": "Subtitles'tan Çık",
   "Listen To": "Ses Kaynağı",
+  "Don't Listen To": "Yok Sayılan Kaynaklar",
+  "Never captioned while listening to all system audio": "Tüm sistem sesi dinlenirken hiç altyazılanmaz",
   "All system audio": "Tüm sistem sesi",
   "Playing now": "Şu an çalanlar",
   "Other audio apps": "Diğer ses uygulamaları",

@@ -144,6 +144,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // Wired up by main.swift.
     var onTogglePause: (() -> Void)?
     var onSelectSource: ((AudioSource) -> Void)?
+    /// Don't Listen To: the apps left out of all system audio, family id to
+    /// name, and the toggle for one of them.
+    var ignoredApps: () -> [String: String] = { [:] }
+    var onToggleIgnoredApp: ((_ id: String, _ name: String) -> Void)?
     var onSelectVariant: ((FluidVariant) -> Void)?
     var onSelectLanguage: ((FluidLanguage) -> Void)?
     var currentLanguageID: () -> String = { FluidLanguage.auto.rawValue }
@@ -489,6 +493,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(sourceMenuItem())
+        menu.addItem(ignoreMenuItem())
         menu.addItem(modelMenuItem())
         if #available(macOS 15, *) {
             menu.addItem(translateMenuItem())
@@ -585,6 +590,58 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         item.submenu = sub
         return item
+    }
+
+    /// Listen To's other face, under ⌥: the same apps, each one checked to
+    /// leave it out of all system audio. Its own row in the menu, marked as
+    /// Listen To's alternate, so AppKit swaps the two while ⌥ is held.
+    private func ignoreMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: L("Don't Listen To", "Menu, shown in place of Listen To while ⌥ is held: apps whose sound is never captioned while listening to all system audio"),
+                              action: nil, keyEquivalent: "")
+        item.keyEquivalentModifierMask = [.option]
+        item.isAlternate = true
+        let sub = NSMenu()
+        let ignored = ignoredApps()
+
+        let sources = SystemAudioTap.audioSources()
+        let playing = sources.filter(\.isPlaying)
+        // As in Listen To, the long tail of silent helpers stays out, except
+        // any already checked, and those that have quit, so they can be put
+        // back.
+        let idle = sources.filter { !$0.isPlaying }
+        let idleShown = idle.filter { ignored[$0.id] != nil }
+            + idle.filter { ignored[$0.id] == nil }.prefix(12)
+        let gone = ignored.filter { id, _ in !sources.contains { $0.id == id } }
+        let others = (idleShown.map { ($0.id, $0.name) } + gone.map { ($0.key, $0.value) })
+            .sorted { $0.1.lowercased() < $1.1.lowercased() }
+
+        if !playing.isEmpty {
+            sub.addItem(groupHeader(L("Playing now")))
+            for p in playing { sub.addItem(ignoreItem(id: p.id, name: p.name, marker: " ●", ignored: ignored)) }
+        }
+        if !others.isEmpty {
+            if !playing.isEmpty { sub.addItem(.separator()) }
+            sub.addItem(groupHeader(L("Other audio apps")))
+            for (id, name) in others { sub.addItem(ignoreItem(id: id, name: name, marker: "", ignored: ignored)) }
+        }
+
+        item.submenu = sub
+        return item
+    }
+
+    private func ignoreItem(id: String, name: String, marker: String,
+                            ignored: [String: String]) -> NSMenuItem {
+        let item = NSMenuItem(title: name + marker, action: #selector(toggleIgnoredApp(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = [id, name]
+        item.state = ignored[id] != nil ? .on : .off
+        item.toolTip = L("Never captioned while listening to all system audio")
+        return item
+    }
+
+    @objc private func toggleIgnoredApp(_ sender: NSMenuItem) {
+        guard let pair = sender.representedObject as? [String], pair.count == 2 else { return }
+        onToggleIgnoredApp?(pair[0], pair[1])
     }
 
     private func processItem(_ p: AudioSourceEntry, current: AudioSource,

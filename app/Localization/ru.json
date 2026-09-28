@@ -139,6 +139,8 @@
  "Reset Overlay Position": "Вернуть оверлей на место",
  "Quit Subtitles": "Завершить Subtitles",
  "Listen To": "Слушать",
+ "Don't Listen To": "Не слушать",
+ "Never captioned while listening to all system audio": "Без субтитров, когда слушается весь системный звук",
  "All system audio": "Весь системный звук",
  "Playing now": "Сейчас играют",
  "Other audio apps": "Другие приложения со звуком",

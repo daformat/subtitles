@@ -253,7 +253,11 @@ final class PlayingAppMonitor {
             guard !inFlight else { return }
             inFlight = true
             queue.async { [self] in
-                let playing = SystemAudioTap.audioSources().filter(\.isPlaying).map(\.id)
+                // Not an app left out of the tap: the box would wear its name
+                // over words that came from something else.
+                let ignored = SystemAudioTap.ignoredApps
+                let playing = SystemAudioTap.audioSources()
+                    .filter { $0.isPlaying && ignored[$0.id] == nil }.map(\.id)
                 DispatchQueue.main.async { [self] in
                     inFlight = false
                     // The source or the pause may have changed underneath, and

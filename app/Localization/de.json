@@ -131,6 +131,8 @@
   "Reset Overlay Position": "Overlay-Position zurücksetzen",
   "Quit Subtitles": "Subtitles beenden",
   "Listen To": "Audioquelle",
+  "Don't Listen To": "Nicht untertiteln",
+  "Never captioned while listening to all system audio": "Wird beim gesamten Systemton nie untertitelt",
   "All system audio": "Gesamter Systemton",
   "Playing now": "Spielt gerade",
   "Other audio apps": "Andere Audio-Apps",

@@ -139,6 +139,8 @@
  "Reset Overlay Position": "Повернути оверлей на місце",
  "Quit Subtitles": "Вийти з Subtitles",
  "Listen To": "Джерело звуку",
+ "Don't Listen To": "Ігнорувати джерела",
+ "Never captioned while listening to all system audio": "Без субтитрів, коли слухається весь звук системи",
  "All system audio": "Увесь звук системи",
  "Playing now": "Зараз грають",
  "Other audio apps": "Інші програми зі звуком",

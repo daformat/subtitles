@@ -144,6 +144,8 @@ enum Defaults {
     static let revealWidth = "overlay.revealWidth"
     static let revealHeight = "overlay.revealHeight"
     static let sourceID = "source.id"
+    /// See `SystemAudioTap.ignoredApps`.
+    static let ignoredApps = "source.ignored"
     static let sourceName = "source.name"
     static let variant = "engine.variant"
     static let language = "engine.language"
@@ -754,12 +756,13 @@ func syncEchoGate() {
 }
 
 // A process started or stopped doing audio. VoiceOver's object is made when
-// it first speaks, after any tap made as it started: the all-audio tap is
-// made again to leave it out, and the echo gate to hear it.
+// it first speaks, after any tap made as it started, and an app under Don't
+// Listen To may launch after it: the all-audio tap is made again to leave
+// them out, and the echo gate to hear VoiceOver.
 tap.onProcessesChanged = {
     if tap.source == .allSystemAudio, tap.isRunning, !isPaused,
        !Set(SystemAudioTap.excludedFromAllAudio(log: false)).isSubset(of: tap.excluded) {
-        err("VoiceOver or Subtitles has new audio; leaving it out of all audio")
+        err("VoiceOver, Subtitles or an ignored app has new audio; leaving it out of all audio")
         tap.select(tap.source)
         resumeCapture()
     }
@@ -1743,6 +1746,19 @@ if useOverlay {
     }
     menu.onSelectSource = { source in
         selectSource(source, overlay: controller)
+    }
+    menu.ignoredApps = { SystemAudioTap.ignoredApps }
+    menu.onToggleIgnoredApp = { id, name in
+        var ignored = SystemAudioTap.ignoredApps
+        ignored[id] = ignored[id] == nil ? name : nil
+        SystemAudioTap.ignoredApps = ignored
+        err("don't listen to: \(ignored.values.sorted().joined(separator: ", "))")
+        // Only all system audio leaves them out; paused, the resume makes
+        // the new tap.
+        if tap.source == .allSystemAudio, tap.isRunning, !isPaused {
+            tap.select(tap.source)
+            resumeCapture()
+        }
     }
     menu.currentTextAlignment = { textAlignment }
     menu.onSelectTextAlignment = { choice in

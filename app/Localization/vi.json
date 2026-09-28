@@ -126,6 +126,8 @@
   "Reset Overlay Position": "Đặt lại vị trí lớp phụ đề",
   "Quit Subtitles": "Thoát Subtitles",
   "Listen To": "Nghe từ",
+  "Don't Listen To": "Không nghe từ",
+  "Never captioned while listening to all system audio": "Không bao giờ tạo phụ đề khi nghe toàn bộ âm thanh hệ thống",
   "All system audio": "Toàn bộ âm thanh hệ thống",
   "Playing now": "Đang phát",
   "Other audio apps": "Ứng dụng âm thanh khác",

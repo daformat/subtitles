@@ -131,6 +131,8 @@
   "Reset Overlay Position": "ओवरले की जगह रीसेट करें",
   "Quit Subtitles": "Subtitles बंद करें",
   "Listen To": "किसे सुनें",
+  "Don't Listen To": "किसे न सुनें",
+  "Never captioned while listening to all system audio": "सिस्टम का सारा ऑडियो सुनते समय इसके कैप्शन कभी नहीं बनते",
   "All system audio": "सिस्टम का सारा ऑडियो",
   "Playing now": "अभी चल रहे हैं",
   "Other audio apps": "बाक़ी ऑडियो ऐप्स",

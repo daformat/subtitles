@@ -451,8 +451,11 @@ final class SystemAudioTap {
 
     /// Names of families currently playing. Used by the permission watchdog to
     /// tell "nobody is playing" apart from "we are being fed zeros" (0B Finding 1).
+    /// Not the apps under Don't Listen To: the tap is meant to hear nothing of
+    /// them.
     static func processesOutputtingAudio() -> [String] {
-        audioSources().filter(\.isPlaying).map(\.name)
+        let ignored = ignoredApps
+        return audioSources().filter { $0.isPlaying && ignored[$0.id] == nil }.map(\.name)
     }
 
     /// What the all-audio tap leaves out. The app itself: it reads the
@@ -462,14 +465,34 @@ final class SystemAudioTap {
     /// VoiceOver's words captioned, translated and read out over it, and a
     /// muted tap would lower VoiceOver along with everything else.
     /// Fixed when the tap is made, so VoiceOver starting later needs a new one.
+    /// And every app picked under Don't Listen To, helpers and all.
     static func excludedFromAllAudio(log: Bool = true) -> [AudioObjectID] {
+        let ignored = ignoredApps
         let found = ownAndVoiceOver()
+            + (ignored.isEmpty ? [] : processes()
+                .filter { ignored[$0.family.id] != nil }
+                .map { (id: $0.objectID, isSelf: false, name: $0.family.name) })
         if log, !found.isEmpty {
             let described = found.map { "\($0.isSelf ? "self" : $0.name) (\($0.id))" }
             FileHandle.standardError.write(
                 "all audio, leaving out: \(described.joined(separator: ", "))\n".data(using: .utf8)!)
         }
         return found.map(\.id)
+    }
+
+    /// The apps never captioned while listening to all system audio, family
+    /// id to the name the menu shows, kept so an app that has quit can still
+    /// be put back. Read from UserDefaults each time: the playing-app poll
+    /// asks from its own queue.
+    static var ignoredApps: [String: String] {
+        get { UserDefaults.standard.dictionary(forKey: Defaults.ignoredApps) as? [String: String] ?? [:] }
+        set {
+            if newValue.isEmpty {
+                UserDefaults.standard.removeObject(forKey: Defaults.ignoredApps)
+            } else {
+                UserDefaults.standard.set(newValue, forKey: Defaults.ignoredApps)
+            }
+        }
     }
 
     /// VoiceOver's audio objects, for the echo gate to listen to. Never the
