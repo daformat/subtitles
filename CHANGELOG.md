@@ -8,11 +8,13 @@ and the DMG name show.
 
 - **Choose who reads, and how fast.** Speak Translation now offers two
   voices, Best Installed Voice (the best one installed for the
-  translation's language, as before) or VoiceOver Voice, and three speeds:
-  Slow, Normal and Fast. VoiceOver Voice reads with VoiceOver's settings,
-  in VoiceOver's language whatever the translation's, and the original still steps
-  back while it speaks; with VoiceOver off, the Mac's own system voice
-  reads. Slow and Fast read at about 0.8 and 1.3 times the usual pace.
+  translation's language, as before) or VoiceOver Voice, and four speeds:
+  Slow, Normal, Fast and Very Fast. VoiceOver Voice reads with VoiceOver's
+  settings, in VoiceOver's language whatever the translation's, and the
+  original still steps back while it speaks; with VoiceOver off, the Mac's
+  own system voice reads. Slow, Fast and Very Fast read at about 0.8, 1.3
+  and 1.9 times the usual pace; with VoiceOver Voice, the usual pace is
+  VoiceOver's.
 
 ## 1.14.0 · 2026-09-28
 

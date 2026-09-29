@@ -356,6 +356,7 @@
   "speech speed|Slow": "Langsam",
   "speech speed|Normal": "Normal",
   "speech speed|Fast": "Schnell",
+  "speech speed|Very Fast": "Sehr schnell",
   "speech|Voice": "Stimme",
   "speech|Speed": "Tempo",
   "Always": "Immer",

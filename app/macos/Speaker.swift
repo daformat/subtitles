@@ -68,17 +68,20 @@ final class Speaker: NSObject {
 
     /// How fast the voice reads. The synthesizer's rate is not linear in
     /// speed; measured on an en-US voice, 0.3 reads at 0.8x the default 0.5,
-    /// and 0.55 at 1.3x.
+    /// 0.55 at 1.3x and 0.65 at 1.9x. With VoiceOver's settings in use, the
+    /// same choices apply on top of VoiceOver's own rate (measured, Sept 2026).
     enum Speed: String, CaseIterable {
         case slow
         case normal
         case fast
+        case veryFast
 
         var rate: Float {
             switch self {
             case .slow: return 0.3
             case .normal: return AVSpeechUtteranceDefaultSpeechRate
             case .fast: return 0.55
+            case .veryFast: return 0.65
             }
         }
 
@@ -87,6 +90,7 @@ final class Speaker: NSObject {
             case .slow: return L("speech speed|Slow", "Speak Translation speed choice: the translation is read slower than usual")
             case .normal: return L("speech speed|Normal", "Speak Translation speed choice: the translation is read at the voice's usual speed")
             case .fast: return L("speech speed|Fast", "Speak Translation speed choice: the translation is read faster than usual")
+            case .veryFast: return L("speech speed|Very Fast", "Speak Translation speed choice: the translation is read at nearly twice the usual speed")
             }
         }
     }

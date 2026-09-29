@@ -341,6 +341,7 @@
  "speech speed|Slow": "慢",
  "speech speed|Normal": "正常",
  "speech speed|Fast": "快",
+ "speech speed|Very Fast": "非常快",
  "speech|Voice": "语音",
  "speech|Speed": "速度",
  "Always": "始终",
