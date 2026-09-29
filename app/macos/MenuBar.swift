@@ -165,6 +165,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var currentSpeechMode: () -> Speaker.Mode = { .withVoiceOver }
     var onToggleLowersOriginal: (() -> Void)?
     var lowersOriginal: () -> Bool = { true }
+    var onSelectSpeechVoice: ((Speaker.Voice) -> Void)?
+    var currentSpeechVoice: () -> Speaker.Voice = { .language }
+    var onSelectSpeechSpeed: ((Speaker.Speed) -> Void)?
+    var currentSpeechSpeed: () -> Speaker.Speed = { .normal }
     var speechActive: () -> Bool = { false }
     var onStopOrRepeatSpeech: (() -> Void)?
     /// There is a transcript to save: the menu offers it, whether or not the
@@ -947,6 +951,30 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         sub.addItem(.separator())
 
+        // Headed sections, so VoiceOver reads Normal as a speed.
+        sub.addItem(.sectionHeader(title: L("speech|Voice", "Speak Translation section header: who reads the translation aloud")))
+        let voice = currentSpeechVoice()
+        for choice in Speaker.Voice.allCases {
+            let row = NSMenuItem(title: choice.displayName,
+                                 action: #selector(selectSpeechVoice(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = choice.rawValue
+            row.state = choice == voice ? .on : .off
+            sub.addItem(row)
+        }
+        sub.addItem(.separator())
+        sub.addItem(.sectionHeader(title: L("speech|Speed", "Speak Translation section header: how fast the translation is read aloud")))
+        let speed = currentSpeechSpeed()
+        for choice in Speaker.Speed.allCases {
+            let row = NSMenuItem(title: choice.displayName,
+                                 action: #selector(selectSpeechSpeed(_:)), keyEquivalent: "")
+            row.target = self
+            row.representedObject = choice.rawValue
+            row.state = choice == speed ? .on : .off
+            sub.addItem(row)
+        }
+        sub.addItem(.separator())
+
         let lower = NSMenuItem(title: L("Lower the Original While Speaking", "Speak Translation switch: the sound being translated gets quieter while the translation is read aloud"),
                                action: #selector(toggleLowersOriginal), keyEquivalent: "")
         lower.target = self
@@ -971,6 +999,18 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         guard let raw = sender.representedObject as? String,
               let mode = Speaker.Mode(rawValue: raw) else { return }
         onSelectSpeechMode?(mode)
+    }
+
+    @objc private func selectSpeechVoice(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let voice = Speaker.Voice(rawValue: raw) else { return }
+        onSelectSpeechVoice?(voice)
+    }
+
+    @objc private func selectSpeechSpeed(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let speed = Speaker.Speed(rawValue: raw) else { return }
+        onSelectSpeechSpeed?(speed)
     }
 
     @objc private func toggleLowersOriginal() { onToggleLowersOriginal?() }

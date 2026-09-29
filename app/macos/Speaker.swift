@@ -16,6 +16,10 @@
 // itself: otherwise the recognizer would hear the translation and transcribe
 // it, and the ducked replay would feed on its own output.
 //
+// The listener can still ask for VoiceOver's voice (`Voice.voiceOver`): the
+// app's synthesizer then reads with VoiceOver's settings, so the timing and
+// the ducking stay the app's, at the cost of the accent.
+//
 // ── What is read ──
 //
 // Each settled chunk of the translation, once, as it lands: never the dimmed
@@ -47,6 +51,46 @@ final class Speaker: NSObject {
         }
     }
 
+    /// Who reads: the best voice installed for the translation's language,
+    /// or the one the listener chose for VoiceOver, in its language whatever
+    /// the translation's.
+    enum Voice: String, CaseIterable {
+        case language
+        case voiceOver
+
+        var displayName: String {
+            switch self {
+            case .language: return L("Best Installed Voice", "Speak Translation voice choice: the best voice installed on this Mac for the language the translation is in")
+            case .voiceOver: return L("VoiceOver Voice", "Speak Translation voice choice: the voice chosen in VoiceOver's settings, whatever the translation's language")
+            }
+        }
+    }
+
+    /// How fast the voice reads. The synthesizer's rate is not linear in
+    /// speed; measured on an en-US voice, 0.3 reads at 0.8x the default 0.5,
+    /// and 0.55 at 1.3x.
+    enum Speed: String, CaseIterable {
+        case slow
+        case normal
+        case fast
+
+        var rate: Float {
+            switch self {
+            case .slow: return 0.3
+            case .normal: return AVSpeechUtteranceDefaultSpeechRate
+            case .fast: return 0.55
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .slow: return L("speech speed|Slow", "Speak Translation speed choice: the translation is read slower than usual")
+            case .normal: return L("speech speed|Normal", "Speak Translation speed choice: the translation is read at the voice's usual speed")
+            case .fast: return L("speech speed|Fast", "Speak Translation speed choice: the translation is read faster than usual")
+            }
+        }
+    }
+
     /// How loud the original stays while the translation is read. About
     /// -12 dB: still there to follow, no longer competing with the voice.
     static let duckedGain: Float = 0.25
@@ -59,6 +103,9 @@ final class Speaker: NSObject {
     var lowersOriginal = true {
         didSet { if lowersOriginal != oldValue { onStateChanged?() } }
     }
+    /// Both apply from the next line read, not the one being read.
+    var voiceChoice: Voice = .language
+    var speed: Speed = .normal
     /// Hold what is to be read until nobody has been heard for `quietAfter`.
     /// For a microphone with the sound on loudspeakers: voice processing
     /// keeps the voice out of the captions (SystemAudioTap.cancelsEcho), but
@@ -234,7 +281,15 @@ final class Speaker: NSObject {
             return
         }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = resolvedVoice()
+        utterance.rate = speed.rate
+        switch voiceChoice {
+        case .language:
+            utterance.voice = resolvedVoice()
+        case .voiceOver:
+            // VoiceOver's voice while it runs; with it off, the system's own
+            // voice, the one Spoken Content reads with.
+            utterance.prefersAssistiveTechnologySettings = true
+        }
         if current == nil { onSpeaking?(true) }
         current = utterance
         syncVoice()

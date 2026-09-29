@@ -164,6 +164,9 @@ enum Defaults {
     /// See `Speaker.Mode`.
     static let speakTranslation = "speech.mode"
     static let lowersOriginal = "speech.lowersOriginal"
+    /// See `Speaker.Voice` and `Speaker.Speed`.
+    static let speechVoice = "speech.voice"
+    static let speechSpeed = "speech.speed"
 }
 
 /// Read by the realtime audio callback, written from the main thread. A plain
@@ -582,6 +585,10 @@ let speaker = Speaker()
 speaker.mode = UserDefaults.standard.string(forKey: Defaults.speakTranslation)
     .flatMap(Speaker.Mode.init(rawValue:)) ?? .withVoiceOver
 speaker.lowersOriginal = UserDefaults.standard.object(forKey: Defaults.lowersOriginal) as? Bool ?? true
+speaker.voiceChoice = UserDefaults.standard.string(forKey: Defaults.speechVoice)
+    .flatMap(Speaker.Voice.init(rawValue:)) ?? .language
+speaker.speed = UserDefaults.standard.string(forKey: Defaults.speechSpeed)
+    .flatMap(Speaker.Speed.init(rawValue:)) ?? .normal
 // The saved target now, not when `applyTranslation` restores it: whether the
 // tap replays its source depends on it, and a change then would bring capture
 // up before the core is ready for it.
@@ -1689,6 +1696,18 @@ if useOverlay {
         speaker.lowersOriginal.toggle()
         UserDefaults.standard.set(speaker.lowersOriginal, forKey: Defaults.lowersOriginal)
         err(speaker.lowersOriginal ? "lowering the original while speaking" : "leaving the original as it is")
+    }
+    menu.currentSpeechVoice = { speaker.voiceChoice }
+    menu.onSelectSpeechVoice = { voice in
+        speaker.voiceChoice = voice
+        UserDefaults.standard.set(voice.rawValue, forKey: Defaults.speechVoice)
+        err("speech voice: \(voice.rawValue)")
+    }
+    menu.currentSpeechSpeed = { speaker.speed }
+    menu.onSelectSpeechSpeed = { speed in
+        speaker.speed = speed
+        UserDefaults.standard.set(speed.rawValue, forKey: Defaults.speechSpeed)
+        err("speech speed: \(speed.rawValue)")
     }
     menu.speechActive = { speaker.isActive }
     menu.onStopOrRepeatSpeech = { speaker.stopOrRepeat() }

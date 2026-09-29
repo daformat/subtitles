@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.14.1 · 2026-09-29
+
+- **Choose who reads, and how fast.** Speak Translation now offers two
+  voices, Best Installed Voice (the best one installed for the
+  translation's language, as before) or VoiceOver Voice, and three speeds:
+  Slow, Normal and Fast. VoiceOver Voice reads with VoiceOver's settings,
+  in VoiceOver's language whatever the translation's, and the original still steps
+  back while it speaks; with VoiceOver off, the Mac's own system voice
+  reads. Slow and Fast read at about 0.8 and 1.3 times the usual pace.
+
 ## 1.14.0 · 2026-09-28
 
 - **Don't Listen To.** Hold ⌥ with the menu open and Listen To becomes
