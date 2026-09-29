@@ -2434,6 +2434,17 @@ kbd {
 .mn-row.is-dim .mn-key, .mn-row.is-dim .mn-more { color: rgb(var(--ink) / 0.3); }
 .mn-row.is-hot { background: var(--menu-accent); color: #fff; }
 .mn-row.is-hot .mn-key, .mn-row.is-hot .mn-more { color: rgb(255 255 255 / 0.85); }
+/* A section's name, as AppKit draws NSMenuItem.sectionHeader: small, gray
+   and bold, over its rows' names, never lit under the pointer. */
+.mn-head {
+  display: flex;
+  align-items: flex-end;
+  height: calc(1.9 * var(--u));
+  padding-inline: calc(2.6 * var(--u)) calc(1 * var(--u));
+  font-size: 0.85em;
+  font-weight: 600;
+  color: rgb(var(--ink) / 0.5);
+}
 .mn-sep { height: 1px; margin: calc(0.45 * var(--u)) calc(0.6 * var(--u)); background: rgb(var(--ink) / 0.12); }
 /* The Try badge on the rows the demo can act on: at the end of the row,
    before the key or the chevron, one size down and boxed, so it reads as a
