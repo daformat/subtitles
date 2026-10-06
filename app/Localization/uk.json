@@ -394,5 +394,20 @@
  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Оригінал лишається чутним, учетверо тихіше, поки звучить переклад. З мікрофоном не діє.",
  "Stop or Repeat Speech": "Зупинити або повторити озвучення",
  "Save Transcript… is also in the Subtitles menu.": "«Зберегти розшифровку…» є і в меню Subtitles.",
- "%@ is in the Subtitles menu.": "«%@» є в меню Subtitles."
+ "%@ is in the Subtitles menu.": "«%@» є в меню Subtitles.",
+ "%lld seconds": {
+  "one": "%lld секунда",
+  "few": "%lld секунди",
+  "many": "%lld секунд",
+  "other": "%lld секунди"
+ },
+ "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "Після хвилини субтитрів або більше, коли звук стихає або нещодавні блоки от-от очистяться, блок пропонує зберегти розшифровку. «Зберегти розшифровку…» завжди є в меню, пропонує він це чи ні.",
+ "Don't Ask Again": "Більше не питати",
+ "Needs Forget the stack when idle, under UI.": "Потрібен параметр «Очищати стос після тиші» в розділі «Вигляд».",
+ "Offer to Save": "Пропозиція зберегти",
+ "Show for": "Показувати",
+ "Speakers": "Мовці",
+ "The offer is off. Settings ▸ Transcript turns it back on.": "Пропозицію вимкнено. Увімкнути її знову можна в Параметри ▸ Розшифровка.",
+ "Transcript": "Розшифровка",
+ "Voices are told apart only with New box on speaker change, under Models.": "Голоси розрізняються, лише якщо ввімкнено «Новий блок для нового мовця» в розділі «Моделі»."
 }

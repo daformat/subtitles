@@ -151,6 +151,8 @@ enum Defaults {
     static let language = "engine.language"
     static let speakerBreaks = "engine.speakerBreaks"
     static let namesSpeakers = "transcript.namesSpeakers"
+    static let transcriptOffer = "transcript.offer"
+    static let transcriptOfferSeconds = "transcript.offerSeconds"
     static let useVAD = "engine.vad"
     static let screenShare = "overlay.screenShare"
     /// See `Pill.IconStyle` and `Pill.TextAlignment`.
@@ -1524,6 +1526,28 @@ if useOverlay {
     settings.onToggleNamesSpeakers = { on in
         controller.namesSpeakersInTranscript = on
         UserDefaults.standard.set(on, forKey: Defaults.namesSpeakers)
+    }
+    controller.isTranscriptOfferEnabled =
+        UserDefaults.standard.object(forKey: Defaults.transcriptOffer) as? Bool ?? true
+    // Held to the slider's ends, which a hand-edited plist may be past.
+    controller.transcriptOfferDuration = min(max(
+        UserDefaults.standard.object(forKey: Defaults.transcriptOfferSeconds) as? Double
+            ?? OverlayController.defaultTranscriptOfferDuration,
+        OverlayController.transcriptOfferDurations.lowerBound),
+        OverlayController.transcriptOfferDurations.upperBound)
+    settings.transcriptOffer = { controller.isTranscriptOfferEnabled }
+    settings.onTranscriptOffer = { on in
+        controller.isTranscriptOfferEnabled = on
+        UserDefaults.standard.set(on, forKey: Defaults.transcriptOffer)
+    }
+    settings.transcriptOfferDuration = { controller.transcriptOfferDuration }
+    settings.onTranscriptOfferDuration = { seconds in
+        controller.transcriptOfferDuration = seconds
+        UserDefaults.standard.set(seconds, forKey: Defaults.transcriptOfferSeconds)
+    }
+    controller.onDisableTranscriptOffer = {
+        UserDefaults.standard.set(false, forKey: Defaults.transcriptOffer)
+        settings.transcriptOfferChanged()
     }
     settings.historyExpiry = { controller.historyExpiry }
     settings.onHistoryExpiry = { seconds in

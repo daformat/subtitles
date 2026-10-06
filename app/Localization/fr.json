@@ -364,5 +364,18 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "L'original reste audible, quatre fois moins fort, pendant que la traduction est énoncée. Sans effet sur le micro.",
   "Stop or Repeat Speech": "Arrêter ou répéter la lecture",
   "Save Transcript… is also in the Subtitles menu.": "Enregistrer la transcription… se trouve aussi dans le menu Subtitles.",
-  "%@ is in the Subtitles menu.": "%@ se trouve dans le menu Subtitles."
+  "%@ is in the Subtitles menu.": "%@ se trouve dans le menu Subtitles.",
+  "%lld seconds": {
+    "one": "%lld seconde",
+    "other": "%lld secondes"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "Après au moins une minute de sous-titres, quand le son s'arrête ou que les blocs récents vont s'effacer, le bloc propose d'enregistrer une transcription. Enregistrer la transcription… est toujours dans le menu, qu'il le propose ou non.",
+  "Don't Ask Again": "Ne plus demander",
+  "Needs Forget the stack when idle, under UI.": "Nécessite Effacer après un silence, dans Affichage.",
+  "Offer to Save": "Proposer l'enregistrement",
+  "Show for": "Afficher pendant",
+  "Speakers": "Intervenants",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "La proposition est désactivée. Préférences ▸ Transcription la réactive.",
+  "Transcript": "Transcription",
+  "Voices are told apart only with New box on speaker change, under Models.": "Les voix ne sont distinguées qu'avec Nouveau bloc au changement d'intervenant, dans Modèles."
 }

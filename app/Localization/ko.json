@@ -349,5 +349,17 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "번역을 읽는 동안 원래 소리는 4분의 1 음량으로 계속 들립니다. 마이크에는 적용되지 않습니다.",
   "Stop or Repeat Speech": "읽기 중단 또는 다시 읽기",
   "Save Transcript… is also in the Subtitles menu.": "대본 저장… 항목은 Subtitles 메뉴에도 있습니다.",
-  "%@ is in the Subtitles menu.": "%@ 항목은 Subtitles 메뉴에 있습니다."
+  "%@ is in the Subtitles menu.": "%@ 항목은 Subtitles 메뉴에 있습니다.",
+  "%lld seconds": {
+    "other": "%lld초"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "자막이 1분 이상 이어진 뒤 소리가 멈추거나 최근 상자가 곧 지워질 때, 상자가 대본을 저장할지 묻습니다. 대본 저장…은 묻든 묻지 않든 항상 메뉴에 있습니다.",
+  "Don't Ask Again": "다시 묻지 않기",
+  "Needs Forget the stack when idle, under UI.": "표시의 조용하면 쌓인 상자 지우기가 켜져 있어야 합니다.",
+  "Offer to Save": "저장 제안",
+  "Show for": "표시 시간",
+  "Speakers": "화자",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "제안이 꺼졌습니다. 설정 ▸ 대본에서 다시 켤 수 있습니다.",
+  "Transcript": "대본",
+  "Voices are told apart only with New box on speaker change, under Models.": "모델의 화자가 바뀌면 새 상자가 켜져 있을 때만 목소리를 구분합니다."
 }

@@ -349,5 +349,17 @@
  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "翻訳の読み上げ中も、元の音声は 4 分の 1 の音量で聞こえます。マイクには適用されません。",
  "Stop or Repeat Speech": "読み上げを停止 / 繰り返し",
  "Save Transcript… is also in the Subtitles menu.": "「書き起こしを保存…」は Subtitles メニューにもあります。",
- "%@ is in the Subtitles menu.": "「%@」は Subtitles メニューにあります。"
+ "%@ is in the Subtitles menu.": "「%@」は Subtitles メニューにあります。",
+ "%lld seconds": {
+  "other": "%lld 秒"
+ },
+ "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "1 分以上字幕が続いたあと、音が止まったときや直近のボックスが消去される直前に、ボックスが書き起こしを保存するか尋ねます。「書き起こしを保存…」は尋ねるかどうかに関わらず、いつでもメニューにあります。",
+ "Don't Ask Again": "今後は確認しない",
+ "Needs Forget the stack when idle, under UI.": "「表示」の「話が途切れたらスタックを消去」が必要です。",
+ "Offer to Save": "保存の確認",
+ "Show for": "表示時間",
+ "Speakers": "話者",
+ "The offer is off. Settings ▸ Transcript turns it back on.": "確認はオフです。設定 ▸ 書き起こしでオンに戻せます。",
+ "Transcript": "書き起こし",
+ "Voices are told apart only with New box on speaker change, under Models.": "声を聞き分けるのは、「モデル」の「話者が変わったら新しいボックス」がオンのときだけです。"
 }

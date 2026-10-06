@@ -78,6 +78,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// changes on, which is where the voices come from.
     var namesSpeakers: () -> Bool = { true }
     var onToggleNamesSpeakers: ((Bool) -> Void)?
+    /// Whether the box offers to save the transcript when the captions go
+    /// quiet, and for how many seconds. The offer's own Don't Ask Again turns
+    /// it off too, and calls `transcriptOfferChanged`.
+    var transcriptOffer: () -> Bool = { true }
+    var onTranscriptOffer: ((Bool) -> Void)?
+    var transcriptOfferDuration: () -> Double = { OverlayController.defaultTranscriptOfferDuration }
+    var onTranscriptOfferDuration: ((Double) -> Void)?
 #if DEV_BUILD
     /// Settings ▸ Debug, in development builds only: the live box's app
     /// label also names the speaker the diarizer hears.
@@ -135,6 +142,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         var panes = [
             (L("UI", "Settings tab: how the caption boxes look and behave"), "captions.bubble"),
             (L("Models", "Settings tab: the speech recognition models"), "cpu"),
+            (L("Transcript", "Settings tab: the offer to save a transcript, and what a saved one holds"), "doc.text"),
             (L("Language", "Settings tab: the language of the app's own menus and windows"), "globe"),
         ]
         #if DEV_BUILD
@@ -161,6 +169,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Governed by the section switch *and* by its own, so it is held apart.
     private var expiryRow: SecondsRow?
     private var expiryToggle: ToggleRow?
+    /// Settings ▸ Transcript's offer: its switch, and the slider it dims.
+    /// The slider needs the stack to clear too, which is UI's to say.
+    private let offerSwitch = NSSwitch()
+    private var offerRow: SliderRow?
+    private var offerCaption: NSTextField?
 
     private let cacheReadout = NSTextField(labelWithString: "")
     /// Titled where the pane is built (`modelsRow`), not here: this object
@@ -370,7 +383,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// someone who wants an hour types it, and the slider then sits at its
     /// nearest end rather than pretending to hold a number it cannot reach.
     /// Nothing goes under `OverlayController.minHistoryExpiry`, typed or
-    /// stepped: the box offers to save the transcript for the last ten seconds
+    /// stepped: the box offers to save the transcript in the last seconds
     /// before the stack goes, and needs a quiet spell ahead of that.
     private final class SecondsRow: NSObject, NSTextFieldDelegate {
         let title = NSTextField(labelWithString: L("Clear after", "Settings slider label: how long the recent boxes are kept after nothing is said"))
@@ -522,7 +535,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// there. Called again after a reset: the rows read their values once, at
     /// construction, so the only way to show new ones is to build new rows.
     private func install(into window: NSWindow) {
-        stacks = [buildUIStack(), buildModelsStack(), buildLanguageStack()]
+        stacks = [buildUIStack(), buildModelsStack(), buildTranscriptStack(),
+                  buildLanguageStack()]
         #if DEV_BUILD
         stacks.append(buildDebugStack())
         #endif
@@ -864,7 +878,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // The labels' column, as wide as the widest label in the app's
         // language and never narrower than English needs, so the sliders
         // still line up from one section to the next.
-        let titles = rows.map(\.title) + [NSTextField(labelWithString: L("Clear after"))]
+        let titles = rows.map(\.title) + [NSTextField(labelWithString: L("Clear after")),
+                                          NSTextField(labelWithString: Self.offerDurationTitle)]
         Self.labelWidth = max(84, ceil(titles.map(\.fittingSize.width).max() ?? 0))
 
         let (stack, section) = Self.makeStack()
@@ -910,6 +925,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             value: historyExpires(), width: Self.contentWidth) { [weak self] on in
                 self?.onHistoryExpires?(on)
                 self?.syncHistoryEnabled()
+                self?.syncOfferEnabled()
                 self?.syncPreview(.expiry, changed: [.historyExpires])
             }
         expiryRow = expiry
@@ -950,20 +966,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.onToggleSpeakerBreaks?($0)
                 self?.namesRow?.isEnabled = $0
             }
-        let names = ToggleRow(
-            L("Name speakers in saved transcripts", "Settings switch: a saved transcript marks each turn with Speaker 1, Speaker 2 and so on"),
-            detail: L("When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out."),
-            value: namesSpeakers(), width: rowWidth) { [weak self] in
-                self?.onToggleNamesSpeakers?($0)
-            }
-        // The voices come from speaker changes; without them there is nobody
-        // to name.
-        names.isEnabled = speakerBreaksEnabled()
         vadRow = vad
         speakerRow = speakers
-        namesRow = names
 
-        let toggles = NSStackView(views: [vad.view, speakers.view, names.view])
+        let toggles = NSStackView(views: [vad.view, speakers.view])
         toggles.orientation = .vertical
         toggles.alignment = .leading
         toggles.spacing = 10
@@ -980,6 +986,88 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 modelsRow(), nil)
 
         return stack
+    }
+
+    // MARK: - Transcript
+
+    /// The offer's slider label, measured with the UI pane's so every grid's
+    /// sliders line up.
+    private static var offerDurationTitle: String {
+        L("Show for", "Settings slider: how long the offer to save the transcript stays in the box")
+    }
+
+    private func buildTranscriptStack() -> NSStackView {
+        let (stack, section) = Self.makeStack()
+
+        let duration = SliderRow(
+            Self.offerDurationTitle,
+            range: OverlayController.transcriptOfferDurations.lowerBound
+                ... OverlayController.transcriptOfferDurations.upperBound,
+            value: transcriptOfferDuration(), snaps: true,
+            format: { LP("%lld seconds", one: "%lld second", Int($0.rounded())) },
+            apply: { [weak self] in self?.onTranscriptOfferDuration?($0.rounded()) })
+        offerRow = duration
+        offerSwitch.target = self
+        offerSwitch.action = #selector(toggleOffer)
+        offerSwitch.state = transcriptOffer() ? .on : .off
+
+        // Said only while it holds: the offer needs the stack to clear.
+        let needsExpiry = Self.caption(
+            L("Needs Forget the stack when idle, under UI.",
+              "Settings ▸ Transcript; Forget the stack when idle is the switch under Settings ▸ UI, name it as that switch does"))
+        offerCaption = needsExpiry
+
+        let offer = NSStackView(views: [Self.grid([duration.cells]), needsExpiry])
+        offer.orientation = .vertical
+        offer.alignment = .leading
+        offer.spacing = 10
+
+        section(L("Offer to Save", "Settings section: the caption box asking to save the transcript"),
+                L("After a minute or more of captions, when the sound stops or the "
+                  + "recent boxes are about to clear, the box asks to save a transcript. "
+                  + "Save Transcript… is always in the menu, whether it asks or not."),
+                offer, offerSwitch)
+        syncOfferEnabled()
+
+        let names = ToggleRow(
+            L("Name speakers in saved transcripts", "Settings switch: a saved transcript marks each turn with Speaker 1, Speaker 2 and so on"),
+            detail: L("When more than one person speaks, each turn starts with Speaker 1, Speaker 2… SRT files leave them out."),
+            value: namesSpeakers(), width: Self.contentWidth) { [weak self] in
+                self?.onToggleNamesSpeakers?($0)
+            }
+        // The voices come from speaker changes; without them there is nobody
+        // to name.
+        names.isEnabled = speakerBreaksEnabled()
+        namesRow = names
+
+        section(L("Speakers", "Settings section: who spoke, in a saved transcript"),
+                L("Voices are told apart only with New box on speaker change, under Models.",
+                  "Settings ▸ Transcript; New box on speaker change is the switch under Settings ▸ Models, name it as that switch does"),
+                names.view, nil)
+
+        return stack
+    }
+
+    @objc private func toggleOffer(_ sender: NSSwitch) {
+        onTranscriptOffer?(sender.state == .on)
+        syncOfferEnabled()
+    }
+
+    /// The offer's own Don't Ask Again was pressed: the switch follows, if
+    /// the window is open.
+    func transcriptOfferChanged() {
+        offerSwitch.state = transcriptOffer() ? .on : .off
+        syncOfferEnabled()
+    }
+
+    /// The slider dims with the switch, and with the stack set never to
+    /// clear, when there is no offer either way. The note under it says so
+    /// only then.
+    private func syncOfferEnabled() {
+        let expires = expiryToggle?.isOn ?? historyExpires()
+        offerSwitch.isEnabled = expires
+        offerRow?.isEnabled = expires && offerSwitch.state == .on
+        offerCaption?.isHidden = expires
     }
 
     // MARK: - Language
@@ -1049,9 +1137,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         row.alignment = .leading
         row.spacing = 8
         section("Captions",
-                "The offer to save the transcript, as if Clear after were ten seconds "
-                + "away; with nothing said yet, two sample boxes stand in. Needs Clear "
-                + "after on. And the line an expired trial ends with, button and hold "
+                "The offer to save the transcript, as if Clear after were its length "
+                + "away; with nothing said yet, two sample boxes stand in. Needs the "
+                + "offer and Clear after on. And the line an expired trial ends with, button and hold "
                 + "included, taken down when the hold runs out; nothing is paused.",
                 row, nil)
         return stack

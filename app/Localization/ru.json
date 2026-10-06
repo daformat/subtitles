@@ -394,5 +394,20 @@
  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Пока звучит перевод, оригинал остаётся слышен, но вчетверо тише. С микрофоном не действует.",
  "Stop or Repeat Speech": "Остановить или повторить озвучку",
  "Save Transcript… is also in the Subtitles menu.": "«Сохранить расшифровку…» есть и в меню Subtitles.",
- "%@ is in the Subtitles menu.": "«%@» есть в меню Subtitles."
+ "%@ is in the Subtitles menu.": "«%@» есть в меню Subtitles.",
+ "%lld seconds": {
+  "one": "%lld секунда",
+  "few": "%lld секунды",
+  "many": "%lld секунд",
+  "other": "%lld секунды"
+ },
+ "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "После минуты субтитров или больше, когда звук стихает или последние блоки вот-вот очистятся, блок предлагает сохранить расшифровку. «Сохранить расшифровку…» всегда есть в меню, предлагает он это или нет.",
+ "Don't Ask Again": "Больше не спрашивать",
+ "Needs Forget the stack when idle, under UI.": "Нужен параметр «Забывать стопку в тишине» в разделе «Интерфейс».",
+ "Offer to Save": "Предложение сохранить",
+ "Show for": "Показывать",
+ "Speakers": "Говорящие",
+ "The offer is off. Settings ▸ Transcript turns it back on.": "Предложение выключено. Включить его снова можно в Настройки ▸ Расшифровка.",
+ "Transcript": "Расшифровка",
+ "Voices are told apart only with New box on speaker change, under Models.": "Голоса различаются, только если включён «Новый блок при смене говорящего» в разделе «Модели»."
 }

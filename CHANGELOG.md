@@ -4,6 +4,17 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.15.0 · 2026-10-06
+
+- **Turn the offer off, or give it longer.** The box's offer to save a
+  transcript now has a Don't Ask Again button beside Save Transcript…,
+  and a new Transcript tab in Settings turns the offer back on and sets
+  how long it stays up, from 5 to 30 seconds (10 by default). While the
+  offer is up, the recent boxes wait for it rather than clearing under
+  it. Save Transcript… is still in the menu whether the box asks or not.
+- **Name speakers in saved transcripts** moves to the Transcript tab,
+  from Models.
+
 ## 1.14.1 · 2026-09-29
 
 - **Choose who reads, and how fast.** Speak Translation now offers two

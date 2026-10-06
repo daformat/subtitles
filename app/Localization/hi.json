@@ -364,5 +364,18 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "अनुवाद पढ़े जाते समय मूल आवाज़ सुनाई देती रहती है, पर चौथाई वॉल्यूम पर। माइक्रोफ़ोन पर लागू नहीं।",
   "Stop or Repeat Speech": "पढ़ना रोकें या दोहराएँ",
   "Save Transcript… is also in the Subtitles menu.": "“ट्रांसक्रिप्ट सहेजें…” Subtitles मेनू में भी है।",
-  "%@ is in the Subtitles menu.": "“%@” Subtitles मेनू में है।"
+  "%@ is in the Subtitles menu.": "“%@” Subtitles मेनू में है।",
+  "%lld seconds": {
+    "one": "%lld सेकंड",
+    "other": "%lld सेकंड"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "एक मिनट या उससे ज़्यादा कैप्शन के बाद, जब आवाज़ रुकती है या पिछले बॉक्स मिटने वाले होते हैं, तो बॉक्स ट्रांसक्रिप्ट सहेजने को पूछता है। “ट्रांसक्रिप्ट सहेजें…” मेनू में हमेशा रहता है, बॉक्स पूछे या न पूछे।",
+  "Don't Ask Again": "फिर से न पूछें",
+  "Needs Forget the stack when idle, under UI.": "इसके लिए “दिखावट” में “ख़ामोशी के बाद ढेर मिटाएँ” चालू होना चाहिए।",
+  "Offer to Save": "सहेजने का सुझाव",
+  "Show for": "दिखाने की अवधि",
+  "Speakers": "वक्ता",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "सुझाव बंद है। सेटिंग्ज़ ▸ ट्रांसक्रिप्ट में इसे फिर से चालू करें।",
+  "Transcript": "ट्रांसक्रिप्ट",
+  "Voices are told apart only with New box on speaker change, under Models.": "आवाज़ें तभी अलग पहचानी जाती हैं जब “मॉडल” में “वक्ता बदलने पर नया बॉक्स” चालू हो।"
 }

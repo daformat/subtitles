@@ -81,7 +81,7 @@ final class SubtitleView: NSView {
     var secondaryTentative = "" { didSet { if secondaryTentative != oldValue { needsDisplay = true } } }
     var fontSize: CGFloat = 30 {
         didSet {
-            actionButton?.fontSize = fontSize
+            for button in actionButtons { button.fontSize = fontSize }
             needsLayout = true
             needsDisplay = true
         }
@@ -169,24 +169,41 @@ final class SubtitleView: NSView {
     /// while ⇧ is held, alongside the panel dropping its click-through.
     var showsDragOutline = false { didSet { needsDisplay = true } }
 
-    /// A button inline after the text, and what pressing it does. Only the
-    /// offer to save the transcript has one. The panel takes clicks while it
-    /// shows, and the box around the button neither acts nor drags.
+    /// A button inline after the text, and what pressing it does. The offer
+    /// to save the transcript and the trial's end have one. The panel takes
+    /// clicks while it shows, and the box around the button neither acts nor
+    /// drags.
     var action: (title: String, press: () -> Void)? {
-        didSet {
-            actionButton?.removeFromSuperview()
-            actionButton = nil
-            if let action {
-                let button = ActionButton(title: action.title, target: self,
-                                          action: #selector(pressAction))
+        didSet { rebuildActionButtons() }
+    }
+
+    /// A second button, before `action`'s: the way out, beside the way in.
+    /// Only with an `action`; the offer's Don't Ask Again.
+    var secondaryAction: (title: String, press: () -> Void)? {
+        didSet { rebuildActionButtons() }
+    }
+
+    private func rebuildActionButtons() {
+        for button in actionButtons { button.removeFromSuperview() }
+        actionButtons = []
+        if let action {
+            if let secondaryAction {
+                let button = ActionButton(title: secondaryAction.title, target: self,
+                                          action: #selector(pressSecondaryAction))
                 button.bezelStyle = .flexiblePush
                 button.fontSize = fontSize
                 addSubview(button)
-                actionButton = button
+                actionButtons.append(button)
             }
-            needsLayout = true
-            needsDisplay = true
+            let button = ActionButton(title: action.title, target: self,
+                                      action: #selector(pressAction))
+            button.bezelStyle = .flexiblePush
+            button.fontSize = fontSize
+            addSubview(button)
+            actionButtons.append(button)
         }
+        needsLayout = true
+        needsDisplay = true
     }
 
     /// The system's push button, in the bezel that takes any height, with
@@ -220,9 +237,12 @@ final class SubtitleView: NSView {
     /// ⇧ is down: every box drags, the ones that take clicks included.
     static var isDragHeld: Bool { NSEvent.modifierFlags.contains(.shift) }
 
-    private var actionButton: ActionButton?
+    /// The buttons in reading order: `secondaryAction`'s, when there is
+    /// one, then `action`'s.
+    private var actionButtons: [ActionButton] = []
 
     @objc private func pressAction() { action?.press() }
+    @objc private func pressSecondaryAction() { secondaryAction?.press() }
 
     // MARK: VoiceOver
 
@@ -249,17 +269,26 @@ final class SubtitleView: NSView {
     }
 
     override func accessibilityChildren() -> [Any]? {
-        guard isReadByVoiceOver, let actionButton else { return [] }
-        return [actionButton]
+        guard isReadByVoiceOver else { return [] }
+        return actionButtons
     }
 
-    /// Between the text and the button.
+    /// Between the text and the buttons.
     static let actionGap: CGFloat = 16
+    /// Between one button and the next.
+    static let actionSpacing: CGFloat = 6
 
-    /// The width the button takes from the text's line, gap included.
+    /// The width the buttons take from the text's line, gap included.
     private var actionRoom: CGFloat {
-        guard let actionButton else { return 0 }
-        return ceil(actionButton.size.width) + Self.actionGap
+        guard !actionButtons.isEmpty else { return 0 }
+        let widths = actionButtons.map { ceil($0.size.width) }
+        return widths.reduce(0, +) + Self.actionSpacing * CGFloat(widths.count - 1)
+            + Self.actionGap
+    }
+
+    /// The tallest button's height, 0 with none.
+    private var actionHeight: CGFloat {
+        ceil(actionButtons.map(\.size.height).max() ?? 0)
     }
 
     /// Where the text goes: the pill's text rect less the button's room on
@@ -267,12 +296,12 @@ final class SubtitleView: NSView {
     /// lowered so the two share a middle.
     private func captionRect(for text: NSAttributedString) -> NSRect {
         var rect = Pill.textRect(in: boxRect, room: iconRoom)
-        guard let actionButton else { return rect }
+        guard !actionButtons.isEmpty else { return rect }
         rect.size.width -= actionRoom
         if isRightToLeft { rect.origin.x += actionRoom }
         let used = Pill.metrics(text, textWidth: rect.width).used.height
         let extra = rect.height - ceil(used)
-        if extra > 0, ceil(actionButton.size.height) > ceil(used) {
+        if extra > 0, actionHeight > ceil(used) {
             rect.size.height -= extra / 2
         }
         return rect
@@ -280,12 +309,19 @@ final class SubtitleView: NSView {
 
     override func layout() {
         super.layout()
-        guard let actionButton else { return }
+        guard !actionButtons.isEmpty else { return }
         let text = Pill.textRect(in: boxRect, room: iconRoom)
-        let size = actionButton.size
-        let x = isRightToLeft ? text.minX : text.maxX - ceil(size.width)
-        actionButton.frame = NSRect(x: x.rounded(), y: (text.midY - size.height / 2).rounded(),
-                                    width: ceil(size.width), height: ceil(size.height))
+        // Laid from the trailing edge inwards, so `action`'s button keeps the
+        // corner it has always had and the second one sits before it.
+        var edge = isRightToLeft ? text.minX : text.maxX
+        for button in actionButtons.reversed() {
+            let size = button.size
+            let width = ceil(size.width)
+            let x = isRightToLeft ? edge : edge - width
+            button.frame = NSRect(x: x.rounded(), y: (text.midY - size.height / 2).rounded(),
+                                  width: width, height: ceil(size.height))
+            edge += isRightToLeft ? width + Self.actionSpacing : -(width + Self.actionSpacing)
+        }
     }
 
     // The first click in a panel that never becomes key has to count.
@@ -458,9 +494,9 @@ final class SubtitleView: NSView {
                                     maxLines: maxLines, pad: Self.pad, room: iconRoom)
         // The button beside the text: the box wider by it, and at least as
         // tall as it.
-        if size.height > 0, let actionButton {
+        if size.height > 0, !actionButtons.isEmpty {
             size.width = min(size.width + room, maxWidth)
-            size.height = max(size.height, ceil(actionButton.size.height)
+            size.height = max(size.height, actionHeight
                 + (inset.height + Self.pad) * 2 + iconRoom.top + iconRoom.inside)
         }
         // The original under the caption adds its block: the box is as tall as
@@ -1340,11 +1376,27 @@ final class OverlayController {
     /// enough that the stack is about what was *just* said.
     static let defaultHistoryExpiry: TimeInterval = 30
 
-    /// How long before the stack is forgotten the box offers to save it: the
-    /// offer's whole life, which its bar counts down.
-    static let transcriptOfferLead: TimeInterval = 10
+    /// Whether the box offers to save the transcript at all. Settings ▸
+    /// Transcript, and the offer's own Don't Ask Again. Off, Save Transcript…
+    /// is still in the status menu.
+    var isTranscriptOfferEnabled = true {
+        didSet { if !isTranscriptOfferEnabled { withdrawTranscriptOffer(fading: true) } }
+    }
 
-    /// The shortest Clear after there is. Twice the offer's lead, so the
+    /// How long the offer stays up, which its bar counts down. At the tail it
+    /// comes up this long before the stack is forgotten. Settings ▸ Transcript.
+    var transcriptOfferDuration: TimeInterval = OverlayController.defaultTranscriptOfferDuration
+
+    static let defaultTranscriptOfferDuration: TimeInterval = 10
+    /// The slider's ends. Under five seconds there is no reading the question
+    /// and reaching the button; over half a minute it is a fixture.
+    static let transcriptOfferDurations: ClosedRange<TimeInterval> = 5...30
+
+    /// The offer's Don't Ask Again was pressed: main.swift saves it and
+    /// Settings follows.
+    var onDisableTranscriptOffer: (() -> Void)?
+
+    /// The shortest Clear after there is. Twice the default offer, so the
     /// captions have been quiet for ten seconds before it asks, rather than
     /// asking over the box that has only just faded.
     static let minHistoryExpiry: TimeInterval = 20
@@ -1358,7 +1410,7 @@ final class OverlayController {
     /// timer says: it is what is being saved.
     private var savingTranscript = false
     /// How long the offer has been up, the time the pointer spent over it
-    /// left out. It lasts `transcriptOfferLead`, wherever it came up.
+    /// left out. It lasts `transcriptOfferDuration`, wherever it came up.
     private var offerElapsed: TimeInterval = 0
     /// The offer has been made since the last words: once per quiet spell,
     /// so one that came up on silence and ran out does not come back at the
@@ -2242,7 +2294,10 @@ final class OverlayController {
         // Both stacks, not the one on screen: with a target chosen the visible one
         // can be empty while the other still holds a session's worth of boxes, and
         // guarding on the visible one alone left that never expiring.
-        guard isHistoryExpiryEnabled, !savingTranscript,
+        // Nor while the offer is up: it asks before the stack clears, and its
+        // bar is the time left to answer. Longer than the quiet left before
+        // Clear after, it holds the stack until it runs out.
+        guard isHistoryExpiryEnabled, !savingTranscript, !offersTranscript,
               !streams.isEmpty || !stack.isEmpty else { return }
         // Not while it is on screen. Someone holding ⌥ is reading it, and a
         // stack that empties under their eyes because nobody spoke for a minute
@@ -2251,27 +2306,28 @@ final class OverlayController {
         guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
         streams.clear()
         forgetStack()
-        withdrawTranscriptOffer(fading: true)
     }
 
-    /// Once the source has stopped making sound, or `transcriptOfferLead`
+    /// Once the source has stopped making sound, or `transcriptOfferDuration`
     /// seconds before the stack is forgotten if that comes first, the box
-    /// asks whether to save it, for `transcriptOfferLead` seconds, and takes
-    /// clicks while it asks. Its bar fills over those seconds. Up at the tail,
-    /// it ends as the stack goes; up earlier on silence, it fades on its own
-    /// and the stack stays until Clear after. New words take the box back at
-    /// once. Silence is the better moment: the video or the call is over, and
-    /// the person is still there to answer.
+    /// asks whether to save it, for `transcriptOfferDuration` seconds, and
+    /// takes clicks while it asks. Its bar fills over those seconds. Up at the
+    /// tail, it ends as the stack goes; up earlier on silence, it fades on its
+    /// own and the stack stays until Clear after. New words take the box back
+    /// at once. Silence is the better moment: the video or the call is over,
+    /// and the person is still there to answer.
     ///
     /// Only over a box that has already faded, and never over the ⌥ stack,
     /// a line of the app's own or a box being dragged. Once up it stays, sound
     /// or no sound, until words, the timer or a click take it; withdrawn,
-    /// faded, if Clear after is turned off in the meantime.
+    /// faded, if Clear after or the offer itself is turned off in the
+    /// meantime.
     private func offerTranscriptIfIdle() {
         let idle = Date().timeIntervalSince(lastTextAt)
-        let due = isSourceSilent == true || idle >= historyExpiry - Self.transcriptOfferLead
+        let due = isSourceSilent == true || idle >= historyExpiry - transcriptOfferDuration
         let enoughSaid = debugOffersAnyway || speechInStack >= Self.transcriptOfferMinimum
-        let wanted = isHistoryExpiryEnabled && !savingTranscript && !isSuppressed
+        let wanted = isTranscriptOfferEnabled && isHistoryExpiryEnabled
+            && !savingTranscript && !isSuppressed
             && !holdsFinalCaption && !stack.isEmpty
             && (offersTranscript || (due && !offeredSinceText && enoughSaid))
         guard wanted else {
@@ -2292,6 +2348,8 @@ final class OverlayController {
         view.tentative = ""
         view.secondary = ""
         view.secondaryTentative = ""
+        view.secondaryAction = (L("Don't Ask Again", "Button in the caption box beside Save Transcript…: turns the offer to save the transcript off"),
+                                { [weak self] in self?.declineTranscriptOffers() })
         view.action = (L("Save Transcript…", "Button in the caption box: saves the session's recent boxes to a text file"),
                        { [weak self] in self?.saveTranscript() })
         panel.ignoresMouseEvents = false
@@ -2300,6 +2358,15 @@ final class OverlayController {
         show()
         announce(L("Save a transcript of this session before it clears?")
                  + " " + L("Save Transcript… is also in the Subtitles menu.", "Read by VoiceOver after the offer to save the transcript"))
+    }
+
+    /// The offer's Don't Ask Again: no more offers, this one taken down, and
+    /// the stack kept as it was. Settings ▸ Transcript turns them back on.
+    private func declineTranscriptOffers() {
+        isTranscriptOfferEnabled = false
+        onDisableTranscriptOffer?()
+        announce(L("The offer is off. Settings ▸ Transcript turns it back on.",
+                   "Read by VoiceOver after Don't Ask Again; Settings ▸ Transcript is the Settings window's tab"))
     }
 
     /// Less speech than this and the box does not ask: a minute of captions
@@ -2392,12 +2459,12 @@ final class OverlayController {
 
     #if DEV_BUILD
     /// Settings ▸ Debug: bring the offer up now, as if the captions had been
-    /// quiet until ten seconds before Clear after. A box on screen fades
+    /// quiet until the offer's length before Clear after. A box on screen fades
     /// first, as it would. With nothing said yet, two sample boxes stand in
     /// for the session, so there is something to save. Needs Clear after on,
     /// and not paused, as the real one does.
     func debugOfferTranscript() {
-        guard isHistoryExpiryEnabled, !isSuppressed else { return }
+        guard isTranscriptOfferEnabled, isHistoryExpiryEnabled, !isSuppressed else { return }
         if stack.isEmpty {
             let samples = ["A sample box, so the offer has something to save.",
                            "Nothing had been said since the history last cleared."]
@@ -2414,7 +2481,7 @@ final class OverlayController {
         if panel.alphaValue == 0 { boxIsCleared = true }
         offeredSinceText = false
         debugOffersAnyway = true
-        lastTextAt = Date().addingTimeInterval(-(historyExpiry - Self.transcriptOfferLead))
+        lastTextAt = Date().addingTimeInterval(-max(historyExpiry - transcriptOfferDuration, 0))
     }
     #endif
 
@@ -2425,8 +2492,9 @@ final class OverlayController {
           "Asked in the caption box before the recent boxes are forgotten")
     }
 
-    /// The offer's bar, over its own ten seconds, and its end when they are
-    /// up. At the tail those are the last ten before the stack goes.
+    /// The offer's bar, over its own `transcriptOfferDuration`, and its end
+    /// when that is up. At the tail it is the last of the quiet before the
+    /// stack goes, which then goes with it.
     ///
     /// Frozen while the pointer is over the box: someone reading the
     /// question, or reaching for the button, is not letting the time run
@@ -2441,20 +2509,19 @@ final class OverlayController {
             if isPointerOverBox {
                 lastTextAt += step
             } else if NSWorkspace.shared.isVoiceOverEnabled {
-                // Thirty seconds rather than ten under VoiceOver: hearing the
-                // question and reaching the button or the menu takes longer
-                // than reading and clicking. The expiry waits the difference.
+                // Three times as long under VoiceOver: hearing the question
+                // and reaching the button or the menu takes longer than
+                // reading and clicking. The expiry waits the difference.
                 offerElapsed += step / 3
                 lastTextAt += step * 2 / 3
             } else {
                 offerElapsed += step
             }
         }
-        view.progress = CGFloat(min(offerElapsed / Self.transcriptOfferLead, 1))
-        // At the tail, the expiry takes it down with the stack; the poll
-        // that runs it is at most half a second behind.
-        if offerElapsed >= Self.transcriptOfferLead,
-           Date().timeIntervalSince(lastTextAt) < historyExpiry - 0.5 {
+        view.progress = CGFloat(min(offerElapsed / transcriptOfferDuration, 1))
+        // At the tail, the expiry that waited for it follows on its next
+        // poll, at most half a second behind.
+        if offerElapsed >= transcriptOfferDuration {
             withdrawTranscriptOffer(fading: true)
         }
     }
@@ -2464,6 +2531,7 @@ final class OverlayController {
     private func withdrawTranscriptOffer(fading: Bool) {
         guard offersTranscript else { return }
         offersTranscript = false
+        view.secondaryAction = nil
         view.action = nil
         view.progress = nil
         if !isDraggable { panel.ignoresMouseEvents = true }
@@ -2733,6 +2801,7 @@ final class OverlayController {
         history.dismiss()
         cancelHold()
         offersTranscript = false
+        view.secondaryAction = nil
         view.action = nil
         view.progress = nil
         holdsFinalCaption = true
@@ -2765,6 +2834,7 @@ final class OverlayController {
     /// word. Used when the engine underneath changes — model or source switch.
     func clearAndHide() {
         if view.action != nil {
+            view.secondaryAction = nil
             view.action = nil
             if !isDraggable { panel.ignoresMouseEvents = true }
         }

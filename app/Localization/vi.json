@@ -349,5 +349,17 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Trong lúc đọc bản dịch, âm gốc vẫn nghe được, chỉ nhỏ đi còn một phần tư. Không áp dụng cho micrô.",
   "Stop or Repeat Speech": "Dừng hoặc đọc lại",
   "Save Transcript… is also in the Subtitles menu.": "“Lưu bản ghi…” cũng có trong menu Subtitles.",
-  "%@ is in the Subtitles menu.": "“%@” có trong menu Subtitles."
+  "%@ is in the Subtitles menu.": "“%@” có trong menu Subtitles.",
+  "%lld seconds": {
+    "other": "%lld giây"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "Sau một phút phụ đề trở lên, khi âm thanh dừng hoặc các khung gần đây sắp bị xoá, khung sẽ hỏi có lưu bản ghi không. “Lưu bản ghi…” luôn có trong menu, dù khung có hỏi hay không.",
+  "Don't Ask Again": "Không hỏi lại",
+  "Needs Forget the stack when idle, under UI.": "Cần bật “Xoá chồng khung khi im lặng” trong “Giao diện”.",
+  "Offer to Save": "Đề nghị lưu",
+  "Show for": "Hiện trong",
+  "Speakers": "Người nói",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "Đề nghị đã tắt. Bật lại trong Cài đặt ▸ Bản ghi.",
+  "Transcript": "Bản ghi",
+  "Voices are told apart only with New box on speaker change, under Models.": "Chỉ phân biệt giọng nói khi bật “Khung mới khi đổi người nói” trong “Mô hình”."
 }

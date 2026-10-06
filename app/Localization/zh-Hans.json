@@ -349,5 +349,17 @@
  "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "朗读翻译时，原声仍可听到，音量降为四分之一。不适用于麦克风。",
  "Stop or Repeat Speech": "停止或重复朗读",
  "Save Transcript… is also in the Subtitles menu.": "“存储文字记录…”也在 Subtitles 菜单中。",
- "%@ is in the Subtitles menu.": "“%@”在 Subtitles 菜单中。"
+ "%@ is in the Subtitles menu.": "“%@”在 Subtitles 菜单中。",
+ "%lld seconds": {
+  "other": "%lld 秒"
+ },
+ "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "字幕持续一分钟或更久之后，声音停止或最近的字幕块即将清空时，字幕块会询问是否存储文字记录。无论是否询问，“存储文字记录…”始终在菜单中。",
+ "Don't Ask Again": "不再询问",
+ "Needs Forget the stack when idle, under UI.": "需要打开“界面”中的“闲置后清空这一叠”。",
+ "Offer to Save": "询问存储",
+ "Show for": "显示时长",
+ "Speakers": "说话人",
+ "The offer is off. Settings ▸ Transcript turns it back on.": "询问已关闭。可在“设置 ▸ 文字记录”中重新打开。",
+ "Transcript": "文字记录",
+ "Voices are told apart only with New box on speaker change, under Models.": "只有打开“模型”中的“换人说话时另起字幕块”，才能区分不同的声音。"
 }

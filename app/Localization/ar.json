@@ -424,5 +424,22 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "يبقى الصوت الأصلي مسموعًا بربع مستواه أثناء نطق الترجمة. لا ينطبق على الميكروفون.",
   "Stop or Repeat Speech": "إيقاف النطق أو تكراره",
   "Save Transcript… is also in the Subtitles menu.": "«حفظ النص…» موجود أيضًا في قائمة Subtitles.",
-  "%@ is in the Subtitles menu.": "«%@» موجود في قائمة Subtitles."
+  "%@ is in the Subtitles menu.": "«%@» موجود في قائمة Subtitles.",
+  "%lld seconds": {
+    "zero": "%lld ثانية",
+    "one": "ثانية واحدة",
+    "two": "ثانيتان",
+    "few": "%lld ثوانٍ",
+    "many": "%lld ثانية",
+    "other": "%lld ثانية"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "بعد دقيقة أو أكثر من الترجمة، عندما يتوقف الصوت أو توشك آخر المربعات على المسح، يعرض المربع حفظ النص. «حفظ النص…» موجود دائمًا في القائمة، سواء عرضه المربع أم لا.",
+  "Don't Ask Again": "عدم السؤال مجددًا",
+  "Needs Forget the stack when idle, under UI.": "يتطلب «مسح المكدّس عند الصمت» في «المظهر».",
+  "Offer to Save": "عرض الحفظ",
+  "Show for": "العرض لمدة",
+  "Speakers": "المتحدثون",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "العرض متوقف. يمكنك إعادة تشغيله من الإعدادات ▸ النص.",
+  "Transcript": "النص",
+  "Voices are told apart only with New box on speaker change, under Models.": "لا تُميَّز الأصوات إلا مع «مربع جديد عند تغيّر المتحدث» في «النماذج»."
 }

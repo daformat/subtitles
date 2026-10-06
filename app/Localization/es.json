@@ -364,5 +364,18 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "El original se sigue oyendo, a una cuarta parte del volumen, mientras se lee la traducción. No se aplica al micrófono.",
   "Stop or Repeat Speech": "Detener o repetir la lectura",
   "Save Transcript… is also in the Subtitles menu.": "Guardar transcripción… también está en el menú de Subtitles.",
-  "%@ is in the Subtitles menu.": "%@ está en el menú de Subtitles."
+  "%@ is in the Subtitles menu.": "%@ está en el menú de Subtitles.",
+  "%lld seconds": {
+    "one": "%lld segundo",
+    "other": "%lld segundos"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "Tras un minuto o más de subtítulos, cuando el sonido se detiene o los recuadros recientes están a punto de borrarse, el recuadro ofrece guardar una transcripción. Guardar transcripción… siempre está en el menú, lo ofrezca o no.",
+  "Don't Ask Again": "No volver a preguntar",
+  "Needs Forget the stack when idle, under UI.": "Requiere Vaciar la pila tras un silencio, en Aspecto.",
+  "Offer to Save": "Ofrecer guardar",
+  "Show for": "Mostrar durante",
+  "Speakers": "Hablantes",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "La oferta está desactivada. Puedes volver a activarla en Ajustes ▸ Transcripción.",
+  "Transcript": "Transcripción",
+  "Voices are told apart only with New box on speaker change, under Models.": "Las voces solo se distinguen con Recuadro nuevo al cambiar de interlocutor, en Modelos."
 }

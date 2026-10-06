@@ -364,5 +364,18 @@
   "The original stays audible, a quarter as loud, while the translation is read. Not for the microphone.": "Het origineel blijft hoorbaar, op een kwart van het volume, terwijl de vertaling wordt voorgelezen. Geldt niet voor de microfoon.",
   "Stop or Repeat Speech": "Voorlezen stoppen of herhalen",
   "Save Transcript… is also in the Subtitles menu.": "Transcript bewaren… staat ook in het menu van Subtitles.",
-  "%@ is in the Subtitles menu.": "%@ staat in het menu van Subtitles."
+  "%@ is in the Subtitles menu.": "%@ staat in het menu van Subtitles.",
+  "%lld seconds": {
+    "one": "%lld seconde",
+    "other": "%lld seconden"
+  },
+  "After a minute or more of captions, when the sound stops or the recent boxes are about to clear, the box asks to save a transcript. Save Transcript… is always in the menu, whether it asks or not.": "Na een minuut of meer aan ondertitels, als het geluid stopt of de recente vakken bijna gewist worden, vraagt het vak of je een transcript wilt bewaren. Transcript bewaren… staat altijd in het menu, of het vak het nu vraagt of niet.",
+  "Don't Ask Again": "Niet meer vragen",
+  "Needs Forget the stack when idle, under UI.": "Vereist Wis de stapel bij stilte, onder Weergave.",
+  "Offer to Save": "Aanbod om te bewaren",
+  "Show for": "Toon gedurende",
+  "Speakers": "Sprekers",
+  "The offer is off. Settings ▸ Transcript turns it back on.": "Het aanbod staat uit. Zet het weer aan via Instellingen ▸ Transcript.",
+  "Transcript": "Transcript",
+  "Voices are told apart only with New box on speaker change, under Models.": "Stemmen worden alleen onderscheiden met Nieuw vak bij andere spreker, onder Modellen."
 }
