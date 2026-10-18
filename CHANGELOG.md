@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.15.2 · 2026-10-18
+
+- **Transcripts go where the last one went.** Save Transcript… now opens
+  in the folder the previous transcript was saved to, and in Documents
+  the first time, rather than in Documents every time.
+- **Or always in one folder.** A new Save Location setting, under
+  Settings ▸ Transcript, keeps Last Used Folder or picks a folder every
+  transcript starts in. If that folder has moved or its disk is not
+  connected, the panel opens in the last used folder instead.
+
 ## 1.15.1 · 2026-10-18
 
 - **A report for captions that never come.** If Subtitles hears speech and

@@ -409,5 +409,10 @@
  "Speakers": "Говорящие",
  "The offer is off. Settings ▸ Transcript turns it back on.": "Предложение выключено. Включить его снова можно в Настройки ▸ Расшифровка.",
  "Transcript": "Расшифровка",
- "Voices are told apart only with New box on speaker change, under Models.": "Голоса различаются, только если включён «Новый блок при смене говорящего» в разделе «Модели»."
+ "Voices are told apart only with New box on speaker change, under Models.": "Голоса различаются, только если включён «Новый блок при смене говорящего» в разделе «Модели».",
+ "Save Location": "Место сохранения",
+ "Last Used Folder": "Последняя папка",
+ "Choose Folder…": "Выбрать папку…",
+ "Choose": "Выбрать",
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Где открывается «Сохранить расшифровку…». «Последняя папка» означает папку, куда была сохранена предыдущая расшифровка, в первый раз «Документы»."
 }

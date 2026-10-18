@@ -377,5 +377,10 @@
   "Speakers": "Konuşmacılar",
   "The offer is off. Settings ▸ Transcript turns it back on.": "Öneri kapalı. Ayarlar ▸ Döküm'den yeniden açabilirsiniz.",
   "Transcript": "Döküm",
-  "Voices are told apart only with New box on speaker change, under Models.": "Sesler yalnızca Modeller altındaki Konuşmacı değişince yeni kutu ile ayırt edilir."
+  "Voices are told apart only with New box on speaker change, under Models.": "Sesler yalnızca Modeller altındaki Konuşmacı değişince yeni kutu ile ayırt edilir.",
+  "Save Location": "Kayıt Yeri",
+  "Last Used Folder": "Son Kullanılan Klasör",
+  "Choose Folder…": "Klasör Seç…",
+  "Choose": "Seç",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Dökümü Kaydet… penceresinin açıldığı yer. Son Kullanılan Klasör, önceki dökümün kaydedildiği klasördür; ilk seferde Belgeler."
 }

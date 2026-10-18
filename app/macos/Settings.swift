@@ -85,6 +85,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onTranscriptOffer: ((Bool) -> Void)?
     var transcriptOfferDuration: () -> Double = { OverlayController.defaultTranscriptOfferDuration }
     var onTranscriptOfferDuration: ((Double) -> Void)?
+    /// The folder Save Transcript… opens in, or nil for the one the last
+    /// transcript went to.
+    var transcriptFolder: () -> URL? = { nil }
+    var onTranscriptFolder: ((URL?) -> Void)?
 #if DEV_BUILD
     /// Settings ▸ Debug, in development builds only: the live box's app
     /// label also names the speaker the diarizer hears.
@@ -1045,7 +1049,74 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   "Settings ▸ Transcript; New box on speaker change is the switch under Settings ▸ Models, name it as that switch does"),
                 names.view, nil)
 
+        fillFolderPopup()
+        folderPopup.target = self
+        folderPopup.action = #selector(chooseFolder)
+        section(L("Save Location", "Settings section: the folder a transcript is saved to"),
+                L("Where Save Transcript… opens. Last Used Folder is the one the previous "
+                  + "transcript went to, Documents the first time.",
+                  "Settings ▸ Transcript; Save Transcript… is the menu item, Last Used Folder the popup's first choice, name them as they are"),
+                folderPopup, nil)
+
         return stack
+    }
+
+    /// Last Used Folder, the chosen folder if there is one, and a way to
+    /// choose another.
+    private let folderPopup = NSPopUpButton()
+
+    private func fillFolderPopup() {
+        folderPopup.removeAllItems()
+        folderPopup.addItem(withTitle: L("Last Used Folder", "Settings popup: save transcripts where the previous one was saved"))
+        folderPopup.menu?.addItem(.separator())
+        if let folder = transcriptFolder() {
+            folderPopup.addItem(withTitle: FileManager.default.displayName(atPath: folder.path))
+            let icon = NSWorkspace.shared.icon(forFile: folder.path)
+            icon.size = NSSize(width: 16, height: 16)
+            folderPopup.lastItem?.image = icon
+            folderPopup.lastItem?.toolTip = folder.path
+            folderPopup.lastItem?.representedObject = folder
+            folderPopup.menu?.addItem(.separator())
+            folderPopup.select(folderPopup.lastItem)
+        } else {
+            folderPopup.selectItem(at: 0)
+        }
+        folderPopup.addItem(withTitle: L("Choose Folder…", "Settings popup: pick the folder transcripts are saved to"))
+    }
+
+    @objc private func chooseFolder(_ sender: NSPopUpButton) {
+        guard let item = sender.selectedItem else { return }
+        if item === sender.lastItem {
+            pickFolder()
+        } else if item.representedObject == nil {
+            onTranscriptFolder?(nil)
+            fillFolderPopup()
+        }
+    }
+
+    /// Opens on the folder chosen before, if any. Cancelled, the popup goes
+    /// back to what it said.
+    private func pickFolder() {
+        let open = NSOpenPanel()
+        open.canChooseDirectories = true
+        open.canChooseFiles = false
+        open.canCreateDirectories = true
+        open.allowsMultipleSelection = false
+        open.prompt = L("Choose", "Folder picker button: use this folder for saved transcripts")
+        open.directoryURL = transcriptFolder()
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        let done: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self else { return }
+            if response == .OK, let url = open.url {
+                self.onTranscriptFolder?(url)
+            }
+            self.fillFolderPopup()
+        }
+        if let window {
+            open.beginSheetModal(for: window, completionHandler: done)
+        } else {
+            done(open.runModal())
+        }
     }
 
     @objc private func toggleOffer(_ sender: NSSwitch) {

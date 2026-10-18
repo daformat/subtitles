@@ -361,5 +361,10 @@
  "Speakers": "说话人",
  "The offer is off. Settings ▸ Transcript turns it back on.": "询问已关闭。可在“设置 ▸ 文字记录”中重新打开。",
  "Transcript": "文字记录",
- "Voices are told apart only with New box on speaker change, under Models.": "只有打开“模型”中的“换人说话时另起字幕块”，才能区分不同的声音。"
+ "Voices are told apart only with New box on speaker change, under Models.": "只有打开“模型”中的“换人说话时另起字幕块”，才能区分不同的声音。",
+ "Save Location": "存储位置",
+ "Last Used Folder": "上次使用的文件夹",
+ "Choose Folder…": "选取文件夹…",
+ "Choose": "选取",
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“存储文字记录…”打开的位置。“上次使用的文件夹”是上一份文字记录存储的位置，第一次为“文稿”。"
 }

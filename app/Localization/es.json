@@ -377,5 +377,10 @@
   "Speakers": "Hablantes",
   "The offer is off. Settings ▸ Transcript turns it back on.": "La oferta está desactivada. Puedes volver a activarla en Ajustes ▸ Transcripción.",
   "Transcript": "Transcripción",
-  "Voices are told apart only with New box on speaker change, under Models.": "Las voces solo se distinguen con Recuadro nuevo al cambiar de interlocutor, en Modelos."
+  "Voices are told apart only with New box on speaker change, under Models.": "Las voces solo se distinguen con Recuadro nuevo al cambiar de interlocutor, en Modelos.",
+  "Save Location": "Ubicación",
+  "Last Used Folder": "Última carpeta usada",
+  "Choose Folder…": "Elegir carpeta…",
+  "Choose": "Elegir",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Dónde se abre Guardar transcripción…. Última carpeta usada es donde se guardó la transcripción anterior; la primera vez, Documentos."
 }

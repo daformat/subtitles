@@ -377,5 +377,10 @@
   "Speakers": "Falantes",
   "The offer is off. Settings ▸ Transcript turns it back on.": "A oferta está desativada. Ajustes ▸ Transcrição a reativa.",
   "Transcript": "Transcrição",
-  "Voices are told apart only with New box on speaker change, under Models.": "As vozes só são distinguidas com Quadro novo quando muda quem fala, em Modelos."
+  "Voices are told apart only with New box on speaker change, under Models.": "As vozes só são distinguidas com Quadro novo quando muda quem fala, em Modelos.",
+  "Save Location": "Local",
+  "Last Used Folder": "Última pasta usada",
+  "Choose Folder…": "Escolher pasta…",
+  "Choose": "Escolher",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Onde Salvar transcrição… abre. Última pasta usada é a da transcrição anterior; na primeira vez, Documentos."
 }

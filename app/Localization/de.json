@@ -377,5 +377,10 @@
   "Speakers": "Sprecher",
   "The offer is off. Settings ▸ Transcript turns it back on.": "Das Angebot ist aus. Unter Einstellungen ▸ Transkript lässt es sich wieder einschalten.",
   "Transcript": "Transkript",
-  "Voices are told apart only with New box on speaker change, under Models.": "Stimmen werden nur mit „Neues Feld bei Sprecherwechsel“ unter „Modelle“ unterschieden."
+  "Voices are told apart only with New box on speaker change, under Models.": "Stimmen werden nur mit „Neues Feld bei Sprecherwechsel“ unter „Modelle“ unterschieden.",
+  "Save Location": "Speicherort",
+  "Last Used Folder": "Zuletzt verwendeter Ordner",
+  "Choose Folder…": "Ordner auswählen…",
+  "Choose": "Auswählen",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Wo „Transkript sichern…“ öffnet. „Zuletzt verwendeter Ordner“ ist der, in dem das vorige Transkript gesichert wurde, beim ersten Mal „Dokumente“."
 }

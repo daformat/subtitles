@@ -2572,6 +2572,26 @@ final class OverlayController {
 
     /// The format last saved in, offered first next time.
     private static let transcriptFormatKey = "transcript.format"
+    /// The folder the last transcript went to.
+    private static let transcriptLastFolderKey = "transcript.lastFolder"
+
+    /// The folder chosen under Settings ▸ Transcript, or nil for wherever the
+    /// last transcript went. Set by main.swift.
+    var transcriptFolder: URL?
+
+    /// Where the save panel opens: the folder chosen in Settings, else the
+    /// one the last transcript went to, else Documents. A folder since
+    /// deleted, or on a disk that is not mounted, is passed over.
+    private var transcriptDirectory: URL? {
+        let last = UserDefaults.standard.string(forKey: Self.transcriptLastFolderKey)
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        return [transcriptFolder, last].compactMap { $0 }.first { folder in
+            var isFolder: ObjCBool = false
+            return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isFolder)
+                && isFolder.boolValue
+        } ?? documents
+    }
 
     /// Ask where, and write the file. Taken from the offer, the stack is then
     /// forgotten, as the timer was about to; cancelled, the timer takes it
@@ -2598,7 +2618,7 @@ final class OverlayController {
         let picker = TranscriptFormatPicker(panel: save)
         save.accessoryView = picker.view
         save.nameFieldStringValue = title + "." + picker.format.fileExtension
-        save.directoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        save.directoryURL = transcriptDirectory
         save.isExtensionHidden = false
         // Over a full-screen video, where the click came from, rather than
         // on a desktop the click would switch to.
@@ -2610,6 +2630,10 @@ final class OverlayController {
             guard response == .OK, let url = save.url else { return }
             let format = picker.format
             UserDefaults.standard.set(format.rawValue, forKey: Self.transcriptFormatKey)
+            // Kept with a folder chosen in Settings too, for when it is set
+            // back to Last Used Folder.
+            UserDefaults.standard.set(url.deletingLastPathComponent().path,
+                                      forKey: Self.transcriptLastFolderKey)
             let text = TranscriptExport.render(entries, as: format, title: title) {
                 LF("Speaker %lld", $0)
             }

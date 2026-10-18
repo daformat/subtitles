@@ -377,5 +377,10 @@
   "Speakers": "Sprekers",
   "The offer is off. Settings ▸ Transcript turns it back on.": "Het aanbod staat uit. Zet het weer aan via Instellingen ▸ Transcript.",
   "Transcript": "Transcript",
-  "Voices are told apart only with New box on speaker change, under Models.": "Stemmen worden alleen onderscheiden met Nieuw vak bij andere spreker, onder Modellen."
+  "Voices are told apart only with New box on speaker change, under Models.": "Stemmen worden alleen onderscheiden met Nieuw vak bij andere spreker, onder Modellen.",
+  "Save Location": "Locatie",
+  "Last Used Folder": "Laatst gebruikte map",
+  "Choose Folder…": "Kies map…",
+  "Choose": "Kies",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Waar Transcript bewaren… opent. Laatst gebruikte map is de map van het vorige transcript, de eerste keer Documenten."
 }

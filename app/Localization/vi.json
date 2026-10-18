@@ -361,5 +361,10 @@
   "Speakers": "Người nói",
   "The offer is off. Settings ▸ Transcript turns it back on.": "Đề nghị đã tắt. Bật lại trong Cài đặt ▸ Bản ghi.",
   "Transcript": "Bản ghi",
-  "Voices are told apart only with New box on speaker change, under Models.": "Chỉ phân biệt giọng nói khi bật “Khung mới khi đổi người nói” trong “Mô hình”."
+  "Voices are told apart only with New box on speaker change, under Models.": "Chỉ phân biệt giọng nói khi bật “Khung mới khi đổi người nói” trong “Mô hình”.",
+  "Save Location": "Vị trí lưu",
+  "Last Used Folder": "Thư mục dùng gần nhất",
+  "Choose Folder…": "Chọn thư mục…",
+  "Choose": "Chọn",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Nơi “Lưu bản ghi…” mở ra. “Thư mục dùng gần nhất” là thư mục đã lưu bản ghi trước, lần đầu là “Tài liệu”."
 }

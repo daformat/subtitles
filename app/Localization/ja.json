@@ -361,5 +361,10 @@
  "Speakers": "話者",
  "The offer is off. Settings ▸ Transcript turns it back on.": "確認はオフです。設定 ▸ 書き起こしでオンに戻せます。",
  "Transcript": "書き起こし",
- "Voices are told apart only with New box on speaker change, under Models.": "声を聞き分けるのは、「モデル」の「話者が変わったら新しいボックス」がオンのときだけです。"
+ "Voices are told apart only with New box on speaker change, under Models.": "声を聞き分けるのは、「モデル」の「話者が変わったら新しいボックス」がオンのときだけです。",
+ "Save Location": "保存場所",
+ "Last Used Folder": "前回使用したフォルダ",
+ "Choose Folder…": "フォルダを選択…",
+ "Choose": "選択",
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "「書き起こしを保存…」が開く場所です。「前回使用したフォルダ」は前の書き起こしを保存したフォルダで、初回は「書類」です。"
 }

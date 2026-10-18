@@ -377,5 +377,10 @@
  "Speakers": "Oratori",
  "The offer is off. Settings ▸ Transcript turns it back on.": "La proposta è disattivata. Puoi riattivarla in Impostazioni ▸ Trascrizione.",
  "Transcript": "Trascrizione",
- "Voices are told apart only with New box on speaker change, under Models.": "Le voci si distinguono solo con Nuovo riquadro a ogni cambio di interlocutore, in Modelli."
+ "Voices are told apart only with New box on speaker change, under Models.": "Le voci si distinguono solo con Nuovo riquadro a ogni cambio di interlocutore, in Modelli.",
+ "Save Location": "Posizione",
+ "Last Used Folder": "Ultima cartella usata",
+ "Choose Folder…": "Scegli cartella…",
+ "Choose": "Scegli",
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Dove si apre Salva trascrizione…. Ultima cartella usata è quella della trascrizione precedente, Documenti la prima volta."
 }

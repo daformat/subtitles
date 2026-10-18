@@ -361,5 +361,10 @@
   "Speakers": "화자",
   "The offer is off. Settings ▸ Transcript turns it back on.": "제안이 꺼졌습니다. 설정 ▸ 대본에서 다시 켤 수 있습니다.",
   "Transcript": "대본",
-  "Voices are told apart only with New box on speaker change, under Models.": "모델의 화자가 바뀌면 새 상자가 켜져 있을 때만 목소리를 구분합니다."
+  "Voices are told apart only with New box on speaker change, under Models.": "모델의 화자가 바뀌면 새 상자가 켜져 있을 때만 목소리를 구분합니다.",
+  "Save Location": "저장 위치",
+  "Last Used Folder": "마지막으로 사용한 폴더",
+  "Choose Folder…": "폴더 선택…",
+  "Choose": "선택",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "대본 저장…이 열리는 위치입니다. 마지막으로 사용한 폴더는 이전 대본을 저장한 폴더이며, 처음에는 문서입니다."
 }

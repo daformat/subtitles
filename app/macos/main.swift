@@ -171,6 +171,8 @@ enum Defaults {
     static let namesSpeakers = "transcript.namesSpeakers"
     static let transcriptOffer = "transcript.offer"
     static let transcriptOfferSeconds = "transcript.offerSeconds"
+    /// A path; absent for the folder the last transcript went to.
+    static let transcriptFolder = "transcript.folder"
     static let useVAD = "engine.vad"
     static let screenShare = "overlay.screenShare"
     /// See `Pill.IconStyle` and `Pill.TextAlignment`.
@@ -1562,6 +1564,17 @@ if useOverlay {
     settings.onTranscriptOfferDuration = { seconds in
         controller.transcriptOfferDuration = seconds
         UserDefaults.standard.set(seconds, forKey: Defaults.transcriptOfferSeconds)
+    }
+    controller.transcriptFolder = UserDefaults.standard.string(forKey: Defaults.transcriptFolder)
+        .map { URL(fileURLWithPath: $0, isDirectory: true) }
+    settings.transcriptFolder = { controller.transcriptFolder }
+    settings.onTranscriptFolder = { folder in
+        controller.transcriptFolder = folder
+        if let folder {
+            UserDefaults.standard.set(folder.path, forKey: Defaults.transcriptFolder)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Defaults.transcriptFolder)
+        }
     }
     controller.onDisableTranscriptOffer = {
         UserDefaults.standard.set(false, forKey: Defaults.transcriptOffer)

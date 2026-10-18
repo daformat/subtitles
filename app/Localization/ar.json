@@ -441,5 +441,10 @@
   "Speakers": "المتحدثون",
   "The offer is off. Settings ▸ Transcript turns it back on.": "العرض متوقف. يمكنك إعادة تشغيله من الإعدادات ▸ النص.",
   "Transcript": "النص",
-  "Voices are told apart only with New box on speaker change, under Models.": "لا تُميَّز الأصوات إلا مع «مربع جديد عند تغيّر المتحدث» في «النماذج»."
+  "Voices are told apart only with New box on speaker change, under Models.": "لا تُميَّز الأصوات إلا مع «مربع جديد عند تغيّر المتحدث» في «النماذج».",
+  "Save Location": "مكان الحفظ",
+  "Last Used Folder": "آخر مجلد مستخدم",
+  "Choose Folder…": "اختيار مجلد…",
+  "Choose": "اختيار",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "حيث يفتح «حفظ النص…». «آخر مجلد مستخدم» هو المجلد الذي حُفظ فيه النص السابق، و«المستندات» في المرة الأولى."
 }

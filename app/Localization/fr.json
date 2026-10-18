@@ -377,5 +377,10 @@
   "Speakers": "Intervenants",
   "The offer is off. Settings ▸ Transcript turns it back on.": "La proposition est désactivée. Préférences ▸ Transcription la réactive.",
   "Transcript": "Transcription",
-  "Voices are told apart only with New box on speaker change, under Models.": "Les voix ne sont distinguées qu'avec Nouveau bloc au changement d'intervenant, dans Modèles."
+  "Voices are told apart only with New box on speaker change, under Models.": "Les voix ne sont distinguées qu'avec Nouveau bloc au changement d'intervenant, dans Modèles.",
+  "Save Location": "Emplacement",
+  "Last Used Folder": "Dernier dossier utilisé",
+  "Choose Folder…": "Choisir un dossier…",
+  "Choose": "Choisir",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Où s'ouvre Enregistrer la transcription…. Dernier dossier utilisé est celui de la transcription précédente, Documents la première fois."
 }

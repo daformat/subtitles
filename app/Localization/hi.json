@@ -377,5 +377,10 @@
   "Speakers": "वक्ता",
   "The offer is off. Settings ▸ Transcript turns it back on.": "सुझाव बंद है। सेटिंग्ज़ ▸ ट्रांसक्रिप्ट में इसे फिर से चालू करें।",
   "Transcript": "ट्रांसक्रिप्ट",
-  "Voices are told apart only with New box on speaker change, under Models.": "आवाज़ें तभी अलग पहचानी जाती हैं जब “मॉडल” में “वक्ता बदलने पर नया बॉक्स” चालू हो।"
+  "Voices are told apart only with New box on speaker change, under Models.": "आवाज़ें तभी अलग पहचानी जाती हैं जब “मॉडल” में “वक्ता बदलने पर नया बॉक्स” चालू हो।",
+  "Save Location": "सहेजने की जगह",
+  "Last Used Folder": "पिछला इस्तेमाल किया फ़ोल्डर",
+  "Choose Folder…": "फ़ोल्डर चुनें…",
+  "Choose": "चुनें",
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“ट्रांसक्रिप्ट सहेजें…” कहाँ खुलता है। “पिछला इस्तेमाल किया फ़ोल्डर” वह है जिसमें पिछली ट्रांसक्रिप्ट सहेजी गई थी, पहली बार “दस्तावेज़”।"
 }
