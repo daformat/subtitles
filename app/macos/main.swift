@@ -44,6 +44,7 @@ var resetPosition = false
 var listSources = false
 var listModels = false
 var variantOverride: FluidVariant?
+var diagnose = false
 // [main-edition]
 /// An appcast URL for the updater, instead of the one in Info.plist.
 var feedOverride: String?
@@ -77,6 +78,11 @@ while i < args.count {
         fontSize = (Double(args[i + 1]) as Double?).map { CGFloat($0) } ?? defaultFontSize; i += 1
     case "--variant" where i + 1 < args.count:
         variantOverride = FluidVariant(rawValue: args[i + 1]); i += 1
+    case "--diagnose": diagnose = true
+    case "--compute" where i + 1 < args.count:
+        computeOverride = computeUnits(named: args[i + 1])
+        if computeOverride == nil { err("unknown compute units: \(args[i + 1]) (ane | cpu | gpu | all)") }
+        i += 1
     // [main-edition]
     case "--feed" where i + 1 < args.count:
         feedOverride = args[i + 1]; i += 1
@@ -93,6 +99,8 @@ while i < args.count {
           --reset-position  put the overlay back to bottom-centre
           --list-sources    print audio sources and exit (no permission needed)
           --list-models     print the model cache and what is unused, and exit
+          --compute UNITS   ane | cpu | gpu | all: where the speech model runs
+          --diagnose        test the speech models on this Mac, print a report, and exit
         \(editionOptions)  --quiet           suppress status lines
 
         Live subtitles for system audio, transcribed on the Apple Neural Engine.
@@ -120,6 +128,16 @@ if listSources {
     print("\n● = currently playing")
     print("microphone: \(SystemAudioTap.defaultInputName() ?? "none")")
     exit(0)
+}
+
+if diagnose {
+    // Before any tap or window: the report needs only the models on disk, and
+    // asks for no permission.
+    Task {
+        await Diagnose.run()
+        exit(0)
+    }
+    dispatchMain()
 }
 
 // ── persisted settings ──

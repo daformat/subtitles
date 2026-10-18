@@ -4,6 +4,17 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.15.1 · 2026-10-18
+
+- **A report for captions that never come.** If Subtitles hears speech and
+  writes nothing, running it with `--diagnose` from Terminal speaks a sentence
+  through each speech model on disk, on the Neural Engine, the CPU and the
+  GPU, prints what each one heard, and says which way works. Nothing is
+  recorded or sent, and nothing is downloaded.
+- **Run the speech model elsewhere.** `--compute cpu`, `gpu`, `ane` or
+  `all` picks where the speech model runs, for a Mac where the Neural
+  Engine path stays silent.
+
 ## 1.15.0 · 2026-10-06
 
 - **Turn the offer off, or give it longer.** The box's offer to save a

@@ -403,6 +403,8 @@ actor FluidAudioEngine {
         onStatus(LF("Loading %@…", variant.displayName))
         do {
             let progress = makeProgressHandler()
+            // Nil unless `--compute` asked for somewhere else; see Diagnose.swift.
+            let configuration = computeConfiguration()
             if variant.isMultilingual {
                 // Two steps rather than one: the download has to be told which
                 // language it is for, because that decides which vocabulary pack
@@ -416,7 +418,8 @@ actor FluidAudioEngine {
                 // models, configuration and per-stream state as loading them
                 // into the manager directly, less the zero-input warm-up of
                 // the ANE programs, which the probe does below for both.
-                let shared = try await StreamingNemotronMultilingualAsrManager.preloadShared(from: dir)
+                let shared = try await StreamingNemotronMultilingualAsrManager.preloadShared(
+                    from: dir, configuration: configuration)
                 let manager = StreamingNemotronMultilingualAsrManager()
                 try await manager.loadFromShared(shared)
                 await manager.setLanguage(language == .auto ? nil : language.code)
@@ -432,11 +435,11 @@ actor FluidAudioEngine {
                 // The only variant that punctuates and capitalises. Costs latency:
                 // its [70,13,13] window is 2.08 s against EOU's 320 ms.
                 let manager = StreamingUnifiedAsrManager()
-                try await manager.loadModels(progressHandler: progress)
+                try await manager.loadModels(configuration: configuration, progressHandler: progress)
                 unified = manager
             } else if variant.isEou {
                 let manager = StreamingEouAsrManager(chunkSize: variant.eouChunkSize)
-                try await manager.loadModels(progressHandler: progress)
+                try await manager.loadModels(configuration: configuration, progressHandler: progress)
                 eou = manager
             } else {
                 // Leave `configuration` nil: FluidAudio then picks
@@ -446,7 +449,7 @@ actor FluidAudioEngine {
                 // engine exists to avoid.
                 let manager = StreamingNemotronAsrManager(
                     requestedChunkSize: variant.nemotronChunkSize)
-                try await manager.loadModels(progressHandler: progress)
+                try await manager.loadModels(configuration: configuration, progressHandler: progress)
                 nemotron = manager
             }
             // Load the diarizer after the recogniser: subtitles are the point, and
