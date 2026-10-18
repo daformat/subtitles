@@ -25,7 +25,7 @@ if let icon = NSImage(contentsOfFile: "build/Subtitles.app/Contents/Resources/Ap
 }
 
 let none: () -> Void = {}
-let key = "E7086052-3FEE43A0-97D4295D-6500E239"
+let key = "A1B2C3D4-E5F6A7B8-C9D0E1F2-A3B4C5D6"
 let until = Date().addingTimeInterval(72 * 3600)
 func form(_ entitlement: Entitlement, key: String = "", outcome: LicenseWindow.Outcome = .none)
     -> LicenseWindow.State {
@@ -44,7 +44,7 @@ let states: [(String, LicenseWindow.State, NSAppearance.Name)] = [
     ("2-trial-unstarted", form(.trial(daysLeft: 7, started: false)), .aqua),
     ("3-expired", form(.expired), .aqua),
     ("4-checking", form(.expired, key: key, outcome: .checking), .aqua),
-    ("5-not-a-key", form(.expired, key: "E7086052-3FEE", outcome: .notAKey), .aqua),
+    ("5-not-a-key", form(.expired, key: "A1B2C3D4-E5F6", outcome: .notAKey), .aqua),
     ("6-invalid", form(.expired, key: key, outcome: .invalid(nil)), .aqua),
     ("7-refunded", form(.expired, key: key, outcome: .revoked(.refunded)), .aqua),
     ("8-unreachable", form(.licensed(email: "mat@example.com"), key: key,

@@ -4,7 +4,7 @@ import XCTest
 @testable import LicenseCore
 
 final class EntitlementTests: XCTestCase {
-    private let key = LicenseKey(parsing: "E7086052-3FEE43A0-97D4295D-6500E239")!
+    private let key = LicenseKey(parsing: "A1B2C3D4-E5F6A7B8-C9D0E1F2-A3B4C5D6")!
     private let other = LicenseKey(parsing: "00000000-11111111-22222222-33333333")!
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     private let day: TimeInterval = 86_400
