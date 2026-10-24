@@ -171,8 +171,12 @@ enum Defaults {
     static let namesSpeakers = "transcript.namesSpeakers"
     static let transcriptOffer = "transcript.offer"
     static let transcriptOfferSeconds = "transcript.offerSeconds"
+    static let transcriptAutoSave = "transcript.autoSave"
     /// A path; absent for the folder the last transcript went to.
     static let transcriptFolder = "transcript.folder"
+    /// A TranscriptFormat's raw value; absent for the format the last
+    /// transcript was saved in.
+    static let transcriptFormat = "transcript.defaultFormat"
     static let useVAD = "engine.vad"
     static let screenShare = "overlay.screenShare"
     /// See `Pill.IconStyle` and `Pill.TextAlignment`.
@@ -1565,6 +1569,13 @@ if useOverlay {
         controller.transcriptOfferDuration = seconds
         UserDefaults.standard.set(seconds, forKey: Defaults.transcriptOfferSeconds)
     }
+    controller.savesTranscriptAutomatically =
+        UserDefaults.standard.bool(forKey: Defaults.transcriptAutoSave)
+    settings.transcriptAutoSave = { controller.savesTranscriptAutomatically }
+    settings.onTranscriptAutoSave = { on in
+        controller.savesTranscriptAutomatically = on
+        UserDefaults.standard.set(on, forKey: Defaults.transcriptAutoSave)
+    }
     controller.transcriptFolder = UserDefaults.standard.string(forKey: Defaults.transcriptFolder)
         .map { URL(fileURLWithPath: $0, isDirectory: true) }
     settings.transcriptFolder = { controller.transcriptFolder }
@@ -1574,6 +1585,17 @@ if useOverlay {
             UserDefaults.standard.set(folder.path, forKey: Defaults.transcriptFolder)
         } else {
             UserDefaults.standard.removeObject(forKey: Defaults.transcriptFolder)
+        }
+    }
+    controller.transcriptFormat = UserDefaults.standard.string(forKey: Defaults.transcriptFormat)
+        .flatMap(TranscriptFormat.init(rawValue:))
+    settings.transcriptFormat = { controller.transcriptFormat }
+    settings.onTranscriptFormat = { format in
+        controller.transcriptFormat = format
+        if let format {
+            UserDefaults.standard.set(format.rawValue, forKey: Defaults.transcriptFormat)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Defaults.transcriptFormat)
         }
     }
     controller.onDisableTranscriptOffer = {

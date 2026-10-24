@@ -382,5 +382,12 @@
   "Last Used Folder": "Son Kullanılan Klasör",
   "Choose Folder…": "Klasör Seç…",
   "Choose": "Seç",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Dökümü Kaydet… penceresinin açıldığı yer. Son Kullanılan Klasör, önceki dökümün kaydedildiği klasördür; ilk seferde Belgeler."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Dökümü Kaydet… penceresinin açıldığı yer. Son Kullanılan Klasör, önceki dökümün kaydedildiği klasördür; ilk seferde Belgeler.",
+  "Save without asking": "Sormadan kaydet",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "Döküm, aşağıdaki Biçim'de Kayıt Yeri'ne kaydedilir ve kutu bunu Finder'da Göster düğmesiyle bildirir. Oturum sürerse aynı dosya güncel tutulur.",
+  "Transcript saved to %@.": "Döküm %@ klasörüne kaydedildi.",
+  "Show in Finder": "Finder'da Göster",
+  "Format": "Biçim",
+  "Last Used Format": "Son Kullanılan Biçim",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Dökümü Kaydet…'in önce önerdiği ve Sormadan kaydet'in yazdığı biçim. Son Kullanılan Biçim önceki dökümün biçimidir, ilk seferde Düz Metin."
 }

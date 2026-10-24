@@ -382,5 +382,12 @@
   "Last Used Folder": "Laatst gebruikte map",
   "Choose Folder…": "Kies map…",
   "Choose": "Kies",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Waar Transcript bewaren… opent. Laatst gebruikte map is de map van het vorige transcript, de eerste keer Documenten."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Waar Transcript bewaren… opent. Laatst gebruikte map is de map van het vorige transcript, de eerste keer Documenten.",
+  "Save without asking": "Bewaren zonder te vragen",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "Het transcript gaat naar de Locatie, in de Structuur hieronder, en het vak meldt het, met Toon in Finder. Gaat de sessie door, dan wordt hetzelfde bestand bijgewerkt.",
+  "Transcript saved to %@.": "Transcript bewaard in %@.",
+  "Show in Finder": "Toon in Finder",
+  "Format": "Structuur",
+  "Last Used Format": "Laatst gebruikte structuur",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Wat Transcript bewaren… eerst voorstelt en wat Bewaren zonder te vragen schrijft. Laatst gebruikte structuur is die van het vorige transcript, de eerste keer Platte tekst."
 }

@@ -446,5 +446,12 @@
   "Last Used Folder": "آخر مجلد مستخدم",
   "Choose Folder…": "اختيار مجلد…",
   "Choose": "اختيار",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "حيث يفتح «حفظ النص…». «آخر مجلد مستخدم» هو المجلد الذي حُفظ فيه النص السابق، و«المستندات» في المرة الأولى."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "حيث يفتح «حفظ النص…». «آخر مجلد مستخدم» هو المجلد الذي حُفظ فيه النص السابق، و«المستندات» في المرة الأولى.",
+  "Save without asking": "الحفظ دون سؤال",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "يُحفظ النص في «مكان الحفظ» بـ«التنسيق» المحدد أدناه، ويقول المربع ذلك، مع «إظهار في Finder». وإذا استمرت الجلسة، يبقى الملف نفسه محدّثًا.",
+  "Transcript saved to %@.": "حُفظ النص في %@.",
+  "Show in Finder": "إظهار في Finder",
+  "Format": "التنسيق",
+  "Last Used Format": "آخر تنسيق مستخدم",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "ما يعرضه «حفظ النص…» أولًا، وما يكتبه «الحفظ دون سؤال». «آخر تنسيق مستخدم» هو تنسيق النص السابق، و«نص عادي» في المرة الأولى."
 }

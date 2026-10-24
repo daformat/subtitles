@@ -366,5 +366,12 @@
  "Last Used Folder": "上次使用的文件夹",
  "Choose Folder…": "选取文件夹…",
  "Choose": "选取",
- "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“存储文字记录…”打开的位置。“上次使用的文件夹”是上一份文字记录存储的位置，第一次为“文稿”。"
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“存储文字记录…”打开的位置。“上次使用的文件夹”是上一份文字记录存储的位置，第一次为“文稿”。",
+ "Save without asking": "无需询问直接存储",
+ "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "文字记录会以下方的“格式”存储到“存储位置”，字幕块会告知，并附“在访达中显示”。如果会话继续，同一文件会保持更新。",
+ "Transcript saved to %@.": "文字记录已存储到“%@”。",
+ "Show in Finder": "在访达中显示",
+ "Format": "格式",
+ "Last Used Format": "上次使用的格式",
+ "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "“存储文字记录…”首先提供、“无需询问直接存储”所用的格式。“上次使用的格式”是上一份文字记录的格式，首次为“纯文本”。"
 }

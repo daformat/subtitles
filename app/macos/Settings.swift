@@ -85,10 +85,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onTranscriptOffer: ((Bool) -> Void)?
     var transcriptOfferDuration: () -> Double = { OverlayController.defaultTranscriptOfferDuration }
     var onTranscriptOfferDuration: ((Double) -> Void)?
+    /// Whether the box saves the transcript itself where it would ask, and
+    /// says so. Inside the offer: off with it.
+    var transcriptAutoSave: () -> Bool = { false }
+    var onTranscriptAutoSave: ((Bool) -> Void)?
     /// The folder Save Transcript… opens in, or nil for the one the last
     /// transcript went to.
     var transcriptFolder: () -> URL? = { nil }
     var onTranscriptFolder: ((URL?) -> Void)?
+    /// The format Save Transcript… offers first and Save without asking
+    /// writes, or nil for the one the last transcript was saved in.
+    var transcriptFormat: () -> TranscriptFormat? = { nil }
+    var onTranscriptFormat: ((TranscriptFormat?) -> Void)?
 #if DEV_BUILD
     /// Settings ▸ Debug, in development builds only: the live box's app
     /// label also names the speaker the diarizer hears.
@@ -177,6 +185,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// The slider needs the stack to clear too, which is UI's to say.
     private let offerSwitch = NSSwitch()
     private var offerRow: SliderRow?
+    private var autoSaveRow: ToggleRow?
     private var offerCaption: NSTextField?
 
     private let cacheReadout = NSTextField(labelWithString: "")
@@ -1021,7 +1030,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
               "Settings ▸ Transcript; Forget the stack when idle is the switch under Settings ▸ UI, name it as that switch does"))
         offerCaption = needsExpiry
 
-        let offer = NSStackView(views: [Self.grid([duration.cells]), needsExpiry])
+        let autoSave = ToggleRow(
+            L("Save without asking", "Settings switch: the transcript is saved where the box would offer to save it"),
+            detail: L("The transcript goes to the Save Location, in the Format below, "
+                      + "and the box says so, with Show in Finder. If the session goes on, "
+                      + "the same file is kept up to date.",
+                      "Settings ▸ Transcript; Save Location and Format are the sections below, Show in Finder the box's button, name them as they are"),
+            value: transcriptAutoSave(), width: Self.contentWidth) { [weak self] in
+                self?.onTranscriptAutoSave?($0)
+            }
+        autoSaveRow = autoSave
+
+        let offer = NSStackView(views: [autoSave.view, Self.grid([duration.cells]), needsExpiry])
         offer.orientation = .vertical
         offer.alignment = .leading
         offer.spacing = 10
@@ -1032,6 +1052,37 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   + "Save Transcript… is always in the menu, whether it asks or not."),
                 offer, offerSwitch)
         syncOfferEnabled()
+
+        fillFolderPopup()
+        folderPopup.target = self
+        folderPopup.action = #selector(chooseFolder)
+        section(L("Save Location", "Settings section: the folder a transcript is saved to"),
+                L("Where Save Transcript… opens. Last Used Folder is the one the previous "
+                  + "transcript went to, Documents the first time.",
+                  "Settings ▸ Transcript; Save Transcript… is the menu item, Last Used Folder the popup's first choice, name them as they are"),
+                folderPopup, nil)
+
+        formatPopup.removeAllItems()
+        formatPopup.addItem(withTitle: L("Last Used Format", "Settings popup: save transcripts in the format the previous one was saved in"))
+        formatPopup.menu?.addItem(.separator())
+        for format in TranscriptFormat.allCases {
+            formatPopup.addItem(withTitle: format.title)
+            formatPopup.lastItem?.representedObject = format.rawValue
+        }
+        if let format = transcriptFormat(),
+           let index = TranscriptFormat.allCases.firstIndex(of: format) {
+            formatPopup.selectItem(at: index + 2)
+        } else {
+            formatPopup.selectItem(at: 0)
+        }
+        formatPopup.target = self
+        formatPopup.action = #selector(chooseFormat)
+        section(L("Format", "Settings section: the file format a transcript is saved in"),
+                L("What Save Transcript… offers first, and what Save without asking writes. "
+                  + "Last Used Format is the one the previous transcript was saved in, "
+                  + "Plain Text the first time.",
+                  "Settings ▸ Transcript; Save Transcript… is the menu item, Save without asking the switch above, Last Used Format the popup's first choice, Plain Text a format; name them as they are"),
+                formatPopup, nil)
 
         let names = ToggleRow(
             L("Name speakers in saved transcripts", "Settings switch: a saved transcript marks each turn with Speaker 1, Speaker 2 and so on"),
@@ -1049,16 +1100,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                   "Settings ▸ Transcript; New box on speaker change is the switch under Settings ▸ Models, name it as that switch does"),
                 names.view, nil)
 
-        fillFolderPopup()
-        folderPopup.target = self
-        folderPopup.action = #selector(chooseFolder)
-        section(L("Save Location", "Settings section: the folder a transcript is saved to"),
-                L("Where Save Transcript… opens. Last Used Folder is the one the previous "
-                  + "transcript went to, Documents the first time.",
-                  "Settings ▸ Transcript; Save Transcript… is the menu item, Last Used Folder the popup's first choice, name them as they are"),
-                folderPopup, nil)
-
         return stack
+    }
+
+    /// Last Used Format, then each format.
+    private let formatPopup = NSPopUpButton()
+
+    @objc private func chooseFormat(_ sender: NSPopUpButton) {
+        onTranscriptFormat?((sender.selectedItem?.representedObject as? String)
+            .flatMap(TranscriptFormat.init(rawValue:)))
     }
 
     /// Last Used Folder, the chosen folder if there is one, and a way to
@@ -1131,13 +1181,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         syncOfferEnabled()
     }
 
-    /// The slider dims with the switch, and with the stack set never to
+    /// The slider and Save without asking dim with the switch, and with the stack set never to
     /// clear, when there is no offer either way. The note under it says so
     /// only then.
     private func syncOfferEnabled() {
         let expires = expiryToggle?.isOn ?? historyExpires()
         offerSwitch.isEnabled = expires
         offerRow?.isEnabled = expires && offerSwitch.state == .on
+        autoSaveRow?.isEnabled = expires && offerSwitch.state == .on
         offerCaption?.isHidden = expires
     }
 

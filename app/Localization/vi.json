@@ -366,5 +366,12 @@
   "Last Used Folder": "Thư mục dùng gần nhất",
   "Choose Folder…": "Chọn thư mục…",
   "Choose": "Chọn",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Nơi “Lưu bản ghi…” mở ra. “Thư mục dùng gần nhất” là thư mục đã lưu bản ghi trước, lần đầu là “Tài liệu”."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Nơi “Lưu bản ghi…” mở ra. “Thư mục dùng gần nhất” là thư mục đã lưu bản ghi trước, lần đầu là “Tài liệu”.",
+  "Save without asking": "Lưu mà không hỏi",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "Bản ghi được lưu vào Vị trí lưu theo Định dạng bên dưới, và khung sẽ báo, kèm nút Hiển thị trong Finder. Nếu phiên tiếp tục, cùng tệp đó sẽ được cập nhật.",
+  "Transcript saved to %@.": "Đã lưu bản ghi vào %@.",
+  "Show in Finder": "Hiển thị trong Finder",
+  "Format": "Định dạng",
+  "Last Used Format": "Định dạng dùng gần nhất",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Định dạng “Lưu bản ghi…” đề xuất trước và “Lưu mà không hỏi” sử dụng. “Định dạng dùng gần nhất” là định dạng của bản ghi trước, lần đầu là “Văn bản thường”."
 }

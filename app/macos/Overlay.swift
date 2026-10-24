@@ -1144,6 +1144,16 @@ final class OverlayController {
         /// what a saved SubRip file is timed by.
         let shown: Date
         let lastWord: Date
+
+        var head: StackHead { StackHead(stream: stream, ordinal: ordinal, shown: shown) }
+    }
+
+    /// Which box a stack started with: the same box when it is the same
+    /// session, and gone once it has been trimmed off or forgotten.
+    private struct StackHead: Equatable {
+        let stream: CaptionStreams.Stream
+        let ordinal: Int
+        let shown: Date
     }
 
     /// When each word first arrived, by stream, audio start and text: the
@@ -1303,6 +1313,7 @@ final class OverlayController {
         speakerChange = nil
         wordSeenAt = [:]
         offeredSinceText = false
+        autoSaved = nil
         onHistoryCleared?()
     }
 
@@ -1396,6 +1407,11 @@ final class OverlayController {
     /// Settings follows.
     var onDisableTranscriptOffer: (() -> Void)?
 
+    /// Settings ▸ Transcript's Save without asking: where the box would ask,
+    /// it saves the transcript itself, to `transcriptDirectory` in the format
+    /// last used, and says so instead. Only with the offer on.
+    var savesTranscriptAutomatically = false
+
     /// The shortest Clear after there is. Twice the default offer, so the
     /// captions have been quiet for ten seconds before it asks, rather than
     /// asking over the box that has only just faded.
@@ -1404,8 +1420,20 @@ final class OverlayController {
     /// The box is showing the offer to save the transcript. See
     /// `offerTranscriptIfIdle`.
     private var offersTranscript = false {
-        didSet { if offersTranscript != oldValue { syncEscapeHotkey() } }
+        didSet {
+            if !offersTranscript { savedTranscript = nil }
+            if offersTranscript != oldValue { syncEscapeHotkey() }
+        }
     }
+    /// The file the box is saying it saved, while it says so in the offer's
+    /// place. Nil while it asks, and when it is down.
+    private var savedTranscript: URL?
+    /// The file the stack was last saved to without asking, under the title
+    /// and in the format it was written with, and the box that headed it.
+    /// While that box still heads the stack the session is the same one, so
+    /// the next save brings this file up to date rather than starting
+    /// another. Forgotten with the stack.
+    private var autoSaved: (url: URL, title: String, format: TranscriptFormat, head: StackHead)?
     /// The save panel is up. The stack is kept while it is, whatever the
     /// timer says: it is what is being saved.
     private var savingTranscript = false
@@ -2322,6 +2350,10 @@ final class OverlayController {
     /// or no sound, until words, the timer or a click take it; withdrawn,
     /// faded, if Clear after or the offer itself is turned off in the
     /// meantime.
+    ///
+    /// With Save without asking, the same moment saves the transcript and
+    /// the box says where, for as long and with the same bar; it asks after
+    /// all if the file could not be written.
     private func offerTranscriptIfIdle() {
         let idle = Date().timeIntervalSince(lastTextAt)
         let due = isSourceSilent == true || idle >= historyExpiry - transcriptOfferDuration
@@ -2344,20 +2376,78 @@ final class OverlayController {
         // Said by Subtitles, like the trial's last line.
         view.icon = NSApp.applicationIconImage
         view.appName = "Subtitles"
-        view.committed = transcriptOfferText
         view.tentative = ""
         view.secondary = ""
         view.secondaryTentative = ""
-        view.secondaryAction = (L("Don't Ask Again", "Button in the caption box beside Save Transcript…: turns the offer to save the transcript off"),
-                                { [weak self] in self?.declineTranscriptOffers() })
-        view.action = (L("Save Transcript…", "Button in the caption box: saves the session's recent boxes to a text file"),
-                       { [weak self] in self?.saveTranscript() })
+        if savesTranscriptAutomatically, let url = saveTranscriptAutomatically() {
+            savedTranscript = url
+            let folder = FileManager.default.displayName(atPath: url.deletingLastPathComponent().path)
+            view.committed = LF("Transcript saved to %@.", folder)
+            view.secondaryAction = nil
+            view.action = (L("Show in Finder", "Button in the caption box after a transcript was saved without asking: selects the file in a Finder window"),
+                           { [weak self] in self?.revealSavedTranscript(url) })
+        } else {
+            view.committed = transcriptOfferText
+            view.secondaryAction = (L("Don't Ask Again", "Button in the caption box beside Save Transcript…: turns the offer to save the transcript off"),
+                                    { [weak self] in self?.declineTranscriptOffers() })
+            view.action = (L("Save Transcript…", "Button in the caption box: saves the session's recent boxes to a text file"),
+                           { [weak self] in self?.saveTranscript() })
+        }
         panel.ignoresMouseEvents = false
         tickTranscriptOffer()
         layout()
         show()
-        announce(L("Save a transcript of this session before it clears?")
-                 + " " + L("Save Transcript… is also in the Subtitles menu.", "Read by VoiceOver after the offer to save the transcript"))
+        if savedTranscript != nil {
+            announce(view.committed)
+        } else {
+            announce(L("Save a transcript of this session before it clears?")
+                     + " " + L("Save Transcript… is also in the Subtitles menu.", "Read by VoiceOver after the offer to save the transcript"))
+        }
+    }
+
+    /// Write the stack where the save panel would open, without asking: over
+    /// the file saved before while it is still the same session, else to a
+    /// new one named as the panel would name it, with " 2", " 3"… should that
+    /// name be taken. Nil when it could not be written.
+    private func saveTranscriptAutomatically() -> URL? {
+        guard let head = stack.first?.head else { return nil }
+        let url: URL
+        let title: String
+        let format: TranscriptFormat
+        if let saved = autoSaved, saved.head == head {
+            (url, title, format) = (saved.url, saved.title, saved.format)
+        } else {
+            guard let folder = transcriptDirectory else { return nil }
+            title = Self.transcriptTitle(at: Date())
+            format = defaultTranscriptFormat
+            var candidate = folder.appendingPathComponent(title + "." + format.fileExtension)
+            var number = 2
+            while FileManager.default.fileExists(atPath: candidate.path) {
+                candidate = folder.appendingPathComponent("\(title) \(number).\(format.fileExtension)")
+                number += 1
+            }
+            url = candidate
+        }
+        let text = TranscriptExport.render(transcriptEntries, as: format, title: title) {
+            LF("Speaker %lld", $0)
+        }
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            FileHandle.standardError.write(
+                "subtitles: could not save the transcript to \(url.path): \(error.localizedDescription)\n"
+                    .data(using: .utf8)!)
+            return nil
+        }
+        autoSaved = (url, title, format, head)
+        return url
+    }
+
+    /// The saved notice's Show in Finder: the file selected in a Finder
+    /// window, and the notice taken down.
+    private func revealSavedTranscript(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        withdrawTranscriptOffer(fading: true)
     }
 
     /// The offer's Don't Ask Again: no more offers, this one taken down, and
@@ -2462,7 +2552,8 @@ final class OverlayController {
     /// quiet until the offer's length before Clear after. A box on screen fades
     /// first, as it would. With nothing said yet, two sample boxes stand in
     /// for the session, so there is something to save. Needs Clear after on,
-    /// and not paused, as the real one does.
+    /// and not paused, as the real one does. With Save without asking on, it
+    /// saves them, as the real one would.
     func debugOfferTranscript() {
         guard isTranscriptOfferEnabled, isHistoryExpiryEnabled, !isSuppressed else { return }
         if stack.isEmpty {
@@ -2572,6 +2663,29 @@ final class OverlayController {
 
     /// The format last saved in, offered first next time.
     private static let transcriptFormatKey = "transcript.format"
+
+    /// The format chosen under Settings ▸ Transcript, or nil for the one
+    /// the last transcript was saved in. Set by main.swift.
+    var transcriptFormat: TranscriptFormat?
+
+    /// What the save panel offers first, and what a save without asking
+    /// writes: the format chosen in Settings, else the one last saved in,
+    /// else plain text.
+    private var defaultTranscriptFormat: TranscriptFormat {
+        transcriptFormat
+            ?? UserDefaults.standard.string(forKey: Self.transcriptFormatKey)
+                .flatMap(TranscriptFormat.init(rawValue:))
+            ?? .text
+    }
+
+    /// A transcript's title and file name. The date and time go into it as
+    /// numbers, sorting as they read.
+    private static func transcriptTitle(at date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm"
+        return LF("Transcript %@", formatter.string(from: date))
+    }
     /// The folder the last transcript went to.
     private static let transcriptLastFolderKey = "transcript.lastFolder"
 
@@ -2579,8 +2693,9 @@ final class OverlayController {
     /// last transcript went. Set by main.swift.
     var transcriptFolder: URL?
 
-    /// Where the save panel opens: the folder chosen in Settings, else the
-    /// one the last transcript went to, else Documents. A folder since
+    /// Where the save panel opens, and where a save without asking goes:
+    /// the folder chosen in Settings, else the one the last transcript went
+    /// to, else Documents. A folder since
     /// deleted, or on a disk that is not mounted, is passed over.
     private var transcriptDirectory: URL? {
         let last = UserDefaults.standard.string(forKey: Self.transcriptLastFolderKey)
@@ -2602,20 +2717,18 @@ final class OverlayController {
     /// while the panel is up, only the boxes saved are forgotten.
     private func saveTranscript() {
         guard !stack.isEmpty, !savingTranscript else { return }
-        let fromOffer = offersTranscript
+        // The box saying it saved is no offer: the menu's save over it keeps
+        // the stack, as it would mid-session.
+        let fromOffer = offersTranscript && savedTranscript == nil
         let entries = transcriptEntries
         let saved = stack.count
         let clickedAt = Date()
         savingTranscript = true
         withdrawTranscriptOffer(fading: true)
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd HH.mm"
-        // The date and time go into the name as numbers, sorting as they read.
-        let title = LF("Transcript %@", formatter.string(from: clickedAt))
+        let title = Self.transcriptTitle(at: clickedAt)
         let save = NSSavePanel()
-        let picker = TranscriptFormatPicker(panel: save)
+        let picker = TranscriptFormatPicker(panel: save, format: defaultTranscriptFormat)
         save.accessoryView = picker.view
         save.nameFieldStringValue = title + "." + picker.format.fileExtension
         save.directoryURL = transcriptDirectory
@@ -2630,8 +2743,8 @@ final class OverlayController {
             guard response == .OK, let url = save.url else { return }
             let format = picker.format
             UserDefaults.standard.set(format.rawValue, forKey: Self.transcriptFormatKey)
-            // Kept with a folder chosen in Settings too, for when it is set
-            // back to Last Used Folder.
+            // Kept with a folder and a format chosen in Settings too, for
+            // when they are set back to Last Used.
             UserDefaults.standard.set(url.deletingLastPathComponent().path,
                                       forKey: Self.transcriptLastFolderKey)
             let text = TranscriptExport.render(entries, as: format, title: title) {
@@ -2661,23 +2774,17 @@ final class OverlayController {
         private let popup = NSPopUpButton()
         private weak var panel: NSSavePanel?
 
-        init(panel: NSSavePanel) {
+        init(panel: NSSavePanel, format: TranscriptFormat) {
             self.panel = panel
             let label = NSTextField(labelWithString: L("Format:", "Save panel: label before the popup choosing the transcript's file format"))
-            popup.addItems(withTitles: [
-                L("Plain Text", "Transcript format: a .txt file"),
-                L("Markdown", "Transcript format: a .md file"),
-                L("SubRip (SRT)", "Transcript format: a .srt subtitle file, with each box's times; SubRip is the format's name"),
-            ])
+            popup.addItems(withTitles: TranscriptFormat.allCases.map(\.title))
             let stack = NSStackView(views: [label, popup])
             stack.orientation = .horizontal
             stack.spacing = 8
             stack.edgeInsets = NSEdgeInsets(top: 10, left: 20, bottom: 10, right: 20)
             view = stack
             super.init()
-            let stored = UserDefaults.standard.string(forKey: OverlayController.transcriptFormatKey)
-                .flatMap(TranscriptFormat.init(rawValue:)) ?? .text
-            popup.selectItem(at: TranscriptFormat.allCases.firstIndex(of: stored) ?? 0)
+            popup.selectItem(at: TranscriptFormat.allCases.firstIndex(of: format) ?? 0)
             popup.target = self
             popup.action = #selector(chosen)
             apply()
@@ -2895,5 +3002,17 @@ final class OverlayController {
             guard let self, rewear, !self.holdsFinalCaption else { return }
             self.wearPlayingApp()
         })
+    }
+}
+
+extension TranscriptFormat {
+    /// The format's name, in the save panel's Format popup and Settings ▸
+    /// Transcript's.
+    var title: String {
+        switch self {
+        case .text: return L("Plain Text", "Transcript format: a .txt file")
+        case .markdown: return L("Markdown", "Transcript format: a .md file")
+        case .srt: return L("SubRip (SRT)", "Transcript format: a .srt subtitle file, with each box's times; SubRip is the format's name")
+        }
     }
 }

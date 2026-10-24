@@ -366,5 +366,12 @@
   "Last Used Folder": "마지막으로 사용한 폴더",
   "Choose Folder…": "폴더 선택…",
   "Choose": "선택",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "대본 저장…이 열리는 위치입니다. 마지막으로 사용한 폴더는 이전 대본을 저장한 폴더이며, 처음에는 문서입니다."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "대본 저장…이 열리는 위치입니다. 마지막으로 사용한 폴더는 이전 대본을 저장한 폴더이며, 처음에는 문서입니다.",
+  "Save without asking": "묻지 않고 저장",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "대본을 아래 포맷으로 저장 위치에 저장하고, 상자가 Finder에서 보기 버튼과 함께 알려 줍니다. 세션이 이어지면 같은 파일이 계속 업데이트됩니다.",
+  "Transcript saved to %@.": "대본을 %@에 저장했습니다.",
+  "Show in Finder": "Finder에서 보기",
+  "Format": "포맷",
+  "Last Used Format": "마지막으로 사용한 포맷",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "대본 저장…이 먼저 제안하고 묻지 않고 저장이 사용하는 포맷입니다. 마지막으로 사용한 포맷은 이전 대본의 포맷이며, 처음에는 일반 텍스트입니다."
 }

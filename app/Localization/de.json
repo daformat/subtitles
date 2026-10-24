@@ -382,5 +382,12 @@
   "Last Used Folder": "Zuletzt verwendeter Ordner",
   "Choose Folder…": "Ordner auswählen…",
   "Choose": "Auswählen",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Wo „Transkript sichern…“ öffnet. „Zuletzt verwendeter Ordner“ ist der, in dem das vorige Transkript gesichert wurde, beim ersten Mal „Dokumente“."
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Wo „Transkript sichern…“ öffnet. „Zuletzt verwendeter Ordner“ ist der, in dem das vorige Transkript gesichert wurde, beim ersten Mal „Dokumente“.",
+  "Save without asking": "Ohne Nachfrage sichern",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "Das Transkript wird am Speicherort im Format unten gesichert, und das Feld sagt es, mit „Im Finder anzeigen“. Geht die Sitzung weiter, wird dieselbe Datei aktualisiert.",
+  "Transcript saved to %@.": "Transkript in „%@“ gesichert.",
+  "Show in Finder": "Im Finder anzeigen",
+  "Format": "Format",
+  "Last Used Format": "Zuletzt verwendetes Format",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Was „Transkript sichern…“ zuerst anbietet und „Ohne Nachfrage sichern“ schreibt. „Zuletzt verwendetes Format“ ist das des vorigen Transkripts, beim ersten Mal „Reiner Text“."
 }

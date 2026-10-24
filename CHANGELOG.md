@@ -4,6 +4,20 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.16.0 · 2026-10-24
+
+- **Save transcripts without being asked.** Turn on Save without asking,
+  under Settings ▸ Transcript, and when the box would offer to save a
+  transcript it saves it instead, to the Save Location in the chosen
+  format. The box says where it went, with a Show in Finder button and
+  the same bar. If the session carries on after a pause, the same file is
+  kept up to date rather than a new one started. If the file can't be
+  written there, the box asks as before.
+- **Pick a format.** A new Format setting, also under Settings ▸
+  Transcript, keeps Last Used Format or sets Plain Text, Markdown or
+  SubRip as the one Save Transcript… offers first and Save without
+  asking writes.
+
 ## 1.15.2 · 2026-10-18
 
 - **Transcripts go where the last one went.** Save Transcript… now opens

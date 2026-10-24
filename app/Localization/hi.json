@@ -382,5 +382,12 @@
   "Last Used Folder": "पिछला इस्तेमाल किया फ़ोल्डर",
   "Choose Folder…": "फ़ोल्डर चुनें…",
   "Choose": "चुनें",
-  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“ट्रांसक्रिप्ट सहेजें…” कहाँ खुलता है। “पिछला इस्तेमाल किया फ़ोल्डर” वह है जिसमें पिछली ट्रांसक्रिप्ट सहेजी गई थी, पहली बार “दस्तावेज़”।"
+  "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "“ट्रांसक्रिप्ट सहेजें…” कहाँ खुलता है। “पिछला इस्तेमाल किया फ़ोल्डर” वह है जिसमें पिछली ट्रांसक्रिप्ट सहेजी गई थी, पहली बार “दस्तावेज़”।",
+  "Save without asking": "बिना पूछे सहेजें",
+  "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "ट्रांसक्रिप्ट नीचे दिए “फ़ॉर्मैट” में “सहेजने की जगह” पर जाती है, और बॉक्स यह बताता है, “Finder में दिखाएँ” के साथ। अगर सत्र जारी रहता है, तो वही फ़ाइल अपडेट होती रहती है।",
+  "Transcript saved to %@.": "ट्रांसक्रिप्ट %@ में सहेजी गई।",
+  "Show in Finder": "Finder में दिखाएँ",
+  "Format": "फ़ॉर्मैट",
+  "Last Used Format": "पिछला इस्तेमाल किया फ़ॉर्मैट",
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "“ट्रांसक्रिप्ट सहेजें…” पहले क्या सुझाता है, और “बिना पूछे सहेजें” क्या लिखता है। “पिछला इस्तेमाल किया फ़ॉर्मैट” पिछली ट्रांसक्रिप्ट का फ़ॉर्मैट है, पहली बार “सादा टेक्स्ट”।"
 }

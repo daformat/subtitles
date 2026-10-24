@@ -414,5 +414,12 @@
  "Last Used Folder": "Последняя папка",
  "Choose Folder…": "Выбрать папку…",
  "Choose": "Выбрать",
- "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Где открывается «Сохранить расшифровку…». «Последняя папка» означает папку, куда была сохранена предыдущая расшифровка, в первый раз «Документы»."
+ "Where Save Transcript… opens. Last Used Folder is the one the previous transcript went to, Documents the first time.": "Где открывается «Сохранить расшифровку…». «Последняя папка» означает папку, куда была сохранена предыдущая расшифровка, в первый раз «Документы».",
+ "Save without asking": "Сохранять без вопроса",
+ "The transcript goes to the Save Location, in the Format below, and the box says so, with Show in Finder. If the session goes on, the same file is kept up to date.": "Расшифровка сохраняется в место сохранения в формате, выбранном ниже, и блок сообщает об этом, с кнопкой «Показать в Finder». Если сеанс продолжается, тот же файл обновляется.",
+ "Transcript saved to %@.": "Расшифровка сохранена в папке «%@».",
+ "Show in Finder": "Показать в Finder",
+ "Format": "Формат",
+ "Last Used Format": "Последний формат",
+ "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Что «Сохранить расшифровку…» предлагает первым и в чём сохраняет «Сохранять без вопроса». «Последний формат» означает формат предыдущей расшифровки, в первый раз «Простой текст»."
 }
