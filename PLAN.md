@@ -2008,6 +2008,56 @@ core or the appcast anywhere but PLAN.md, which travels whole.
 
 ---
 
+## 26. Polish, Swedish, and Danish and Norwegian as experimental (2026-10-25)
+
+§22 stopped at NVIDIA's transcription-ready tier. Asked whether more of the
+checkpoint's ~40 locales could go in, the answer was measured rather than read
+off the card: two everyday paragraphs per language, read by the macOS voice for
+it (`say --data-format=LEF32@16000`), fed through the cached full pack pinned
+and on auto, scored by character error after stripping punctuation and the
+`<xx-XX>` tags. Clean synthetic speech flatters every language (English came out
+perfect, against the card's 7.9 % WER on FLEURS), so only the ranking means
+anything.
+
+| pinned CER | languages |
+|---|---|
+| ≤ 2 % | en es fr de it pt hi ru vi, and fi bg cs hu |
+| 2 to 6 % | ko ja zh ar tr nl uk, and pl sv sk ro hr he el |
+| 13 to 24 % | nb da sl |
+| fails | lt, th (empty), id ms bn ta te kn (`<unk>` or Devanagari), zh-TW (Simplified on auto, `<unk>` pinned) |
+
+The card's tiers mostly hold, with two surprises each way: Hebrew and Greek,
+which it calls adaptation-ready, transcribe; Danish and Norwegian, which it
+calls broad-coverage, do not, and on auto they drift into German, English or
+Swedish. A 70 s clip instead of 15 s ones helps those three (da 20.5 to 14.8 %,
+nb 13.3 to 10.1 %, sl 17.8 to 13.1 % pinned) mostly by letting the language
+settle; a third of the words are still wrong. The engine restarts at every
+1.6 s silence (`ENDPOINT_SILENCE`), so speech with pauses gets the short-clip
+numbers.
+
+**What decided the list was translation, not recognition.** Of the languages that
+transcribe, Apple's framework on macOS 26 translates only Polish and Swedish
+among the new ones (no cs, sk, hu, ro, bg, fi, hr, he, el), and a language here
+that cannot be translated would be the only one that cannot. So: pl and sv beside
+the transcription-ready tier; da and nb, which Apple does translate, under an
+**Experimental · less accurate** header after the full-vocabulary group. They
+share its pack, so the header carries no size. The menu note counts 18
+languages, the experimental two left out.
+
+**Not every pair translates.** Probed with `LanguageAvailability.status`, sv, da
+and nb go neither to nor from ru, uk, pl, ar or hi: 30 of the 380 ordered pairs.
+The app asks once at launch (`Translator.refusedPairs`) and Translate To greys a
+target that `spokenLanguage` cannot reach: the pinned language, or on auto the
+one last heard, as of when the menu opens. A refused pair at run time already
+fell back to the original, since the pipeline reads `unsupportedLanguagePairing`
+as source equals target.
+
+The app's interface went into the same four languages. The site has not, so
+`AppLanguage.siteURL` sends them to the English pages and the welcome window's
+demo falls back to `demo.html`.
+
+---
+
 ## 10. References
 
 - sherpa-onnx — streaming Zipformer transducer models, C API, bundled Silero VAD

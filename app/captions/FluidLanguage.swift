@@ -16,16 +16,25 @@ import Foundation
 ///
 /// The set is NVIDIA's transcription-ready tier: the 19 locales the model card
 /// calls accurate out of the box, which collapse to 15 languages once the regional
-/// pairs (en-US/en-GB, pt-BR/pt-PT, …) are folded together. Mandarin joins them from
-/// a tier down. The checkpoint reaches ~40 locales in all; the rest are
-/// broad-coverage or need fine-tuning first, and each is one `code` away.
+/// pairs (en-US/en-GB, pt-BR/pt-PT, …) are folded together. Mandarin, Polish and
+/// Swedish join them from a tier down, and Danish and Norwegian from the same tier
+/// as experimental. The checkpoint reaches ~40 locales in all; which of the rest
+/// were worth listing was measured, not taken from the card (PLAN.md §26).
 public enum FluidLanguage: String, CaseIterable, Sendable {
     case auto
     case en, es, fr, it, pt, de
     case nl, tr, ru, ar, hi, ja, ko, vi, uk
-    /// Broad-coverage rather than transcription-ready, unlike the rest of these.
-    /// Kept because it shipped first and the pack it needs is downloaded anyway.
+    /// Broad-coverage rather than transcription-ready, unlike the rest of these,
+    /// and measured as close to them: 2 to 3 % of characters wrong on read
+    /// speech, against 0 to 6 % for the tier above.
+    case pl, sv
+    /// Broad-coverage too. Kept because it shipped first and the pack it needs
+    /// is downloaded anyway.
     case zh
+    /// Broad-coverage on the card, and measured several times worse than the
+    /// rest: a third of the words wrong, and on auto-detect they drift into
+    /// German, English or Swedish. Listed apart, under Experimental.
+    case da, nb
 
     /// FLEURS-style code the model's prompt dictionary is keyed on.
     public var code: String {
@@ -46,7 +55,11 @@ public enum FluidLanguage: String, CaseIterable, Sendable {
         case .ko: return "ko-KR"
         case .vi: return "vi-VN"
         case .uk: return "uk-UA"
+        case .pl: return "pl-PL"
+        case .sv: return "sv-SE"
         case .zh: return "zh-CN"
+        case .da: return "da-DK"
+        case .nb: return "nb-NO"
         }
     }
 
@@ -68,16 +81,23 @@ public enum FluidLanguage: String, CaseIterable, Sendable {
         case .ko: return "한국어"
         case .vi: return "Tiếng Việt"
         case .uk: return "Українська"
+        case .pl: return "Polski"
+        case .sv: return "Svenska"
         case .zh: return "中文"
+        case .da: return "Dansk"
+        case .nb: return "Norsk bokmål"
         }
     }
+
+    /// Offered, but under a heading that says not to expect much. See `da`.
+    public var isExperimental: Bool { self == .da || self == .nb }
 
     /// True when this language is served by the smaller Latin-script pack.
     /// Mirrors `StreamingNemotronMultilingualAsrManager.languageDirectory`.
     public var usesLatinPack: Bool {
         switch self {
         case .en, .es, .fr, .it, .pt, .de: return true
-        case .auto, .nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .zh: return false
+        case .auto, .nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .pl, .sv, .zh, .da, .nb: return false
         }
     }
 }

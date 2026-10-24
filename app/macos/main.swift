@@ -297,6 +297,9 @@ nonisolated(unsafe) var lastOtherLanguage: FluidLanguage?
 /// it when it comes.
 nonisolated(unsafe) var guessedLanguage: FluidLanguage?
 nonisolated(unsafe) var translateTo: FluidLanguage?
+/// The pairs Apple's framework refuses outright, "from>to", asked once at launch
+/// for the menu to grey. See `Translator.refusedPairs(among:)`.
+nonisolated(unsafe) var refusedTranslationPairs: Set<String> = []
 nonisolated(unsafe) var translationMode: TranslationMode = .hybrid
 /// Live translation, while a target is set. Typed `AnyObject?` because a global of
 /// a macOS 15 type cannot be declared on a 14.2 floor; every use casts inside an
@@ -1056,7 +1059,7 @@ var effectiveSource: Locale.Language? { spokenLanguage?.locale }
 
 /// Name the language from the transcript: while the checkpoint has not, and
 /// again when what is being said reads as another language than the one it
-/// named. Eight words are enough for NaturalLanguage to tell the sixteen
+/// named. Eight words are enough for NaturalLanguage to tell the app's languages
 /// apart, and the last sixteen are what it reads, so a change of speaker is
 /// caught within a sentence. The checkpoint's own tag is latched per decode
 /// session and can outlive the speaker it was decided on — a French turn came
@@ -1073,7 +1076,8 @@ func guessLanguage(from words: [TimedWord]) {
     let recognizer = NLLanguageRecognizer()
     recognizer.languageConstraints = [
         .english, .spanish, .french, .italian, .portuguese, .german, .dutch, .turkish,
-        .russian, .arabic, .hindi, .japanese, .korean, .vietnamese, .ukrainian, .simplifiedChinese,
+        .russian, .arabic, .hindi, .japanese, .korean, .vietnamese, .ukrainian, .polish,
+        .swedish, .simplifiedChinese, .danish, .norwegian,
     ]
     recognizer.processString(words.suffix(16).map(\.text).joined(separator: " "))
     let needed = lastDetectedLanguage == nil ? 0.5 : (words.count >= 8 ? 0.8 : 0.9)
@@ -1746,6 +1750,14 @@ if useOverlay {
     menu.currentLanguageID = { currentLanguage.rawValue }
     menu.onSelectTranslation = { applyTranslation($0) }
     menu.currentTranslationID = { translateTo?.rawValue }
+    menu.translationRefused = { target in
+        spokenLanguage.map { refusedTranslationPairs.contains($0.rawValue + ">" + target) } ?? false
+    }
+    if #available(macOS 15, *) {
+        Task { @MainActor in
+            refusedTranslationPairs = await Translator.refusedPairs(among: FluidLanguage.allCases.filter { $0 != .auto })
+        }
+    }
     menu.onSelectTranslationMode = { applyTranslationMode($0) }
     menu.currentTranslationMode = { translationMode }
     menu.showsBothLanguages = { controller.showsBothLanguages }

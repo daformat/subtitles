@@ -20,8 +20,8 @@ import LicenseCore
 
 enum AppLanguage {
     /// The app's translations, as their .lproj folders name them, each under
-    /// its own name for itself. The sixteen of the site, in the order the
-    /// Translate To menu lists them.
+    /// its own name for itself, in the order the Translate To menu lists them:
+    /// the sixteen of the site, and the four the site does not have yet.
     static let all: [(code: String, name: String)] = [
         ("en", "English"),
         ("es", "Español"),
@@ -38,8 +38,15 @@ enum AppLanguage {
         ("ko", "한국어"),
         ("vi", "Tiếng Việt"),
         ("uk", "Українська"),
+        ("pl", "Polski"),
+        ("sv", "Svenska"),
         ("zh-Hans", "简体中文"),
+        ("da", "Dansk"),
+        ("nb", "Norsk bokmål"),
     ]
+
+    /// The app's languages the site is not in, whose links go to its English.
+    private static let notOnSite: Set<String> = ["pl", "sv", "da", "nb"]
 
     private static let key = "AppleLanguages"
 
@@ -88,12 +95,13 @@ enum AppLanguage {
     }
 
     /// A page on the site, in the language the app is in when the site has
-    /// it (the site has all sixteen): `path` is relative to the site's root,
+    /// it, else in English: `path` is relative to the site's root,
     /// "changelog/" or "" for the home page.
     static func siteURL(_ path: String) -> URL {
         let prefix: String
         switch current {
         case "en": prefix = ""
+        case let code where notOnSite.contains(code): prefix = ""
         case "pt-BR": prefix = "pt/"
         case "zh-Hans": prefix = "zh/"
         case let code: prefix = code + "/"

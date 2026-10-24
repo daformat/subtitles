@@ -38,7 +38,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron1120: return LF("Nemotron · %lld ms", 1120)
         case .nemotron2240: return LF("Nemotron · %lld ms", 2240)
         case .unified: return L("Parakeet Unified · punctuated", "An English speech model; punctuated means it writes punctuation")
-        case .multilingual: return L("Multilingual · 560 ms", "The speech model that handles all sixteen languages, and its latency")
+        case .multilingual: return L("Multilingual · 560 ms", "The speech model that handles all of the app's languages, and its latency")
         }
     }
 
@@ -68,7 +68,7 @@ enum FluidVariant: String, CaseIterable {
         case .nemotron1120: return L("612 MB · punctuated · the trained chunk size", "Model note: this latency is the audio chunk size the model was trained on")
         case .nemotron2240: return L("612 MB · punctuated · highest throughput")
         case .unified: return L("595 MB · punctuated · 2.08 s · Nemotron is faster")
-        case .multilingual: return L("583–633 MB · default · 16 languages · punctuated")
+        case .multilingual: return L("583–633 MB · default · 18 languages · punctuated")
         }
     }
 

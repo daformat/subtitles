@@ -13,12 +13,19 @@ import XCTest
 final class FluidLanguageTests: XCTestCase {
     private var real: [FluidLanguage] { FluidLanguage.allCases.filter { $0 != .auto } }
 
-    /// The menu describes the multilingual variant as carrying sixteen languages.
-    /// That number is written out in `FluidVariant.note`, and the repository has
-    /// already shipped it wrong once ("Say eight languages, not nine"). Adding a
-    /// language should fail here and send you to the string.
-    func testSixteenLanguagesAreOffered() {
-        XCTAssertEqual(real.count, 16)
+    /// The menu describes the multilingual variant as carrying eighteen languages,
+    /// the experimental two not counted. That number is written out in
+    /// `FluidVariant.note`, and the repository has already shipped it wrong once
+    /// ("Say eight languages, not nine"). Adding a language should fail here and
+    /// send you to the string.
+    func testEighteenLanguagesAreOffered() {
+        XCTAssertEqual(real.filter { !$0.isExperimental }.count, 18)
+    }
+
+    /// Measured several times worse than the rest, so listed apart and left
+    /// out of the count. A language moving in or out of this set is a menu change.
+    func testDanishAndNorwegianAreTheExperimentalOnes() {
+        XCTAssertEqual(Set(real.filter(\.isExperimental)), [.da, .nb])
     }
 
     /// `auto` is a detection mode over the languages, not one of them.
@@ -76,8 +83,8 @@ final class FluidLanguageTests: XCTestCase {
 
     /// The pruned 2828-token pack was built for six named languages and covers
     /// nothing past them, so this list is not "the Latin-script ones" however much
-    /// the name suggests it. Dutch, Turkish and Vietnamese are Latin-script and
-    /// still need the full vocabulary.
+    /// the name suggests it. Dutch, Turkish, Vietnamese, Polish and the Nordic
+    /// three are Latin-script and still need the full vocabulary.
     func testTheLatinPackIsExactlyItsSixLanguages() {
         let latin = FluidLanguage.allCases.filter(\.usesLatinPack)
         XCTAssertEqual(Set(latin), Set([.en, .es, .fr, .it, .pt, .de]))
@@ -90,7 +97,7 @@ final class FluidLanguageTests: XCTestCase {
     }
 
     func testLatinScriptLanguagesThatStillNeedTheFullPack() {
-        for language in [FluidLanguage.nl, .tr, .vi] {
+        for language in [FluidLanguage.nl, .tr, .vi, .pl, .sv, .da, .nb] {
             XCTAssertFalse(language.usesLatinPack,
                            "\(language.rawValue) is Latin-script but not in the pruned pack")
         }

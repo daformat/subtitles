@@ -16,8 +16,8 @@ export MACOSX_DEPLOYMENT_TARGET=14.2
 # VERSION is what people see. BUILD is the monotonic one and must never go
 # backwards or repeat: macOS caches bundle metadata by identifier, and a version
 # that reappears with different contents makes it serve the stale one.
-VERSION="1.16.1"
-BUILD="48"
+VERSION="1.17.0"
+BUILD="49"
 # [main-edition]
 # The updater's public key (PLAN.md §23). Its private half is in the login
 # Keychain of the machine that ran Sparkle's generate_keys, and is what
@@ -54,7 +54,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
         <string>en</string> <string>es</string> <string>fr</string> <string>it</string>
         <string>pt-BR</string> <string>de</string> <string>nl</string> <string>tr</string>
         <string>ru</string> <string>ar</string> <string>hi</string> <string>ja</string>
-        <string>ko</string> <string>vi</string> <string>uk</string> <string>zh-Hans</string>
+        <string>ko</string> <string>vi</string> <string>uk</string> <string>pl</string>
+        <string>sv</string> <string>zh-Hans</string> <string>da</string> <string>nb</string>
     </array>
     <key>CFBundlePackageType</key>        <string>APPL</string>
     <key>CFBundleShortVersionString</key> <string>$VERSION</string>

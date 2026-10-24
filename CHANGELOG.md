@@ -4,6 +4,28 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.17.0 · 2026-10-25
+
+- **Polish and Swedish.** Both are in Language / Models, and in Translate
+  To. They use the same 633 MB download as Multilingual, so if you already
+  use Multilingual there is nothing more to download. Swedish can't be
+  translated to or from Russian, Ukrainian, Polish, Arabic or Hindi, which
+  Apple's translation doesn't offer for it; every other pair works.
+- **Danish and Norwegian, as experimental.** They are under a new
+  Experimental heading in Language / Models. Expect more mistakes than in
+  the other languages, and choose them there rather than leaving them to
+  Multilingual, which can mistake them for German, English or Swedish.
+  Like Swedish, they can't be translated to or from Russian, Ukrainian,
+  Polish, Arabic or Hindi.
+- **Subtitles in four more languages.** The app's menus, windows and
+  messages are now in Polish, Swedish, Danish and Norwegian too, chosen
+  under Settings ▸ Language or following your Mac.
+- **Translate To shows what can't be translated.** A language that can't
+  be translated from the language being spoken is greyed out: the one you
+  chose, or with Multilingual the one last heard. If the speaker changes to
+  a language that can't be translated into your choice, the captions stay
+  in the original language while they speak.
+
 ## 1.16.1 · 2026-10-24
 
 - **See where transcripts go.** Next to the Save Location popup, under

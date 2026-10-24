@@ -155,6 +155,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// this runs on exists at all.
     var onSelectTranslation: ((FluidLanguage?) -> Void)?
     var currentTranslationID: () -> String? = { nil }
+    /// Whether Apple's framework refuses to translate what is being spoken into
+    /// this target, by raw value: the pinned language, or on auto-detect the one
+    /// last heard. False until the launch's probe has answered, and before
+    /// anything has been heard.
+    var translationRefused: (_ target: String) -> Bool = { _ in false }
     var onSelectTranslationMode: ((TranslationMode) -> Void)?
     var currentTranslationMode: () -> TranslationMode = { .hybrid }
     /// The original under the translation — see `OverlayController.showsBothLanguages`.
@@ -730,8 +735,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         // Language is the top level, because it is the first decision and for most
         // people the only one. Auto-detect leads as the default; English is the one
-        // language with a choice of models behind it, the other fifteen being served
-        // by the multilingual checkpoint alone.
+        // language with a choice of models behind it, the others being served by
+        // the multilingual checkpoint alone.
         sub.addItem(autoDetectItem(checked: onMultilingual && language == .auto))
 
         // English stands apart from both packs: choosing it loads an English-only
@@ -750,11 +755,21 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
         sub.addItem(.separator())
         sub.addItem(groupHeader(L("Full vocabulary · 633 MB", "Group header: the other languages share the larger 633 MB download")))
-        // The order the model card lists its transcription-ready tier in, with
-        // Mandarin last because it sits a tier below the rest. Not alphabetical:
-        // these are endonyms, so sorting 中文, 日本語 and Русский orders them by
-        // codepoint, which is no order at all to the eye doing the reading.
-        for entry in [FluidLanguage.nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .zh] {
+        // The order the model card lists its transcription-ready tier in, then
+        // Polish, Swedish and Mandarin in the order it lists the tier below. Not
+        // alphabetical: these are endonyms, so sorting 中文, 日本語 and Русский
+        // orders them by codepoint, which is no order at all to the eye doing the
+        // reading.
+        for entry in [FluidLanguage.nl, .tr, .ru, .ar, .hi, .ja, .ko, .vi, .uk, .pl, .sv, .zh] {
+            sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
+        }
+        // Same pack as the group above, so no size: the header is there to say
+        // what to expect. Measured, a third of the words come out wrong, and on
+        // auto-detect they drift into German, English or Swedish, so they are
+        // worth choosing here rather than leaving to Multilingual.
+        sub.addItem(.separator())
+        sub.addItem(groupHeader(L("Experimental · less accurate", "Group header: languages the speech model transcribes noticeably less accurately than the rest")))
+        for entry in FluidLanguage.allCases where entry.isExperimental {
             sub.addItem(languageItem(entry, checked: onMultilingual && language == entry))
         }
 
@@ -763,7 +778,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func autoDetectItem(checked: Bool) -> NSMenuItem {
-        let item = NSMenuItem(title: L("Multilingual", "Language / Models choice: one model for all sixteen languages, which detects the language itself"),
+        let item = NSMenuItem(title: L("Multilingual", "Language / Models choice: one model for all of the app's languages, which detects the language itself"),
                               action: #selector(selectLanguage(_:)), keyEquivalent: "")
         item.target = self
         item.representedObject = FluidLanguage.auto.rawValue
@@ -851,11 +866,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     /// Target language for live translation, or off.
     ///
-    /// The targets are this app's own sixteen rather than everything Apple can
-    /// do — probed on this machine, the framework supports all sixteen and every
-    /// one of the 240 ordered pairs between them, so the recogniser's list is the
-    /// binding constraint and offering a longer one here would only promise
-    /// targets nothing can be transcribed into.
+    /// The targets are this app's own languages rather than everything Apple can
+    /// do, since offering a longer list would only promise targets nothing can
+    /// be transcribed into. Probed on macOS 26, the framework supports every one
+    /// of them but not every pair: Swedish, Danish and Norwegian go neither to
+    /// nor from Russian, Ukrainian, Polish, Arabic or Hindi, 30 of the 380. Those
+    /// are greyed for the language pinned, or on auto-detect for the one last
+    /// heard, as of when the menu opens; until anything is heard none is, and a
+    /// refused pair shows the original.
     @available(macOS 15, *)
     private func translateMenuItem() -> NSMenuItem {
         let item = NSMenuItem(title: L("Translate To", "Menu: the language the captions are translated into"), action: nil, keyEquivalent: "")
@@ -895,7 +913,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             row.state = current == entry.rawValue ? .on : .off
             // Translating into the language being recognised is a no-op, and
             // showing it as a choice invites the question of what it would do.
-            row.isEnabled = entry.rawValue != currentLanguageID()
+            // A pair Apple refuses would show the original and nothing else.
+            row.isEnabled = entry.rawValue != currentLanguageID() && !translationRefused(entry.rawValue)
             sub.addItem(row)
         }
         item.submenu = sub

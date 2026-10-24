@@ -29,7 +29,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 LOCALIZATION = ROOT / "app" / "Localization"
 LANGUAGES = ["es", "fr", "it", "pt-BR", "de", "nl", "tr", "ru", "ar", "hi",
-             "ja", "ko", "vi", "uk", "zh-Hans"]
+             "ja", "ko", "vi", "uk", "pl", "sv", "zh-Hans", "da", "nb"]
 INFO_PLIST_KEYS = ["NSAudioCaptureUsageDescription", "NSMicrophoneUsageDescription"]
 
 # The plural categories each language's numbers fall into (CLDR, integers).
@@ -41,6 +41,8 @@ PLURALS = {
     "ru": {"one", "few", "many", "other"}, "uk": {"one", "few", "many", "other"},
     "ar": {"zero", "one", "two", "few", "many", "other"}, "hi": {"one", "other"},
     "ja": {"other"}, "ko": {"other"}, "vi": {"other"}, "zh-Hans": {"other"},
+    "pl": {"one", "few", "many", "other"}, "sv": {"one", "other"},
+    "da": {"one", "other"}, "nb": {"one", "other"},
 }
 # Required rather than merely allowed: "many" in the Romance languages is for
 # millions, which no count here reaches, so it may be left to "other".

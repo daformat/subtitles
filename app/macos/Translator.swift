@@ -5,7 +5,8 @@
 // languages. Half this app's language menu — ja, ko, zh, ar, hi, vi — is not in
 // that set, and no pair among them works at all, because there is no pivot: the
 // model takes audio, so fr → en → de would need the second leg to be text, which
-// it cannot do. Apple's framework covers all 240 ordered pairs of our sixteen.
+// it cannot do. Apple's framework covers 350 of the 380 ordered pairs among our
+// twenty; the Nordic three miss Russian, Ukrainian, Polish, Arabic and Hindi.
 //
 // The cost is macOS 15, against the app's 14.2 floor, so everything here is
 // behind `@available(macOS 15, *)` and the framework is weak-linked. On 14.2 this
@@ -146,6 +147,21 @@ final class Translator {
     /// is per-device. A table baked in here would be wrong on the next release.
     static func supportedLanguages() async -> [Locale.Language] {
         await LanguageAvailability().supportedLanguages
+    }
+
+    /// Every ordered pair among `languages` the framework will not translate at
+    /// all, as "from>to" by raw value. Not every supported language reaches every
+    /// other: on macOS 26 Swedish cannot be translated into Russian, for one.
+    /// Asked once at launch, since the menu has to know without waiting.
+    static func refusedPairs(among languages: [FluidLanguage]) async -> Set<String> {
+        let availability = LanguageAvailability()
+        var refused: Set<String> = []
+        for source in languages { for target in languages where target != source {
+            if await availability.status(from: source.locale, to: target.locale) == .unsupported {
+                refused.insert(source.rawValue + ">" + target.rawValue)
+            }
+        }}
+        return refused
     }
 
     static func readiness(from source: Locale.Language,
