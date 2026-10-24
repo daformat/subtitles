@@ -100,7 +100,15 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
                 "updater not started: \(error.localizedDescription)\n".data(using: .utf8)!)
             return
         }
-        pendingVersion = UserDefaults.standard.string(forKey: Self.pendingKey)
+        // Only if it is still ahead of this copy: a version seen by an older
+        // build, then installed some other way (a DMG, a local build), stayed a
+        // badge offering what was already running.
+        let stored = UserDefaults.standard.string(forKey: Self.pendingKey)
+        pendingVersion = stored.flatMap { Self.isNewer($0) ? $0 : nil }
+        // didSet writes only on a change, and nil to nil is none.
+        if stored != nil, pendingVersion == nil {
+            UserDefaults.standard.removeObject(forKey: Self.pendingKey)
+        }
         // A version seen last time and put off with Later comes back at the
         // next launch, not a day later: Sparkle's own schedule would wait out
         // the interval, and launch is the moment the window is welcome.
@@ -150,9 +158,24 @@ final class Updater: NSObject, SPUUpdaterDelegate, SPUUserDriver {
         updater.checkForUpdates()
     }
 
+    /// Whether `version` is ahead of the one running, as Sparkle compares them.
+    private static func isNewer(_ version: String) -> Bool {
+        guard let running = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        else { return true }
+        return SUStandardVersionComparator.default.compareVersion(version, toVersion: running) == .orderedDescending
+    }
+
     // MARK: SPUUpdaterDelegate
 
     func feedURLString(for updater: SPUUpdater) -> String? { feedOverride }
+
+    /// Any check that comes back empty, scheduled ones included. The user
+    /// driver only hears of a manual one (`showUpdateNotFoundWithError`), so a
+    /// badge from an earlier find outlived the background check that would have
+    /// said there was nothing left to install.
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        pendingVersion = nil
+    }
 
     // MARK: SPUUserDriver — the question
 

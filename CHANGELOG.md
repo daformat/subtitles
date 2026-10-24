@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.17.1 · 2026-10-25
+
+- **No update offered for a version you already have.** If you installed a
+  newer Subtitles yourself after the app had found an update, the menu could
+  keep offering that older version. It now forgets an update that isn't
+  newer than the copy running, and clears it when a check finds nothing new.
+- **The welcome window's demo lists the new languages.** Its Language /
+  Models and Translate To menus show Polish and Swedish, and Danish and
+  Norwegian under Experimental, as the app's own menus do.
+
 ## 1.17.0 · 2026-10-25
 
 - **Polish and Swedish.** Both are in Language / Models, and in Translate
