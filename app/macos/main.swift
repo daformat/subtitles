@@ -1579,6 +1579,8 @@ if useOverlay {
     controller.transcriptFolder = UserDefaults.standard.string(forKey: Defaults.transcriptFolder)
         .map { URL(fileURLWithPath: $0, isDirectory: true) }
     settings.transcriptFolder = { controller.transcriptFolder }
+    settings.transcriptDirectory = { controller.transcriptDirectory }
+    controller.onTranscriptSaved = { settings.transcriptSaved() }
     settings.onTranscriptFolder = { folder in
         controller.transcriptFolder = folder
         if let folder {

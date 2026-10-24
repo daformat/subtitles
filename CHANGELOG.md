@@ -4,6 +4,15 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.16.1 · 2026-10-24
+
+- **See where transcripts go.** Next to the Save Location popup, under
+  Settings ▸ Transcript, the folder transcripts are saved to is shown
+  with its icon; click it to open it in Finder. With Last Used Folder it
+  says which folder that is, Documents until a transcript has been saved.
+- **A chosen folder shows its name again.** After choosing a folder for
+  Save Location, the popup was blank. It shows the folder's name again.
+
 ## 1.16.0 · 2026-10-24
 
 - **Save transcripts without being asked.** Turn on Save without asking,

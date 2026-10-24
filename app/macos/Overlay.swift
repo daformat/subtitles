@@ -2694,19 +2694,31 @@ final class OverlayController {
     var transcriptFolder: URL?
 
     /// Where the save panel opens, and where a save without asking goes:
-    /// the folder chosen in Settings, else the one the last transcript went
-    /// to, else Documents. A folder since
-    /// deleted, or on a disk that is not mounted, is passed over.
-    private var transcriptDirectory: URL? {
-        let last = UserDefaults.standard.string(forKey: Self.transcriptLastFolderKey)
-            .map { URL(fileURLWithPath: $0, isDirectory: true) }
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        return [transcriptFolder, last].compactMap { $0 }.first { folder in
-            var isFolder: ObjCBool = false
-            return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isFolder)
-                && isFolder.boolValue
-        } ?? documents
+    /// the folder chosen in Settings, else `lastTranscriptFolder`. A folder
+    /// since deleted, or on a disk that is not mounted, is passed over.
+    /// Settings ▸ Transcript shows it beside the popup.
+    var transcriptDirectory: URL? {
+        transcriptFolder.flatMap(Self.existingFolder) ?? lastTranscriptFolder
     }
+
+    /// What Last Used Folder stands for right now: the folder the last
+    /// transcript went to, else Documents.
+    private var lastTranscriptFolder: URL? {
+        UserDefaults.standard.string(forKey: Self.transcriptLastFolderKey)
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+            .flatMap(Self.existingFolder)
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+    }
+
+    private static func existingFolder(_ folder: URL) -> URL? {
+        var isFolder: ObjCBool = false
+        return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isFolder)
+            && isFolder.boolValue ? folder : nil
+    }
+
+    /// A transcript was saved through the panel, so the last folder may have
+    /// moved: main.swift has Settings follow.
+    var onTranscriptSaved: (() -> Void)?
 
     /// Ask where, and write the file. Taken from the offer, the stack is then
     /// forgotten, as the timer was about to; cancelled, the timer takes it
@@ -2747,6 +2759,7 @@ final class OverlayController {
             // when they are set back to Last Used.
             UserDefaults.standard.set(url.deletingLastPathComponent().path,
                                       forKey: Self.transcriptLastFolderKey)
+            self.onTranscriptSaved?()
             let text = TranscriptExport.render(entries, as: format, title: title) {
                 LF("Speaker %lld", $0)
             }

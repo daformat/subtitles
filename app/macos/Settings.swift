@@ -93,6 +93,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// transcript went to.
     var transcriptFolder: () -> URL? = { nil }
     var onTranscriptFolder: ((URL?) -> Void)?
+    /// The folder a transcript goes to right now, whichever the popup says:
+    /// the chosen one, or the last used one, or Documents. Shown beside it.
+    var transcriptDirectory: () -> URL? = { nil }
     /// The format Save Transcript… offers first and Save without asking
     /// writes, or nil for the one the last transcript was saved in.
     var transcriptFormat: () -> TranscriptFormat? = { nil }
@@ -1056,11 +1059,24 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         fillFolderPopup()
         folderPopup.target = self
         folderPopup.action = #selector(chooseFolder)
+        folderButton.isBordered = false
+        folderButton.imagePosition = .imageLeading
+        folderButton.target = self
+        folderButton.action = #selector(openFolder)
+        folderButton.setAccessibilityHelp(L("Show in Finder"))
+        // A long name gives way, from the middle, before the popup does.
+        folderButton.cell?.lineBreakMode = .byTruncatingMiddle
+        folderButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let location = NSStackView(views: [folderPopup, folderButton])
+        location.orientation = .horizontal
+        location.alignment = .centerY
+        location.spacing = 12
+        location.widthAnchor.constraint(lessThanOrEqualToConstant: Self.contentWidth).isActive = true
         section(L("Save Location", "Settings section: the folder a transcript is saved to"),
                 L("Where Save Transcript… opens. Last Used Folder is the one the previous "
                   + "transcript went to, Documents the first time.",
                   "Settings ▸ Transcript; Save Transcript… is the menu item, Last Used Folder the popup's first choice, name them as they are"),
-                folderPopup, nil)
+                location, nil)
 
         formatPopup.removeAllItems()
         formatPopup.addItem(withTitle: L("Last Used Format", "Settings popup: save transcripts in the format the previous one was saved in"))
@@ -1126,13 +1142,44 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             folderPopup.lastItem?.image = icon
             folderPopup.lastItem?.toolTip = folder.path
             folderPopup.lastItem?.representedObject = folder
-            folderPopup.menu?.addItem(.separator())
+            // Selected before the separator goes in after it, which would
+            // otherwise be the last item, and the popup would show nothing.
             folderPopup.select(folderPopup.lastItem)
+            folderPopup.menu?.addItem(.separator())
         } else {
             folderPopup.selectItem(at: 0)
         }
         folderPopup.addItem(withTitle: L("Choose Folder…", "Settings popup: pick the folder transcripts are saved to"))
+        syncFolderButton()
     }
+
+    /// Beside the popup, the folder transcripts go to now, in the secondary
+    /// color of a value rather than a control's; a click opens it in Finder.
+    /// With Last Used Folder it says which that is; with a folder chosen it
+    /// names it again, or the last used one if the chosen one has gone.
+    private let folderButton = NSButton(title: "", target: nil, action: nil)
+
+    private func syncFolderButton() {
+        let folder = transcriptDirectory()
+        folderButton.isHidden = folder == nil
+        guard let folder else { return }
+        let icon = NSWorkspace.shared.icon(forFile: folder.path)
+        icon.size = NSSize(width: 16, height: 16)
+        folderButton.image = icon
+        folderButton.attributedTitle = NSAttributedString(
+            string: FileManager.default.displayName(atPath: folder.path),
+            attributes: [.foregroundColor: NSColor.secondaryLabelColor,
+                         .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+        folderButton.toolTip = folder.path
+    }
+
+    @objc private func openFolder(_ sender: NSButton) {
+        guard let folder = transcriptDirectory() else { return }
+        NSWorkspace.shared.open(folder)
+    }
+
+    /// A transcript was saved: the last used folder may be another one now.
+    func transcriptSaved() { syncFolderButton() }
 
     @objc private func chooseFolder(_ sender: NSPopUpButton) {
         guard let item = sender.selectedItem else { return }
@@ -1144,7 +1191,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Opens on the folder chosen before, if any. Cancelled, the popup goes
+    /// Opens on the folder chosen before, else the last used one. Cancelled, the popup goes
     /// back to what it said.
     private func pickFolder() {
         let open = NSOpenPanel()
@@ -1153,8 +1200,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         open.canCreateDirectories = true
         open.allowsMultipleSelection = false
         open.prompt = L("Choose", "Folder picker button: use this folder for saved transcripts")
-        open.directoryURL = transcriptFolder()
-            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        open.directoryURL = transcriptDirectory()
         let done: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard let self else { return }
             if response == .OK, let url = open.url {
