@@ -2046,7 +2046,7 @@ languages, the experimental two left out.
 
 **Not every pair translates.** Probed with `LanguageAvailability.status`, sv, da
 and nb go neither to nor from ru, uk, pl, ar or hi: 30 of the 380 ordered pairs.
-The app asks once at launch (`Translator.refusedPairs`) and Translate To greys a
+The app asks once at launch (`Translator.refusedPairs`) and Translate To grays a
 target that `spokenLanguage` cannot reach: the pinned language, or on auto the
 one last heard, as of when the menu opens. A refused pair at run time already
 fell back to the original, since the pipeline reads `unsupportedLanguagePairing`

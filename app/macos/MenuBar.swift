@@ -871,7 +871,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// be transcribed into. Probed on macOS 26, the framework supports every one
     /// of them but not every pair: Swedish, Danish and Norwegian go neither to
     /// nor from Russian, Ukrainian, Polish, Arabic or Hindi, 30 of the 380. Those
-    /// are greyed for the language pinned, or on auto-detect for the one last
+    /// are grayed for the language pinned, or on auto-detect for the one last
     /// heard, as of when the menu opens; until anything is heard none is, and a
     /// refused pair shows the original.
     @available(macOS 15, *)

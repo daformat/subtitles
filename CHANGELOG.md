@@ -21,7 +21,7 @@ and the DMG name show.
   messages are now in Polish, Swedish, Danish and Norwegian too, chosen
   under Settings ▸ Language or following your Mac.
 - **Translate To shows what can't be translated.** A language that can't
-  be translated from the language being spoken is greyed out: the one you
+  be translated from the language being spoken is grayed out: the one you
   chose, or with Multilingual the one last heard. If the speaker changes to
   a language that can't be translated into your choice, the captions stay
   in the original language while they speak.
