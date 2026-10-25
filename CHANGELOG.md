@@ -4,6 +4,12 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.17.2 · 2026-10-25
+
+- **The welcome window's demo in four more languages.** With Subtitles in
+  Polish, Swedish, Danish or Norwegian, the demo in the welcome window now
+  plays in that language too, rather than in English.
+
 ## 1.17.1 · 2026-10-25
 
 - **No update offered for a version you already have.** If you installed a
