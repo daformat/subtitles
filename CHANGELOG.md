@@ -4,6 +4,39 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.18.0 · 2026-10-26
+
+- **Resize the box by its edge.** Whenever the box can be moved, with ⇧
+  held or with Pointer Reveal and Click-Through off, drag its top or bottom
+  edge to change how many lines it holds. It steps a line at a time, a
+  pill in the middle reads Max 3 Lines or however many, and the text and
+  the glow soften behind it. Letting go sets Lines in Settings.
+- **Pointer Reveal and Click-Through.** The menu item that was Fade Away
+  Under Pointer, and the Settings section that was Pointer Reveal, now say
+  what turning it off does: the box stops fading under the pointer, takes
+  the clicks that land on it, and drags without ⇧. A dashed outline shows
+  when the pointer is over it.
+- **More than five lines.** Lines, under Settings ▸ UI, has a number field
+  beside its slider. The slider still goes from 1 to 5, and the field takes
+  up to 99.
+- **The box grows away from the screen's nearest edge.** Moved into the top half of
+  the screen, the box keeps its top edge where you left it and grows
+  downward. In the bottom half it keeps its bottom edge, as before.
+- **Steadier dragging.** The box stays where you hold it while it grows or
+  shrinks under the pointer.
+- **⇧ eases the reveal.** With the reveal on, pressing ⇧ closes the hole
+  under the pointer smoothly instead of snapping the box solid, and letting
+  go opens it the same way.
+- **The ⌥ stack waits for the box.** A box that has just filled stays in
+  the live box for a moment so it can be finished. It now joins the stack
+  when it leaves the live box, rather than appearing there while you are
+  still reading it.
+- **An even fade at both ends of the stack.** Scrolled back, the bottom of
+  the ⌥ stack fades as gradually as the top, blur included.
+- **Animation at the display's own rate.** The reveal, the glow and the
+  box's other animations now follow the screen's refresh rate, 120 Hz on a
+  ProMotion display, instead of a fixed 60.
+
 ## 1.17.2 · 2026-10-25
 
 - **The welcome window's demo in four more languages.** With Subtitles in
