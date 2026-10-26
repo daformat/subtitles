@@ -1487,7 +1487,9 @@ kbd {
    anything. An SVG rather than a dashed border, since a border's dash is the
    browser's and cannot be phased; script.js puts the element on the box
    (ringFor), and the rect takes its geometry from CSS so it follows the box
-   as it grows. Only while ⇧ is held, which is also when the mask is off. */
+   as it grows. Only while the box is armed: ⇧ held, or the pointer over it
+   with Pointer Reveal and Click-Through off, which is also when the mask is
+   off. */
 .ov-ring {
   position: absolute;
   top: -4px;

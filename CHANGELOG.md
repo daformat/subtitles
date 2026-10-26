@@ -15,7 +15,8 @@ and the DMG name show.
   Under Pointer, and the Settings section that was Pointer Reveal, now say
   what turning it off does: the box stops fading under the pointer, takes
   the clicks that land on it, and drags without ⇧. A dashed outline shows
-  when the pointer is over it.
+  when the pointer is over it. The demo in the welcome window does the
+  same.
 - **More than five lines.** Lines, under Settings ▸ UI, has a number field
   beside its slider. The slider still goes from 1 to 5, and the field takes
   up to 99.

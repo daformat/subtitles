@@ -1569,6 +1569,34 @@ const pointerReveal = (box, screen, opts) => {
   };
 };
 
+// The caption box armed for picking up: while `held` says so (⇧ down, or a
+// drag under way), and, with Pointer Reveal and Click-Through off, whenever
+// the pointer is over a box that is showing, as the app does. Armed is
+// `is-movable`, which is what gives the box its clicks, its grab cursor and
+// its dashed ring. The pointer is followed on `area` rather than on the box,
+// which takes no events until it is armed.
+const hoverGrab = (box, area, held) => {
+  let over = false;
+  const sync = () => {
+    const loose = over && !box.classList.contains('has-reveal') && box.classList.contains('is-visible');
+    box.classList.toggle('is-movable', held() || loose);
+  };
+  if (area) {
+    area.addEventListener('pointermove', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      const r = box.getBoundingClientRect();
+      const inside = event.clientX >= r.left && event.clientX <= r.right
+        && event.clientY >= r.top && event.clientY <= r.bottom;
+      if (inside !== over) { over = inside; sync(); }
+    });
+    area.addEventListener('pointerleave', () => { over = false; sync(); });
+  }
+  // The box fading out or coming back under a still pointer, and the reveal
+  // switched from the menu, both change what armed means.
+  new MutationObserver(sync).observe(box, { attributes: true, attributeFilter: ['class'] });
+  return { sync: sync };
+};
+
 // The app's status menu, opened by hand: a click on the glyph drops it, and
 // it works as a menu does — rows light under the pointer, a row with a
 // submenu opens it, submenus nest (Language / Models has English inside it),
@@ -4071,9 +4099,12 @@ function fullyInView(el, slack = 0) {
   // Tabbing away with the key down would otherwise leave it armed forever.
   // ⇧ also takes the stack down while it is held, as the landing pages and
   // the app do: the box is being picked up, and the stack is pinned to it.
+  // With Pointer Reveal and Click-Through off, the pointer over the box
+  // arms it as ⇧ does: see hoverGrab.
+  const boxArm = hoverGrab(box, stage, () => shiftKey || !!boxGrab);
   const armBox = (on) => {
     shiftKey = on;
-    box.classList.toggle('is-movable', on);
+    boxArm.sync();
     showHistory();
   };
   window.addEventListener('keydown', (e) => { if (e.key === 'Shift' && !e.repeat) armBox(true); });
@@ -4081,7 +4112,7 @@ function fullyInView(el, slack = 0) {
   window.addEventListener('blur', () => armBox(false));
 
   box.addEventListener('pointerdown', (event) => {
-    if (event.pointerType !== 'mouse' || !event.shiftKey || !stage) return;
+    if (event.pointerType !== 'mouse' || !box.classList.contains('is-movable') || !stage) return;
     event.preventDefault();
     try { box.setPointerCapture(event.pointerId); } catch (e) { /* pointer gone */ }
 
@@ -4113,6 +4144,7 @@ function fullyInView(el, slack = 0) {
     box.addEventListener(type, () => {
       boxGrab = null;
       box.classList.remove('is-dragging');
+      boxArm.sync();
     })
   );
 
