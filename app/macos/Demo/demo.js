@@ -48,7 +48,7 @@ const CUT_MS = 250;
 //   maxLines            lines a box fills before it pages, 1 and up
 //   boxOpacity          0…1, how solid the box is behind the text
 //   blur                points, 0 for none
-//   revealEnabled       Fade Away Under Pointer
+//   revealEnabled       Pointer Reveal and Click-Through
 //   revealOpacity       0…1, how much of the box the pointer takes
 //   revealWidth         points, the hole's full extent; or revealSize as
 //   revealHeight        {width, height} or [width, height], as CGSize encodes
@@ -1520,7 +1520,7 @@ const pageOf = (text, from, to, of) => {
 // than that, so both feed the same queue, and `onFrame` runs with it, for
 // whatever else follows the box. `solid` says when the box stays whole:
 // under ⇧, since you are about to pick it up, and under ⌥, since the stack
-// is what is being read then. `on` is the menu's Fade Away Under Pointer.
+// is what is being read then. `on` is the menu's Pointer Reveal and Click-Through.
 const pointerReveal = (box, screen, opts) => {
   let on = opts.on !== false;
   let pointer = null;
