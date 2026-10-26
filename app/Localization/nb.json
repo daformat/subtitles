@@ -125,8 +125,6 @@
   "Pause Subtitles": "Sett Subtitles på pause",
   "Save Transcript…": "Lagre avskrift…",
   "Show Overlay In Screen Share / Capture": "Vis overlegget ved skjermdeling / -opptak",
-  "Fade Away Under Pointer": "Ton ut under pekeren",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Pek på boksen for å se gjennom den; hold nede ⇧ for å la den være heldekkende",
   "Recent Boxes On ⌥": "Nylige bokser med ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Hold nede ⌥ for å stable opp de siste boksene igjen; rull for eldre",
   "Reset Overlay Position": "Nullstill plasseringen til overlegget",
@@ -206,9 +204,9 @@
   "%lld pt": "%lld pt",
   "Height": "Høyde",
   "Lines": "Linjer",
-  "%lld lines": {
-    "one": "%lld linje",
-    "other": "%lld linjer"
+  "Max %lld Lines": {
+    "one": "Maks. %lld linje",
+    "other": "Maks. %lld linjer"
   },
   "Background": "Bakgrunn",
   "Blur": "Uskarphet",
@@ -222,8 +220,10 @@
   "Text": "Tekst",
   "Subtitle Box": "Undertekstboks",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hvor mange linjer en boks fyller før den tømmes og en ny begynner, hvor dekkende flaten bak teksten er, og hvor mye bildet under den mykes opp. ⌥-stabelen følger disse innstillingene, bare litt mer gjennomsiktig.",
-  "Pointer Reveal": "Gjennomsyn under pekeren",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Hvor mye av boksen som forsvinner under pekeren, og hvor langt hullet rundt den rekker. Hold nede ⇧ for å la boksen være heldekkende.",
+  "Pointer Reveal and Click-Through": "Gjennomsyn og klikk gjennom boksen",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hvor mye av boksen som forsvinner under pekeren, og hvor langt hullet rundt den rekker. Klikk går gjennom til appen under; hold nede ⇧ for å la boksen være heldekkende og dra den. Slått av tar boksen imot klikk og kan dras uten ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Pek på boksen for å se gjennom den og klikke på det som ligger under; hold nede ⇧ for å flytte den",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Boksen forblir heldekkende under pekeren og tar imot klikk. Dra den for å flytte den.",
   "Forget the stack when idle": "Glem stabelen ved stillhet",
   "Otherwise the stack is kept until you pause or quit.": "Ellers beholdes stabelen til du setter på pause eller avslutter.",
   "Recent Boxes": "Nylige bokser",
@@ -299,7 +299,6 @@
     "one": "Bildet bak flaten mykes opp med %lld punkt.",
     "other": "Bildet bak flaten mykes opp med %lld punkter."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Boksen forblir heldekkende under pekeren. Flytt den i stedet: hold nede ⇧ og dra.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Pek på boksen, så løses så mye av den opp, så langt rundt pekeren.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ henter ingenting tilbake. Ferdige bokser er borte så snart de tømmes.",
   "⌥ brings back the last box.": "⌥ henter tilbake den siste boksen.",

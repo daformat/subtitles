@@ -132,8 +132,6 @@
  "Resume Subtitles": "Відновити Subtitles",
  "Pause Subtitles": "Призупинити Subtitles",
  "Show Overlay In Screen Share / Capture": "Показувати оверлей у демонстрації й записі екрана",
- "Fade Away Under Pointer": "Розчинятися під вказівником",
- "Point at the box to see through it; hold ⇧ to keep it solid": "Наведіть вказівник на блок, щоб бачити крізь нього; утримуйте ⇧, щоб він лишався непрозорим",
  "Recent Boxes On ⌥": "Нещодавні блоки на ⌥",
  "Hold ⌥ to stack the last few boxes back up; scroll for older": "Утримуйте ⌥, щоб знову скласти стосом кілька останніх блоків; гортайте, щоб побачити давніші",
  "Reset Overlay Position": "Повернути оверлей на місце",
@@ -195,11 +193,11 @@
  "%lld pt": "%lld пт",
  "Height": "Висота",
  "Lines": "Рядки",
- "%lld lines": {
-  "one": "%lld рядок",
-  "few": "%lld рядки",
-  "many": "%lld рядків",
-  "other": "%lld рядка"
+ "Max %lld Lines": {
+  "one": "Макс. %lld рядок",
+  "few": "Макс. %lld рядки",
+  "many": "Макс. %lld рядків",
+  "other": "Макс. %lld рядка"
  },
  "Background": "Тло",
  "Blur": "Розмиття",
@@ -215,8 +213,10 @@
  "Text": "Текст",
  "Subtitle Box": "Блок субтитрів",
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Скільки рядків заповнює блок, перш ніж очиститися й почати новий, наскільки щільне тло під текстом і наскільки розмито зображення під ним. Стос ⌥ бере ці налаштування, лише тло в нього трохи прозоріше.",
- "Pointer Reveal": "Під вказівником",
- "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Наскільки блок зникає під вказівником і як далеко навколо нього сягає цей просвіт. Утримуйте ⇧, щоб блок лишався непрозорим.",
+ "Pointer Reveal and Click-Through": "Просвіт і кліки крізь блок",
+ "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Наскільки блок зникає під вказівником і як далеко навколо нього сягає цей просвіт. Кліки проходять до програми під ним; утримуйте ⇧, щоб блок лишався непрозорим і його можна було перетягнути. Якщо вимкнути, блок приймає кліки й перетягується без ⇧.",
+ "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Наведіть вказівник на блок, щоб бачити крізь нього й клацати те, що під ним; утримуйте ⇧, щоб посунути його",
+ "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Блок лишається непрозорим під вказівником і приймає кліки. Перетягніть його, щоб посунути.",
  "Forget the stack when idle": "Очищати стос після тиші",
  "Otherwise the stack is kept until you pause or quit.": "Інакше стос зберігається, доки ви не призупините програму чи не вийдете з неї.",
  "Recent Boxes": "Нещодавні блоки",
@@ -275,7 +275,6 @@
   "many": "Зображення за тлом розмито на %lld пунктів.",
   "other": "Зображення за тлом розмито на %lld пункту."
  },
- "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Блок лишається непрозорим під вказівником. Натомість його можна посунути: утримуйте ⇧ і перетягніть.",
  "Point at the box and this much of it dissolves, this far around the pointer.": "Наведіть вказівник на блок, і він розчиниться ось настільки й ось так далеко навколо вказівника.",
  "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ нічого не повертає. Завершені блоки зникають, щойно очищаються.",
  "⌥ brings back the last box.": "⌥ повертає останній блок.",

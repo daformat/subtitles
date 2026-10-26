@@ -270,8 +270,8 @@ private final class PreviewStage: NSView {
     private var rings: [CGFloat] = [1, 0, 0, 0]
     private var nextHand: TimeInterval = 0
     private var lastFrame: TimeInterval = 0
-    private var frames: Timer?
-    private static let fps: TimeInterval = 1 / 30
+    /// On the display's own frames, so the pulses move at the screen's rate.
+    private lazy var frames = FrameClock { [weak self] in self?.advance() }
 
     /// Still rings and no hand-off under Reduce Motion, as the demo does: it is
     /// who is speaking, not an animation.
@@ -281,20 +281,15 @@ private final class PreviewStage: NSView {
     /// same reason the preview's own loop does.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        frames?.invalidate()
-        frames = nil
+        frames.stop()
         guard window != nil else { return }
         let now = CACurrentMediaTime()
         lastFrame = now
         nextHand = now + 1.9
-        let timer = Timer(timeInterval: Self.fps, repeats: true) { [weak self] _ in
-            self?.advance()
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        frames = timer
+        frames.start(in: self)
     }
 
-    deinit { frames?.invalidate() }
+    deinit { frames.stop() }
 
     private func advance() {
         let now = CACurrentMediaTime()
@@ -778,8 +773,8 @@ final class SettingsPreview: NSView {
     /// points gets a ten-point fade rather than swallowing a whole box.
     private static let fadeHeight: CGFloat = 150
     /// Ceiling on the near edge's fade, matching `HistoryController`: there only
-    /// once the stack has been scrolled away from the live box, and much shorter.
-    private static let nearFadeHeight: CGFloat = 60
+    /// once the stack has been scrolled away from the live box, and as tall.
+    private static let nearFadeHeight: CGFloat = fadeHeight
 
     // ── what is on the box ──
     private var page = ""
@@ -1031,7 +1026,7 @@ final class SettingsPreview: NSView {
                      one: "The picture behind the pill is softened by %lld point.", points)
         case .reveal:
             guard style.revealEnabled else {
-                return L("The box stays solid under the pointer. Move it instead: hold ⇧ and drag.")
+                return L("The box stays solid under the pointer and takes clicks. Drag it to move it.")
             }
             return L("Point at the box and this much of it dissolves, this far around the pointer.")
         case .keep:

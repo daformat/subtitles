@@ -132,8 +132,6 @@
  "Resume Subtitles": "Возобновить Subtitles",
  "Pause Subtitles": "Приостановить Subtitles",
  "Show Overlay In Screen Share / Capture": "Показывать оверлей при демонстрации и записи экрана",
- "Fade Away Under Pointer": "Растворять под указателем",
- "Point at the box to see through it; hold ⇧ to keep it solid": "Наведите на блок, чтобы видеть сквозь него; удерживайте ⇧, чтобы он остался непрозрачным",
  "Recent Boxes On ⌥": "Последние блоки по ⌥",
  "Hold ⌥ to stack the last few boxes back up; scroll for older": "Удерживайте ⌥, чтобы вернуть последние блоки стопкой; прокрутите, чтобы увидеть более ранние",
  "Reset Overlay Position": "Вернуть оверлей на место",
@@ -194,11 +192,11 @@
  "%lld pt": "%lld пт",
  "Height": "Высота",
  "Lines": "Строки",
- "%lld lines": {
-  "one": "%lld строка",
-  "few": "%lld строки",
-  "many": "%lld строк",
-  "other": "%lld строки"
+ "Max %lld Lines": {
+  "one": "Макс. %lld строка",
+  "few": "Макс. %lld строки",
+  "many": "Макс. %lld строк",
+  "other": "Макс. %lld строки"
  },
  "Background": "Фон",
  "Blur": "Размытие",
@@ -213,8 +211,10 @@
  },
  "Text": "Текст",
  "Subtitle Box": "Блок субтитров",
- "Pointer Reveal": "Просвет под указателем",
- "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Насколько блок исчезает под указателем и как далеко вокруг него расходится просвет. Удерживайте ⇧, чтобы блок оставался непрозрачным.",
+ "Pointer Reveal and Click-Through": "Просвет и клики сквозь блок",
+ "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Насколько блок исчезает под указателем и как далеко вокруг него расходится просвет. Клики проходят в приложение под ним; удерживайте ⇧, чтобы блок оставался непрозрачным и его можно было перетащить. Если выключить, блок принимает клики и перетаскивается без ⇧.",
+ "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Наведите на блок, чтобы видеть сквозь него и щёлкать по тому, что под ним; удерживайте ⇧, чтобы передвинуть его",
+ "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Под указателем блок остаётся непрозрачным и принимает клики. Перетащите его, чтобы передвинуть.",
  "Otherwise the stack is kept until you pause or quit.": "Иначе стопка хранится, пока вы не приостановите или не завершите Subtitles.",
  "Recent Boxes": "Последние блоки",
  "How many finished boxes ⌥ can bring back and scroll through, and how far their text sits behind the live one's.": "Сколько закрытых блоков ⌥ может вернуть и прокрутить и насколько их текст бледнее, чем в живом блоке.",
@@ -272,7 +272,6 @@
   "many": "Изображение под подложкой размыто на %lld пт.",
   "other": "Изображение под подложкой размыто на %lld пт."
  },
- "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Под указателем блок остаётся непрозрачным. Зато его можно передвинуть: удерживайте ⇧ и перетаскивайте.",
  "Point at the box and this much of it dissolves, this far around the pointer.": "Наведите на блок: вот насколько он растворится и как далеко вокруг указателя.",
  "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ ничего не возвращает. Закрытые блоки исчезают, как только очищаются.",
  "⌥ brings back the last box.": "⌥ возвращает последний блок.",

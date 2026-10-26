@@ -135,8 +135,6 @@
   "Pause Subtitles": "Wstrzymaj Subtitles",
   "Save Transcript…": "Zachowaj transkrypcję…",
   "Show Overlay In Screen Share / Capture": "Pokazuj napisy przy udostępnianiu / nagrywaniu ekranu",
-  "Fade Away Under Pointer": "Znikanie pod wskaźnikiem",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Wskaż ramkę, aby widzieć przez nią; przytrzymaj ⇧, aby pozostała nieprzezroczysta",
   "Recent Boxes On ⌥": "Ostatnie ramki pod ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Przytrzymaj ⌥, aby przywołać stos ostatnich ramek; przewiń, aby zobaczyć starsze",
   "Reset Overlay Position": "Przywróć położenie napisów",
@@ -216,11 +214,11 @@
   "%lld pt": "%lld pt",
   "Height": "Wysokość",
   "Lines": "Wiersze",
-  "%lld lines": {
-    "one": "%lld wiersz",
-    "few": "%lld wiersze",
-    "many": "%lld wierszy",
-    "other": "%lld wiersza"
+  "Max %lld Lines": {
+    "one": "Maks. %lld wiersz",
+    "few": "Maks. %lld wiersze",
+    "many": "Maks. %lld wierszy",
+    "other": "Maks. %lld wiersza"
   },
   "Background": "Tło",
   "Blur": "Rozmycie",
@@ -236,8 +234,10 @@
   "Text": "Tekst",
   "Subtitle Box": "Ramka napisów",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Ile wierszy mieści ramka, zanim się wyczyści i zacznie się nowa, jak kryjące jest tło pod tekstem i jak mocno rozmyty jest obraz pod nim. Stos ⌥ korzysta z tych ustawień, z nieco bardziej przezroczystym tłem.",
-  "Pointer Reveal": "Prześwit pod wskaźnikiem",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Jak bardzo ramka znika pod wskaźnikiem i jak daleko sięga prześwit wokół niego. Przytrzymaj ⇧, aby ramka pozostała nieprzezroczysta.",
+  "Pointer Reveal and Click-Through": "Prześwit i klikanie przez ramkę",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Jak bardzo ramka znika pod wskaźnikiem i jak daleko sięga prześwit wokół niego. Kliknięcia trafiają do aplikacji pod spodem; przytrzymaj ⇧, aby ramka pozostała nieprzezroczysta i dała się przeciągnąć. Po wyłączeniu ramka przyjmuje kliknięcia i można ją przeciągać bez ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Wskaż ramkę, aby widzieć przez nią i klikać to, co pod nią; przytrzymaj ⇧, aby ją przesunąć",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Ramka pozostaje nieprzezroczysta pod wskaźnikiem i przyjmuje kliknięcia. Przeciągnij ją, aby przesunąć.",
   "Forget the stack when idle": "Zapominaj stos po ciszy",
   "Otherwise the stack is kept until you pause or quit.": "W przeciwnym razie stos zostaje, dopóki nie wstrzymasz aplikacji lub jej nie zakończysz.",
   "Recent Boxes": "Ostatnie ramki",
@@ -321,7 +321,6 @@
     "many": "Obraz za tłem jest rozmyty o %lld punktów.",
     "other": "Obraz za tłem jest rozmyty o %lld punktu."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Ramka pozostaje nieprzezroczysta pod wskaźnikiem. Możesz ją za to przesunąć: przytrzymaj ⇧ i przeciągnij.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Wskaż ramkę, a rozpłynie się w takim stopniu i na taką odległość wokół wskaźnika.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ niczego nie przywołuje. Zakończone ramki znikają, gdy się wyczyszczą.",
   "⌥ brings back the last box.": "⌥ przywołuje ostatnią ramkę.",

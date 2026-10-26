@@ -10,7 +10,9 @@
 // the cursor, so anything it is covering can be read without moving it. Hold ⇧
 // to make it solid again and grabbable, and drag it somewhere else; the position
 // is remembered. ⇧ rather than ⌥ because holding ⌥ while dragging a window puts
-// macOS into its tiling preview, which fights the drag.
+// macOS into its tiling preview, which fights the drag. With Pointer Reveal and
+// Click-Through off, the box is an ordinary thing on screen: solid, taking the
+// clicks that land on it, and dragged without ⇧.
 //
 // Hold ⌥ and the last few closed pages stack up above the live box — see
 // History.swift. The box pages like broadcast subtitles, so without it anything
@@ -25,9 +27,33 @@ import CSubs
 import AppKit
 import Carbon.HIToolbox
 import CaptionCore
+import CoreImage
 import UniformTypeIdentifiers
 
 // MARK: - Panel
+
+/// Lets the box set the cursor while another app is the active one, which is
+/// always: the overlay never takes focus. Without it macOS drops the cursor a
+/// background app sets, and the resize arrows over the box's edge never show.
+///
+/// Private, and looked up by name: the window server's per-connection
+/// "SetsCursorInBackground" property, which no header declares. Should it go,
+/// the lookup returns nil and the edge still resizes, only without the arrows.
+enum BackgroundCursor {
+    private static let allowed: Void = {
+        typealias Connection = @convention(c) () -> Int32
+        typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+        let all = dlopen(nil, RTLD_LAZY)
+        guard let main = dlsym(all, "_CGSDefaultConnection"),
+              let set = dlsym(all, "CGSSetConnectionProperty") else { return }
+        let connection = unsafeBitCast(main, to: Connection.self)()
+        _ = unsafeBitCast(set, to: SetProperty.self)(connection, connection,
+                                                      "SetsCursorInBackground" as CFString, kCFBooleanTrue)
+    }()
+
+    /// Once per process; later calls are free.
+    static func allow() { _ = allowed }
+}
 
 final class SubtitlePanel: NSPanel {
     init(contentRect: NSRect) {
@@ -45,7 +71,10 @@ final class SubtitlePanel: NSPanel {
         isOpaque = false
         hasShadow = false
         ignoresMouseEvents = true
-        isMovableByWindowBackground = true
+        // Not the window server's drag: it holds the pointer's offset from the
+        // frame's corner, so a box that resizes under the pointer mid-drag slides
+        // away from it. `SubtitleView` drags the box itself instead.
+        isMovableByWindowBackground = false
         hidesOnDeactivate = false
 
         // Follow the user across Spaces and sit above fullscreen apps rather than
@@ -166,8 +195,81 @@ final class SubtitleView: NSView {
     }
 
     /// Draws the dashed ring that says the box can be picked up right now. Set
-    /// while ⇧ is held, alongside the panel dropping its click-through.
-    var showsDragOutline = false { didSet { needsDisplay = true } }
+    /// while ⇧ is held, alongside the panel dropping its click-through, and
+    /// with the pointer over the box when click-through is off.
+    var showsDragOutline = false { didSet { if showsDragOutline != oldValue { needsDisplay = true } } }
+
+    /// A drag of the box, in screen coordinates: where it began, each point it
+    /// moves through, and its end. The controller moves the panel, since it
+    /// knows which edge the box is anchored by.
+    var onDragBegan: ((NSPoint) -> Void)?
+    var onDragged: ((NSPoint) -> Void)?
+    var onDragEnded: (() -> Void)?
+
+    /// The edge a drag resizes the box by, nil while it cannot be resized:
+    /// the one away from the edge the box is anchored by, so the box grows
+    /// and shrinks the way it does as it fills.
+    enum ResizeEdge { case top, bottom }
+    var resizableEdge: ResizeEdge? {
+        didSet { if resizableEdge != oldValue { updateCursor(at: pointerInView) } }
+    }
+    /// A drag of that edge, as the drag's own three are.
+    var onResizeBegan: ((NSPoint) -> Void)?
+    var onResized: ((NSPoint) -> Void)?
+    var onResizeEnded: (() -> Void)?
+
+    /// While the edge is dragged, the number of lines it has reached. The
+    /// box is drawn empty at that many lines' height and a line wide, the
+    /// app's name still on it, with the count in a small ringed pill in the
+    /// middle.
+    var resizeLines: Int? {
+        didSet { if resizeLines != oldValue { needsDisplay = true } }
+    }
+
+    /// How far the text has gone behind the line count, 0 to 1: blurred and
+    /// dimmed at 1, untouched at 0. Eased in and out by the controller around
+    /// a resize, so the words soften as the count appears and come back as it
+    /// goes.
+    var resizeVeil: CGFloat = 0 {
+        didSet { if resizeVeil != oldValue { needsDisplay = true } }
+    }
+
+    /// How far either side of the pill's edge a press takes the edge rather
+    /// than the box.
+    private static let edgeReach: CGFloat = 5
+
+    private func isOnResizableEdge(_ point: NSPoint) -> Bool {
+        guard let resizableEdge else { return false }
+        let y = resizableEdge == .top ? boxRect.maxY : boxRect.minY
+        return abs(point.y - y) <= Self.edgeReach && point.x >= bounds.minX && point.x <= bounds.maxX
+    }
+
+    private var pointerInView: NSPoint? {
+        guard let window else { return nil }
+        return convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+    }
+
+    /// The up-down arrows over the edge, and while it is dragged. Set rather
+    /// than left to cursor rects, which only a key window keeps, and this
+    /// panel never is one; and set on every tick of the controller's cursor
+    /// poll while it is wanted, since the app under the pointer's last move
+    /// may have set its own since. None of it shows without
+    /// `BackgroundCursor`: the app is never the active one while someone
+    /// points at its box, and macOS ignores cursors from the others.
+    private var showsResizeCursor = false
+    private func updateCursor(at point: NSPoint?) {
+        let wants = isResizing || (point.map(isOnResizableEdge) ?? false)
+        if wants {
+            BackgroundCursor.allow()
+            NSCursor.resizeUpDown.set()
+        } else if showsResizeCursor {
+            NSCursor.arrow.set()
+        }
+        showsResizeCursor = wants
+    }
+
+    /// The cursor for wherever the pointer is now.
+    func refreshCursor() { updateCursor(at: pointerInView) }
 
     /// A button inline after the text, and what pressing it does. The offer
     /// to save the transcript and the trial's end have one. The panel takes
@@ -324,17 +426,47 @@ final class SubtitleView: NSView {
         }
     }
 
-    // The first click in a panel that never becomes key has to count.
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { action != nil }
+    // The first click in a panel that never becomes key has to count, the
+    // one that starts a drag as much as the one on a button.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     /// Whether a click beside the button is swallowed rather than the start
     /// of a drag. A box with a button still moves under ⇧, like any other.
     private var takesClicks: Bool { action != nil && !Self.isDragHeld }
 
-    override var mouseDownCanMoveWindow: Bool { !takesClicks }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    private var isDragging = false
+    private var isResizing = false
 
     override func mouseDown(with event: NSEvent) {
-        if !takesClicks { super.mouseDown(with: event) }
+        guard !takesClicks else { return }
+        if isOnResizableEdge(convert(event.locationInWindow, from: nil)) {
+            isResizing = true
+            onResizeBegan?(NSEvent.mouseLocation)
+            return
+        }
+        isDragging = true
+        onDragBegan?(NSEvent.mouseLocation)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if isResizing {
+            onResized?(NSEvent.mouseLocation)
+        } else if isDragging {
+            onDragged?(NSEvent.mouseLocation)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if isResizing {
+            isResizing = false
+            onResizeEnded?()
+            updateCursor(at: convert(event.locationInWindow, from: nil))
+        } else if isDragging {
+            isDragging = false
+            onDragEnded?()
+        }
     }
 
     /// How far along the bar on the pill's bottom edge is filled, 0 to 1; nil
@@ -401,6 +533,20 @@ final class SubtitleView: NSView {
     }
 
     static let defaultMaskStrength: CGFloat = 0.95
+
+    /// How far open the reveal is, 0 to 1, as a share of `maskStrength`: eased
+    /// by the controller as ⇧ or ⌥ close it and open it again, rather than the
+    /// box snapping solid and back.
+    var maskLevel: CGFloat = 1 {
+        didSet {
+            guard maskLevel != oldValue else { return }
+            builtGradient = nil
+            if maskCenter != nil { needsDisplay = true }
+        }
+    }
+
+    /// The strength the hole is drawn at right now.
+    private var openStrength: CGFloat { maskStrength * maskLevel }
 
     /// Weakest the reveal may be set to. Below about half, the hole stops
     /// reading as a hole — you get a slightly paler box and no sense that
@@ -483,10 +629,26 @@ final class SubtitleView: NSView {
         return (secondaryGap + ceil(capped), m.used.width + 2 + (inset.width + Self.pad) * 2)
     }
 
+    /// What a box of `lines` full lines measures: a line wide, and as tall as
+    /// that many lines are, with the inset and the icon's room around them.
+    /// Measured off that many lines of type rather than reckoned from a line's
+    /// height, so the box lands at the height it will have when full and does
+    /// not jump when the edge is let go.
+    func size(forLines lines: Int, maxWidth: CGFloat) -> NSSize {
+        let room = iconRoom
+        let sample = Array(repeating: "Ag", count: max(lines, 1)).joined(separator: "\n")
+        let text = ceil(Pill.metrics(attributed(committed: sample, tentative: "", measuring: true),
+                                     textWidth: maxWidth).used.height)
+        return NSSize(width: maxWidth,
+                      height: text + (inset.height + Self.pad) * 2 + room.top + room.inside)
+    }
+
     /// Size the box needs, hugging its content.
     ///
     /// `maxWidth` is a ceiling, not the width: a short line gets a short box.
+    /// While its edge is dragged, the size of the lines it has reached.
     func fittingSize(maxWidth: CGFloat) -> NSSize {
+        if let resizeLines { return size(forLines: resizeLines, maxWidth: maxWidth) }
         let room = actionRoom
         var size = Pill.fittingSize(attributed(committed: committed, tentative: tentative,
                                                measuring: true),
@@ -531,11 +693,12 @@ final class SubtitleView: NSView {
     /// where the core ends, and it lands on the untouched box the same way.
     private var builtGradient: CGGradient?
 
-    /// Rebuilt only when the strength changes, so the 60 Hz cursor poll still
-    /// draws against a gradient it did not have to sample.
+    /// Rebuilt only when the strength changes, so the frame poll still draws
+    /// against a gradient it did not have to sample, except while the reveal
+    /// is easing open or shut.
     private var maskGradient: CGGradient? {
         if let builtGradient { return builtGradient }
-        builtGradient = Self.buildMaskGradient(strength: maskStrength)
+        builtGradient = Self.buildMaskGradient(strength: openStrength)
         return builtGradient
     }
 
@@ -594,16 +757,17 @@ final class SubtitleView: NSView {
         }
         let rtl = isRightToLeft
         backdrop.shape = .init(rect: boxRect, corner: corner, hole: maskCenter.map {
-            .init(center: $0, size: maskSize, strength: maskStrength)
+            .init(center: $0, size: maskSize, strength: openStrength)
         }, square: squareCorners, tab: blurTab(on: boxRect, rtl: rtl))
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        let resizing = resizeLines != nil
         let text = attributed(committed: committed, tentative: tentative)
         // Here, because everything the shape depends on ends in a redraw: this
         // is the one place the blur is certain to be told with the pill.
-        syncBackdrop(drawsPill: text.length > 0)
-        guard text.length > 0 else { return }
+        syncBackdrop(drawsPill: text.length > 0 || resizing)
+        guard text.length > 0 || resizing else { return }
 
         // Pill, ring and text have to be composited into one image before the
         // hole is cut: `.destinationOut` only erases what is already in the
@@ -632,10 +796,14 @@ final class SubtitleView: NSView {
         // The glow, over the box and under everything on it, inside its whole
         // silhouette, tab included. With no pill there is no edge to sit on.
         if let borealis, backgroundOpacity > 0, let ctx {
-            AudioBorealisPainter.draw(borealis, in: ctx, pill: box,
-                                      path: Pill.silhouette(pill: box, style: iconStyle, icon: icon != nil,
-                                                            name: appName, size: fontSize, rtl: rtl, grow: 0),
-                                      fontSize: fontSize)
+            let silhouette = Pill.silhouette(pill: box, style: iconStyle, icon: icon != nil,
+                                             name: appName, size: fontSize, rtl: rtl, grow: 0)
+            if resizeVeil > 0 {
+                drawVeiledBorealis(borealis, in: ctx, pill: box, path: silhouette)
+            } else {
+                AudioBorealisPainter.draw(borealis, in: ctx, pill: box, path: silhouette,
+                                          fontSize: fontSize)
+            }
         }
         // No pill, no outline: at zero the setting says bare text over the picture.
         let scale = window?.backingScaleFactor ?? 2
@@ -646,7 +814,7 @@ final class SubtitleView: NSView {
 
         // Full width along the bottom edge, clipped to the pill so its
         // corners round the bar's ends. Fills from where the text starts.
-        if let progress {
+        if let progress, !resizing {
             NSGraphicsContext.saveGraphicsState()
             Pill.pillPath(box, radius: corner, square: squareCorners).addClip()
             let track = NSRect(x: box.minX, y: box.minY, width: box.width, height: Self.progressHeight)
@@ -701,6 +869,19 @@ final class SubtitleView: NSView {
                       size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale, filled: false)
         }
         let textRect = captionRect(for: text)
+        if resizeVeil > 0 {
+            // Clipped to the pill: a box stepped down past its text would
+            // otherwise spill the words over its edge.
+            NSGraphicsContext.saveGraphicsState()
+            Pill.pillPath(box, radius: corner, square: squareCorners).addClip()
+            drawVeiled(text, in: textRect, scale: scale)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        if let resizeLines {
+            drawLineCount(resizeLines, in: Pill.textRect(in: box, room: iconRoom), scale: scale)
+            return
+        }
+        if resizeVeil > 0 { return }
         text.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
         // The original, in the room `fittingSize` added under the caption: the
         // bottom of the text rect, the gap above it left empty.
@@ -711,9 +892,160 @@ final class SubtitleView: NSView {
                 .draw(with: under, options: [.usesLineFragmentOrigin, .usesFontLeading])
         }
     }
+
+    /// One renderer for every veiled frame, as Core Image wants: building a
+    /// context is the expensive part.
+    private static let veilContext = CIContext(options: [.useSoftwareRenderer: false])
+    /// The last veiled text, kept while the words, the rect and the veil hold:
+    /// a resize sits at full veil for as long as the edge is held, and the box
+    /// is redrawn on every step and every glow frame meanwhile.
+    private var veiled: (key: String, image: CGImage, rect: NSRect)?
+
+    /// The caption behind the count: blurred and dimmed by `resizeVeil`,
+    /// drawn into a bitmap at the screen's scale and softened there, since a
+    /// layer filter would blur the pill and the count along with it.
+    private func drawVeiled(_ text: NSAttributedString, in rect: NSRect, scale: CGFloat) {
+        let radius = 6 * resizeVeil
+        let alpha = 1 - 0.6 * resizeVeil
+        let margin = ceil(radius * 3)
+        let area = rect.insetBy(dx: -margin, dy: -margin)
+        let key = "\(text.string)|\(rect)|\(resizeVeil)|\(effectiveAppearance.name.rawValue)"
+        if veiled?.key != key {
+            veiled = nil
+            let width = Int(ceil(area.width * scale)), height = Int(ceil(area.height * scale))
+            guard width > 0, height > 0,
+                  let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                                                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                                isPlanar: false, colorSpaceName: .deviceRGB,
+                                                bytesPerRow: 0, bitsPerPixel: 0) else { return }
+            // In points before the context is made from it, or the context draws
+            // in pixels and the text comes out at a fraction of its size.
+            bitmap.size = area.size
+            guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            // The ink is a dynamic colour: resolved against this box's look,
+            // not whatever the bitmap would assume.
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                text.draw(with: NSRect(x: margin, y: margin, width: rect.width, height: rect.height),
+                          options: [.usesLineFragmentOrigin, .usesFontLeading])
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            guard let source = CIImage(bitmapImageRep: bitmap) else { return }
+            let blurred = radius > 0.1
+                ? source.clampedToExtent().applyingGaussianBlur(sigma: Double(radius * scale)).cropped(to: source.extent)
+                : source
+            guard let image = Self.veilContext.createCGImage(blurred, from: source.extent) else { return }
+            veiled = (key, image, area)
+        }
+        guard let veiled, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        ctx.saveGState()
+        ctx.setAlpha(alpha)
+        ctx.draw(veiled.image, in: veiled.rect)
+        ctx.restoreGState()
+    }
+
+    /// Pixels per point the glow is softened at behind a resize: blurred, the
+    /// glow has no detail left for more to keep, and it is redrawn on every
+    /// frame of the display.
+    private static let veiledGlowResolution: CGFloat = 0.5
+
+    /// The glow behind the count, softened with the text: painted whole, the
+    /// haze and its curves, into a small bitmap, blurred there by
+    /// `resizeVeil`, and laid back over the box.
+    private func drawVeiledBorealis(_ frame: AudioBorealis.Frame, in ctx: CGContext,
+                                    pill: NSRect, path: NSBezierPath) {
+        let radius = 6 * resizeVeil
+        let resolution = Self.veiledGlowResolution
+        let area = path.bounds.union(pill).insetBy(dx: -ceil(radius * 3), dy: -ceil(radius * 3))
+        let width = Int((area.width * resolution).rounded(.up))
+        let height = Int((area.height * resolution).rounded(.up))
+        guard width > 0, height > 0,
+              let bitmap = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                     bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        bitmap.scaleBy(x: resolution, y: resolution)
+        bitmap.translateBy(x: -area.minX, y: -area.minY)
+        AudioBorealisPainter.draw(frame, in: bitmap, pill: pill, path: path, fontSize: fontSize)
+        guard let painted = bitmap.makeImage() else { return }
+        let source = CIImage(cgImage: painted)
+        let blurred = radius > 0.1
+            ? source.clampedToExtent().applyingGaussianBlur(sigma: Double(radius * resolution))
+                .cropped(to: source.extent)
+            : source
+        guard let image = Self.veilContext.createCGImage(blurred, from: source.extent) else { return }
+        ctx.saveGState()
+        // Inside the box, as it is sharp: the blur spreads it past the edge.
+        ctx.addPath(path.cgPath)
+        ctx.clip()
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: area)
+        ctx.restoreGState()
+    }
+
+    /// The count a resize has reached, centred where the text goes: in the
+    /// box's ink, in a pill ringed with a hairline and nothing else, so it
+    /// reads as a note on the empty box rather than a caption in it.
+    private func drawLineCount(_ lines: Int, in rect: NSRect, scale: CGFloat) {
+        let label = NSAttributedString(
+            string: LP("Max %lld Lines", one: "Max %lld Line", lines),
+            attributes: [.font: Pill.font(ofSize: max(13, (fontSize * 0.55).rounded())),
+                         .foregroundColor: Pill.ink])
+        let size = label.size()
+        let height = ceil(size.height) + 8
+        let width = ceil(size.width) + height
+        // Whole points, then half a pixel in, so the hairline sits on the pixel.
+        let hairline = 1 / scale
+        let ring = NSRect(x: (rect.midX - width / 2).rounded(), y: (rect.midY - height / 2).rounded(),
+                          width: width, height: height).insetBy(dx: hairline / 2, dy: hairline / 2)
+        let path = NSBezierPath(roundedRect: ring, xRadius: ring.height / 2, yRadius: ring.height / 2)
+        path.lineWidth = hairline
+        Pill.ink.withAlphaComponent(0.6).setStroke()
+        path.stroke()
+        label.draw(at: NSPoint(x: ring.midX - size.width / 2, y: ring.midY - size.height / 2))
+    }
 }
 
 // MARK: - Controller
+
+/// A call on every frame the display draws, at the display's own rate: 120
+/// Hz on a ProMotion screen, 60 on most others, whatever an external one runs
+/// at. For animation, which a fixed-interval timer steps at the wrong rate
+/// for one screen or another. Started on a screen it runs whether or not any
+/// window is showing, which the overlay's polls need while the box is faded
+/// out; started in a view it pauses while the view is not on screen.
+///
+/// An object of its own because a display link wants an Objective-C target,
+/// and holds it: whoever owns one stops it when done with it.
+final class FrameClock: NSObject {
+    private let tick: () -> Void
+    private var link: CADisplayLink?
+
+    init(_ tick: @escaping () -> Void) { self.tick = tick }
+
+    func start(on screen: NSScreen) {
+        replace(with: screen.displayLink(target: self, selector: #selector(step)))
+    }
+
+    func start(in view: NSView) {
+        replace(with: view.displayLink(target: self, selector: #selector(step)))
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+    }
+
+    /// In `.common`, so it keeps going while a menu or a drag has the run loop
+    /// in a tracking mode.
+    private func replace(with new: CADisplayLink) {
+        link?.invalidate()
+        new.add(to: .main, forMode: .common)
+        link = new
+    }
+
+    @objc private func step(_ link: CADisplayLink) { tick() }
+}
 
 final class OverlayController {
     private let panel: SubtitlePanel
@@ -722,7 +1054,8 @@ final class OverlayController {
     private let backdrop = BackdropBlurView(blending: .behindWindow)
     private var idleTimer: Timer?
     private var modifierTimer: Timer?
-    private var cursorTimer: Timer?
+    private lazy var frameClock = FrameClock { [weak self] in self?.frameTick() }
+    private var panelScreenObserver: NSObjectProtocol?
     private var moveObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
     /// True only while `layout()` is moving the panel itself, so the move
@@ -1015,14 +1348,29 @@ final class OverlayController {
         }
     }
 
-    /// Whether pointing at the box fades it away. On by default; the menu turns it
-    /// off for anyone who would rather the subtitles simply stayed put.
+    /// Whether pointing at the box fades it away and clicks pass through it. On
+    /// by default; the menu turns it off for anyone who would rather the
+    /// subtitles simply stayed put, and could be picked up without ⇧.
     var isRevealEnabled = true {
         didSet {
             // Close any hole that is open right now — the next poll would leave it
             // there, since a disabled reveal stops updating the centre at all.
             if !isRevealEnabled { view.maskCenter = nil }
+            syncClickThrough()
         }
+    }
+
+    /// Let clicks through to what is under the box, or catch them: while ⇧
+    /// holds it for dragging, while it carries a button, and always with the
+    /// reveal off. Never while paused or faded out, when catching them would
+    /// make an invisible rectangle that swallows clicks meant for whatever is
+    /// underneath. Called on every modifier poll as well as on each change,
+    /// because the box fading out and coming back does not pass through here.
+    private func syncClickThrough() {
+        let catches = !isSuppressed
+            && (isDraggable || isHandled || view.action != nil
+                || (!isRevealEnabled && panel.alphaValue > 0))
+        if panel.ignoresMouseEvents == catches { panel.ignoresMouseEvents = !catches }
     }
 
     /// Paused. Nothing may put the overlay back on screen until resumed — not
@@ -1322,12 +1670,23 @@ final class OverlayController {
     /// with it, so the voices it numbers belong to the session the stack holds.
     var onHistoryCleared: (() -> Void)?
 
+    /// The page that has closed but is still on screen, held there for
+    /// reading by `holdPage`: its stream and place in that stream's count, as
+    /// `StackBox` keeps them. It is in the stack already, for the transcript,
+    /// but kept out of the ⌥ stack until the live box lets it go, or the stack
+    /// animates in a box the reader is still reading in the live one.
+    private var heldBox: (stream: CaptionStreams.Stream, ordinal: Int)?
+
     /// The stack as shown, each box wearing the icon of the app it came from.
     /// Under ⌃ each box shows its other language, the way the live box shows
     /// the original; with both languages shown the other goes under, and ⌃
-    /// is not held (`showsSource` is never set then).
+    /// is not held (`showsSource` is never set then). Without the page still
+    /// held on screen, if there is one.
     private var pastPages: [HistoryEntry] {
-        stack.map { box in
+        stack.filter { box in
+            guard let heldBox else { return true }
+            return box.stream != heldBox.stream || box.ordinal != heldBox.ordinal
+        }.map { box in
             let swapped = showsSource && !box.under.isEmpty
             return HistoryEntry(text: swapped ? box.under : box.text,
                                 icon: box.app.map { AppCatalog.shared.icon(for: $0) },
@@ -1480,6 +1839,7 @@ final class OverlayController {
     /// resizes with its text, and anchoring the origin would make it grow
     /// rightwards off its position instead of expanding evenly about its centre.
     private static let anchorKey = "overlay.anchor"
+    private static let anchorTopKey = "overlay.anchorTop"
 
     /// Where the box sits, and the *only* source of truth for it while running —
     /// `UserDefaults` is persistence, read once here and written on release.
@@ -1490,6 +1850,33 @@ final class OverlayController {
     /// layout, so an untouched overlay follows a resolution or display change.
     private var anchor: NSPoint?
 
+    /// Whether `anchor.y` is the pill's top edge rather than its bottom. A box
+    /// in the upper half of the screen keeps its top where it was left and
+    /// grows downwards, away from the edge it is near, as one in the lower half
+    /// keeps its bottom and grows upwards. Decided while it is dragged, as it
+    /// crosses the middle.
+    private var anchorsTop = false
+
+    /// The pointer's offset from `anchor` while the box is being dragged, nil
+    /// otherwise. Measured from the anchor rather than the frame, so a box
+    /// that grows or shrinks under the pointer mid-drag stays where it is held.
+    private var dragGrab: NSPoint?
+
+    /// Where an edge resize began: the pointer's height and the line count
+    /// the box had. Nil when no edge is being dragged.
+    private var resizeStart: (y: CGFloat, lines: Int)?
+
+    /// A drag or a resize is under way: the box is in the reader's hand.
+    private var isHandled: Bool { dragGrab != nil || resizeStart != nil }
+
+    /// The Lines setting changed by dragging the box's edge, for the settings
+    /// to keep.
+    var onMaxLinesChosen: ((Int) -> Void)?
+    /// The anchor `frame` puts the pill on, by the edge it is anchored by.
+    private func edgeAnchor(of frame: NSRect) -> NSPoint {
+        NSPoint(x: frame.midX,
+                y: anchorsTop ? frame.maxY - SubtitleView.pad : frame.minY + SubtitleView.pad)
+    }
     /// The box's ceiling: a line of `Pill.maxLineCharacters` at the current
     /// text size, or less of the screen on one too narrow for it.
     private var maxWidth: CGFloat {
@@ -1518,7 +1905,15 @@ final class OverlayController {
 
         if let saved = UserDefaults.standard.string(forKey: Self.anchorKey) {
             anchor = NSPointFromString(saved)
+            anchorsTop = UserDefaults.standard.bool(forKey: Self.anchorTopKey)
         }
+
+        view.onDragBegan = { [weak self] in self?.beginDrag(at: $0) }
+        view.onDragged = { [weak self] in self?.drag(to: $0) }
+        view.onDragEnded = { [weak self] in self?.endDrag() }
+        view.onResizeBegan = { [weak self] in self?.beginResize(at: $0) }
+        view.onResized = { [weak self] in self?.resize(to: $0) }
+        view.onResizeEnded = { [weak self] in self?.endResize() }
 
         // While the user drags, the panel's own position is the truth — this is
         // what feeds it back into `anchor` so the next word lays out where the box
@@ -1533,11 +1928,10 @@ final class OverlayController {
             forName: NSWindow.didMoveNotification, object: panel, queue: nil
         ) { [weak self] _ in
             guard let self, !self.isRepositioning else { return }
-            // The anchor is the pill's bottom edge, not the panel's: the panel
-            // carries a transparent margin for the ⇧ ring, and folding that into
-            // the anchor would walk the box a few points down on every drag.
-            self.anchor = NSPoint(x: self.panel.frame.midX,
-                                  y: self.panel.frame.minY + SubtitleView.pad)
+            // The anchor is the pill's edge, not the panel's: the panel carries
+            // a transparent margin for the ⇧ ring, and folding that into the
+            // anchor would walk the box a few points on every drag.
+            self.anchor = self.edgeAnchor(of: self.panel.frame)
         }
 
         // Resolution changed, a display arrived or left, or the arrangement
@@ -1585,31 +1979,45 @@ final class OverlayController {
             let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
-                self.panel.ignoresMouseEvents = !wantsDrag && self.view.action == nil
-                self.view.showsDragOutline = wantsDrag
                 // Nudge visible while it can be grabbed, so it is obvious the
                 // overlay is now catching clicks instead of passing them through.
                 if wantsDrag { self.panel.alphaValue = 1.0 }
                 if !wantsDrag { self.saveAnchor() }
             }
+            self.syncClickThrough()
         }
 
         // Cursor tracking for the reveal. Polled for the same reason ⇧ is (see
         // the file header) and because the panel is click-through: it receives no
         // mouse events of its own, so there is nothing to track from.
         //
-        // Its own timer at frame rate rather than a job on the 0.15s modifier
+        // On the display's frames rather than a job on the 0.15s modifier
         // poll: the hole is attached to the pointer, and at 0.15s it visibly lags
-        // behind it. Added to `.common` so the reveal keeps following while a menu
-        // or a resize has the run loop in a tracking mode.
-        let cursor = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            self?.updateHistory()
-            self?.updateMask()
-            self?.tickAudioBorealis()
-            self?.tickTranscriptOffer()
+        // behind it. The screen's frames, at its own rate, so a ProMotion screen
+        // gets all 120 of them; and the screen's rather than the panel's, which
+        // would stop while the box is faded out and ⌥ is still to be noticed.
+        // Moved to whichever screen the box is dragged onto.
+        if let screen = panel.screen ?? NSScreen.main { frameClock.start(on: screen) }
+        panelScreenObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification, object: panel, queue: .main
+        ) { [weak self] _ in
+            guard let self, let screen = self.panel.screen else { return }
+            self.frameClock.start(on: screen)
         }
-        RunLoop.main.add(cursor, forMode: .common)
-        cursorTimer = cursor
+    }
+
+    /// Everything that moves with the frames: the reveal, the stack, the ring
+    /// and the cursor, the glow, the offer's bar, and the box easing into a
+    /// resize and out of it.
+    private func frameTick() {
+        updateHistory()
+        tickRevealLevel()
+        updateMask()
+        updateDragOutline()
+        tickAudioBorealis()
+        tickTranscriptOffer()
+        tickFrameEase()
+        tickResizeVeil()
     }
 
     deinit {
@@ -1617,7 +2025,8 @@ final class OverlayController {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         idleTimer?.invalidate()
         modifierTimer?.invalidate()
-        cursorTimer?.invalidate()
+        frameClock.stop()
+        if let panelScreenObserver { NotificationCenter.default.removeObserver(panelScreenObserver) }
     }
 
     /// Raise or drop the ⌥ stack.
@@ -1687,13 +2096,10 @@ final class OverlayController {
         view.borealis = frame.glow > 0.002 ? frame : nil
     }
 
-    /// Point the reveal at the cursor, or turn it off.
+    /// Point the reveal at the cursor, or turn it off. The keys that close it
+    /// ease it shut through `revealLevel` rather than here: see `revealHeld`.
     ///
-    /// ⇧ is read here rather than reusing `isDraggable` so the box goes solid the
-    /// moment the key is down: `isDraggable` only catches up on the next 0.15s
-    /// modifier poll, which is long enough to start a drag through a hole.
-    ///
-    /// ⌥ suppresses it for a different reason: the pointer has to be over the
+    /// ⌥ closes it for a different reason than ⇧: the pointer has to be over the
     /// stack to scroll it, and a hole punched through the live box under the
     /// cursor while the user is reading the history above it is pure noise. A
     /// stack pinned by its search is being read the same way, with ⌥ released.
@@ -1701,14 +2107,19 @@ final class OverlayController {
     /// panel is about to be given one and has not got it yet.
     private func updateMask(for frame: NSRect? = nil) {
         let panelFrame = frame ?? panel.frame
-        let flags = NSEvent.modifierFlags
         guard isRevealEnabled,
               !holdsFinalCaption,
               !offersTranscript,
-              panel.alphaValue > 0,
-              !flags.contains(.shift),
-              !flags.contains(.option),
-              !history.isPinned else {
+              panel.alphaValue > 0 else {
+            view.maskCenter = nil
+            // Ready at whatever the keys say, so a box coming back under the
+            // pointer is not seen easing open.
+            revealLevel = revealHeld ? 0 : 1
+            view.maskLevel = revealLevel
+            return
+        }
+        // Held shut, and eased all the way there: no hole to draw.
+        guard revealLevel > 0 else {
             view.maskCenter = nil
             return
         }
@@ -1728,6 +2139,38 @@ final class OverlayController {
         // borderless panel's content view fills its frame exactly, so the two
         // agree in every other respect.
         view.maskCenter = NSPoint(x: point.x - panelFrame.minX, y: point.y - panelFrame.minY)
+    }
+
+    /// What closes the reveal while it is on: ⇧ to pick the box up, ⌥ and a
+    /// pinned stack to read the history over it, and the box being dragged or
+    /// resized. Read off the keys every frame, not `isDraggable`, so the box
+    /// starts going solid the moment ⇧ is down rather than on the next
+    /// modifier poll.
+    private var revealHeld: Bool {
+        let flags = NSEvent.modifierFlags
+        return flags.contains(.shift) || flags.contains(.option) || history.isPinned || isHandled
+    }
+
+    /// How far open the reveal is before easing, 0 to 1.
+    private var revealLevel: CGFloat = 1
+    private var revealTickedAt: CFTimeInterval = 0
+    private static let revealEase: CFTimeInterval = 0.15
+
+    /// The reveal easing shut as ⇧ or ⌥ goes down and open as it comes up,
+    /// once a frame, the hole staying under the pointer while it does.
+    private func tickRevealLevel() {
+        let target: CGFloat = revealHeld ? 0 : 1
+        guard revealLevel != target else {
+            revealTickedAt = 0
+            return
+        }
+        let now = CACurrentMediaTime()
+        let dt = revealTickedAt == 0 ? 1.0 / 120 : min(0.05, now - revealTickedAt)
+        revealTickedAt = now
+        let step = CGFloat(dt / Self.revealEase)
+        revealLevel = target > revealLevel ? min(1, revealLevel + step) : max(0, revealLevel - step)
+        let t = revealLevel
+        view.maskLevel = t * t * (3 - 2 * t)
     }
 
     // MARK: text
@@ -1938,6 +2381,7 @@ final class OverlayController {
             if wordSeenAt[key] == nil { wordSeenAt[key] = now }
         }
         let underBefore = onScreen ? view.secondary + view.secondaryTentative : ""
+        var holding = false
         let paged = streams.ingest(stream, words: words, chunkStarts: chunkStarts,
                                    depth: effectiveHistoryDepth, allowCarry: allowsCarry,
                                    speculativeFrom: speculativeFrom, app: playingApp) { candidates in
@@ -1948,10 +2392,15 @@ final class OverlayController {
             pageShownAt = Date()
             if onScreen {
                 pendingPageChange = true
-                holdPage(caption: captionBefore, under: underBefore)
+                holding = holdPage(caption: captionBefore, under: underBefore)
             }
         }
         if paged.brokePage || paged.revisedFrom != nil { recordClosedBoxes() }
+        // The box that just closed is the one the hold keeps on screen, when it
+        // is this stream's that the stack takes.
+        if holding, stream == historyStream, let last = stack.last, last.stream == stream {
+            heldBox = (stream, last.ordinal)
+        }
         pageStartTime = streams.start(stream)
         return paged.visible
     }
@@ -1965,8 +2414,10 @@ final class OverlayController {
     /// words keep arriving into the pager meanwhile, and the redraw at the end
     /// shows wherever they have got to. A hold already running is left alone:
     /// a page that turned during it was never seen, and is owed nothing.
-    private func holdPage(caption: String, under: String) {
-        if let holdUntil, holdUntil > Date() { return }
+    /// Whether it began a hold: the page that closed is then the one on screen.
+    @discardableResult
+    private func holdPage(caption: String, under: String) -> Bool {
+        if let holdUntil, holdUntil > Date() { return false }
         let shown = Date().timeIntervalSince(displayedPageSince)
         let needed = max(readingTime(caption, scale: 1),
                          readingTime(under, scale: SubtitleView.secondaryScale))
@@ -1977,14 +2428,18 @@ final class OverlayController {
                 format: "[page] turn: %d + %d chars need %.1fs, shown %.1fs → hold %.2fs\n",
                 caption.count, under.count, needed, shown, hold).data(using: .utf8)!)
         }
-        guard hold > 0.05 else { holdUntil = nil; return }
+        guard hold > 0.05 else { holdUntil = nil; return false }
         holdUntil = Date().addingTimeInterval(hold)
         holdTimer?.invalidate()
         holdTimer = Timer.scheduledTimer(withTimeInterval: hold, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.holdUntil = nil
+            // The page leaves the box as it joins the stack: the redraw's
+            // stack update animates it in.
+            self.heldBox = nil
             self.redraw()
         }
+        return true
     }
 
     /// Seconds to read `text` drawn at `scale` of the caption's size.
@@ -1997,6 +2452,7 @@ final class OverlayController {
         holdTimer?.invalidate()
         holdTimer = nil
         holdUntil = nil
+        heldBox = nil
         pendingPageChange = false
     }
 
@@ -2237,19 +2693,75 @@ final class OverlayController {
         anchor?.x ?? NSScreen.main?.frame.midX ?? panel.frame.midX
     }
 
-    private func layout() {
-        let size = view.fittingSize(maxWidth: maxWidth)
-        guard size.height > 0, let screen = NSScreen.main else { return }
+    /// One dimension of the box easing from one size to another: the box
+    /// going into a resize and coming out of it. Run by the cursor poll rather
+    /// than the window's animator, which moves the whole frame as one: a step
+    /// taken while the box is still widening must land its height at once and
+    /// leave the width to carry on.
+    private struct Ease {
+        var from: CGFloat
+        var to: CGFloat
+        var start: CFTimeInterval
 
-        let anchor = self.anchor ?? NSPoint(x: screen.frame.midX,
-                                            y: screen.frame.minY + screen.frame.height * 0.12)
+        static let duration: CFTimeInterval = 0.18
+
+        func value(at now: CFTimeInterval) -> CGFloat {
+            let t = CGFloat(min(max((now - start) / Self.duration, 0), 1))
+            return from + (to - from) * t * t * (3 - 2 * t)
+        }
+
+        func isDone(at now: CFTimeInterval) -> Bool { now - start >= Self.duration }
+    }
+    private var widthEase: Ease?
+    private var heightEase: Ease?
+    /// The size the box is headed for, which an ease is still on its way to.
+    private var sizeTarget: NSSize?
+
+    /// `animated` eases the box to its new size; `snaps` lands its height at
+    /// once, and its width too unless an ease is already carrying it, which
+    /// then turns towards the new width from wherever it has got to. A plain
+    /// layout over a running ease retargets it the same way.
+    private func layout(animated: Bool = false, snaps: Bool = false) {
+        let size = view.fittingSize(maxWidth: maxWidth)
+        guard size.height > 0, NSScreen.main != nil else { return }
+        let now = CACurrentMediaTime()
+        let shown = panel.frame.size
+
+        func ease(_ running: Ease?, from current: CGFloat, to target: CGFloat,
+                  starts: Bool) -> Ease? {
+            if starts { return current == target ? nil : Ease(from: current, to: target, start: now) }
+            guard let running, !running.isDone(at: now) else { return nil }
+            if running.to == target { return running }
+            return Ease(from: running.value(at: now), to: target, start: now)
+        }
+        widthEase = ease(widthEase, from: shown.width, to: size.width, starts: animated)
+        heightEase = snaps ? nil : ease(heightEase, from: shown.height, to: size.height, starts: animated)
+        sizeTarget = size
+        placeFrame(at: now)
+    }
+
+    /// One frame of the box's ease.
+    private func tickFrameEase() {
+        guard widthEase != nil || heightEase != nil else { return }
+        let now = CACurrentMediaTime()
+        placeFrame(at: now)
+        if widthEase?.isDone(at: now) == true { widthEase = nil }
+        if heightEase?.isDone(at: now) == true { heightEase = nil }
+    }
+
+    /// Put the panel at the size it has eased to, about its anchor.
+    private func placeFrame(at now: CFTimeInterval) {
+        guard let target = sizeTarget, let screen = NSScreen.main else { return }
+        let size = NSSize(width: (widthEase?.value(at: now) ?? target.width).rounded(),
+                          height: (heightEase?.value(at: now) ?? target.height).rounded())
+        let anchor = resolvedAnchor(on: screen)
 
         // Round the origin: a half-pixel x makes the text render soft as the box
-        // resizes on every word. The y drops by the ring margin so the *pill*
+        // resizes on every word. The y moves by the ring margin so the *pill*
         // still sits on the anchor — the margin is invisible, and the box would
-        // otherwise appear to float a few points above where it was left.
-        let origin = NSPoint(x: (anchor.x - size.width / 2).rounded(),
-                             y: (anchor.y - SubtitleView.pad).rounded())
+        // otherwise appear to float a few points off where it was left.
+        let y = anchorsTop ? anchor.y + SubtitleView.pad - size.height : anchor.y - SubtitleView.pad
+        let origin = NSPoint(x: (anchor.x - size.width / 2).rounded(), y: y.rounded())
         // NSWindow resizes its content view itself, so assigning view.frame here
         // is redundant — and actively harmful: setFrame(display: true) paints
         // immediately, so a manual assignment afterwards means that paint happens
@@ -2263,6 +2775,7 @@ final class OverlayController {
         // reads as the reveal blinking out. Recomputed here against the frame
         // about to be set, so the first paint is already right.
         let frame = NSRect(origin: origin, size: size)
+        guard frame != panel.frame else { return }
         updateMask(for: frame)
         isRepositioning = true
         panel.setFrame(frame, display: true)
@@ -2290,27 +2803,153 @@ final class OverlayController {
 
     /// Hold the pill inside the screen's visible frame.
     ///
-    /// The anchor is the pill's bottom centre, so the clamp is against half a
-    /// width either side and the box's own height above. A box wider or taller
-    /// than the screen has no valid position, and centring it is the least
-    /// surprising answer.
+    /// The anchor is the centre of the pill's bottom or top edge, so the clamp
+    /// is against half a width either side and the box's own height above or
+    /// below. A box wider or taller than the screen has no valid position, and
+    /// centring it is the least surprising answer.
     private func clamp(_ point: NSPoint, to screen: NSScreen) -> NSPoint {
         let area = screen.visibleFrame
         let size = panel.frame.size
         let half = size.width / 2
+        // The pill's height, which is what separates its two edges.
+        let pill = size.height - SubtitleView.pad * 2
 
         let x = area.width >= size.width
             ? min(max(point.x, area.minX + half), area.maxX - half)
             : area.midX
+        let bottom = anchorsTop ? point.y - pill : point.y
         let lowest = area.minY + SubtitleView.pad
         let highest = area.maxY - size.height + SubtitleView.pad
-        let y = highest >= lowest ? min(max(point.y, lowest), highest) : lowest
-        return NSPoint(x: x.rounded(), y: y.rounded())
+        let y = highest >= lowest ? min(max(bottom, lowest), highest) : lowest
+        return NSPoint(x: x.rounded(), y: (anchorsTop ? y + pill : y).rounded())
+    }
+
+    /// Where the box goes: where it was left, or low and centred on the screen
+    /// until it has been moved.
+    private func resolvedAnchor(on screen: NSScreen) -> NSPoint {
+        anchor ?? NSPoint(x: screen.frame.midX, y: screen.frame.minY + screen.frame.height * 0.12)
     }
 
     private func saveAnchor() {
         guard let anchor else { return }
         UserDefaults.standard.set(NSStringFromPoint(anchor), forKey: Self.anchorKey)
+        UserDefaults.standard.set(anchorsTop, forKey: Self.anchorTopKey)
+    }
+
+    // MARK: drag
+
+    private func beginDrag(at mouse: NSPoint) {
+        guard let screen = NSScreen.main else { return }
+        let current = anchor ?? resolvedAnchor(on: screen)
+        anchor = current
+        dragGrab = NSPoint(x: current.x - mouse.x, y: current.y - mouse.y)
+    }
+
+    /// The anchor follows the pointer by the offset it was grabbed at, and the
+    /// box is laid out from it, so a word that resizes the box mid-drag grows
+    /// it about the anchor rather than out from under the pointer. Crossing the
+    /// middle of the screen hands the anchor to the other edge, measured off
+    /// the frame as it stands, so nothing moves when it does.
+    private func drag(to mouse: NSPoint) {
+        guard let grab = dragGrab, let screen = NSScreen.main else { return }
+        anchor = NSPoint(x: mouse.x + grab.x, y: mouse.y + grab.y)
+        layout()
+        let wantsTop = panel.frame.midY > screen.visibleFrame.midY
+        guard wantsTop != anchorsTop else { return }
+        anchorsTop = wantsTop
+        let handed = edgeAnchor(of: panel.frame)
+        anchor = handed
+        dragGrab = NSPoint(x: handed.x - mouse.x, y: handed.y - mouse.y)
+    }
+
+    private func endDrag() {
+        guard dragGrab != nil else { return }
+        dragGrab = nil
+        saveAnchor()
+        syncClickThrough()
+    }
+
+    /// The dashed ring: while ⇧ makes the box grabbable, while it is being
+    /// dragged or resized, and, with click-through off, whenever the pointer is
+    /// over a box that a drag would move. Not over one with a button, whose
+    /// clicks go to the button and nowhere else. Whenever the box can be picked
+    /// up it can be resized too, by the edge away from its anchor.
+    private func updateDragOutline() {
+        let grabbable = !isRevealEnabled && !isSuppressed && panel.alphaValue > 0
+            && view.action == nil
+        let hovering = grabbable && panel.frame.contains(NSEvent.mouseLocation)
+        let wanted = !isSuppressed && (isDraggable || isHandled || hovering)
+        if view.showsDragOutline != wanted { view.showsDragOutline = wanted }
+        let resizable = resizeStart != nil
+            || (!isSuppressed && panel.alphaValue > 0 && dragGrab == nil && (isDraggable || grabbable))
+        let edge: SubtitleView.ResizeEdge? = resizable ? (anchorsTop ? .bottom : .top) : nil
+        if view.resizableEdge != edge { view.resizableEdge = edge }
+        view.refreshCursor()
+    }
+
+    /// How far the veil over the text has got, 0 to 1, before easing.
+    private var veilProgress: CGFloat = 0
+    private var veilTickedAt: CFTimeInterval = 0
+
+    /// The text softening behind the count while the edge is held, and
+    /// coming back after, over the time the box takes to change size.
+    private func tickResizeVeil() {
+        let target: CGFloat = resizeStart != nil ? 1 : 0
+        guard veilProgress != target else {
+            veilTickedAt = 0
+            return
+        }
+        let now = CACurrentMediaTime()
+        let dt = veilTickedAt == 0 ? 1.0 / 60 : min(0.05, now - veilTickedAt)
+        veilTickedAt = now
+        let step = CGFloat(dt / 0.18)
+        veilProgress = target > veilProgress ? min(1, veilProgress + step) : max(0, veilProgress - step)
+        let t = veilProgress
+        view.resizeVeil = t * t * (3 - 2 * t)
+    }
+
+    // MARK: resize
+
+    /// The box empties to the line count it is set to, and the edge then
+    /// steps it a line at a time, a line's height of pointer travel to each.
+    /// Counted from where the press began rather than from where the edge
+    /// is, so the box jumping to its full height on the press does not count
+    /// as a move. Laid out from the anchor, so the anchored edge stays put.
+    private func beginResize(at mouse: NSPoint) {
+        guard let screen = NSScreen.main else { return }
+        if anchor == nil { anchor = resolvedAnchor(on: screen) }
+        resizeStart = (mouse.y, maxLines)
+        view.resizeLines = maxLines
+        layout(animated: true)
+    }
+
+    private func resize(to mouse: NSPoint) {
+        guard let start = resizeStart else { return }
+        // Away from the anchor is bigger: up for a box anchored by its bottom,
+        // down for one anchored by its top.
+        let travel = anchorsTop ? start.y - mouse.y : mouse.y - start.y
+        let lines = max(1, start.lines + Int((travel / Pill.lineHeight(ofSize: view.fontSize)).rounded()))
+        guard lines != view.resizeLines else { return }
+        view.resizeLines = lines
+        // Steps land their height at once, under the pointer; a width still
+        // easing in carries on. Only going into the resize and out of it ease.
+        layout(snaps: true)
+    }
+
+    private func endResize() {
+        guard resizeStart != nil, let lines = view.resizeLines else { return }
+        resizeStart = nil
+        // Set while the box is still the count's size, so the re-page it may
+        // bring lays out at that size and the one animation below takes the
+        // box from there to its text.
+        maxLines = lines
+        onMaxLinesChosen?(lines)
+        view.resizeLines = nil
+        // The text back, at the new count; re-paged by `maxLines` if it no
+        // longer fits.
+        layout(animated: true)
+        saveAnchor()
+        syncClickThrough()
     }
 
     /// Drop the ⌥ stack once the transcript has been quiet long enough.
@@ -2393,7 +3032,7 @@ final class OverlayController {
             view.action = (L("Save Transcript…", "Button in the caption box: saves the session's recent boxes to a text file"),
                            { [weak self] in self?.saveTranscript() })
         }
-        panel.ignoresMouseEvents = false
+        syncClickThrough()
         tickTranscriptOffer()
         layout()
         show()
@@ -2625,7 +3264,7 @@ final class OverlayController {
         view.secondaryAction = nil
         view.action = nil
         view.progress = nil
-        if !isDraggable { panel.ignoresMouseEvents = true }
+        syncClickThrough()
         guard fading else {
             view.committed = ""
             wearPlayingApp()
@@ -2819,7 +3458,8 @@ final class OverlayController {
     }
 
     private func fadeIfTextIdle() {
-        guard !isDraggable, !holdsFinalCaption, !offersTranscript, panel.alphaValue > 0 else { return }
+        guard !isDraggable, !isHandled, !holdsFinalCaption, !offersTranscript,
+              panel.alphaValue > 0 else { return }
         guard Date().timeIntervalSince(lastTextAt) >= textIdleTimeout else { return }
 
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -2873,7 +3513,9 @@ final class OverlayController {
 
     func resetPosition() {
         anchor = nil
+        anchorsTop = false
         UserDefaults.standard.removeObject(forKey: Self.anchorKey)
+        UserDefaults.standard.removeObject(forKey: Self.anchorTopKey)
         layout()
     }
 
@@ -2927,8 +3569,8 @@ final class OverlayController {
             // Drop the drag state too, or a ⇧ held across the pause leaves the
             // panel catching clicks it will never show anything for.
             isDraggable = false
-            panel.ignoresMouseEvents = true
-            view.showsDragOutline = false
+            syncClickThrough()
+            updateDragOutline()
         }
     }
 
@@ -2960,8 +3602,9 @@ final class OverlayController {
         view.secondary = ""
         view.secondaryTentative = ""
         view.action = action
-        // Clicks reach the box while the button is up, and only then.
-        panel.ignoresMouseEvents = action == nil
+        // Clicks reach the box while the button is up, and only then, unless
+        // the reveal is off and they always do.
+        syncClickThrough()
         // All of it at once, not a word at a time: it is the app talking, and
         // someone reading it wants the whole line, not to watch it typed out.
         boxIsCleared = false
@@ -2980,7 +3623,7 @@ final class OverlayController {
         if view.action != nil {
             view.secondaryAction = nil
             view.action = nil
-            if !isDraggable { panel.ignoresMouseEvents = true }
+            syncClickThrough()
         }
         // The app's name comes back once the box is out of sight, not while
         // the line Subtitles said is still fading under it.

@@ -125,8 +125,6 @@
   "Pause Subtitles": "Sæt Subtitles på pause",
   "Save Transcript…": "Gem udskrift…",
   "Show Overlay In Screen Share / Capture": "Vis undertekster ved skærmdeling/-optagelse",
-  "Fade Away Under Pointer": "Gennemsigtig under markøren",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Peg på boksen for at se igennem den. Hold ⇧ nede for at holde den dækkende",
   "Recent Boxes On ⌥": "Seneste bokse med ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Hold ⌥ nede for at stable de seneste bokse igen. Rul for at se ældre",
   "Reset Overlay Position": "Nulstil underteksternes placering",
@@ -206,9 +204,9 @@
   "%lld pt": "%lld pkt.",
   "Height": "Højde",
   "Lines": "Linjer",
-  "%lld lines": {
-    "one": "%lld linje",
-    "other": "%lld linjer"
+  "Max %lld Lines": {
+    "one": "Maks. %lld linje",
+    "other": "Maks. %lld linjer"
   },
   "Background": "Baggrund",
   "Blur": "Sløring",
@@ -222,8 +220,10 @@
   "Text": "Tekst",
   "Subtitle Box": "Undertekstboks",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hvor mange linjer en boks fylder, før den ryddes og en ny begynder, hvor dækkende baggrunden bag teksten er, og hvor meget billedet under den sløres. Stakken under ⌥ følger disse indstillinger, bare en anelse mindre dækkende.",
-  "Pointer Reveal": "Gennemsigtighed under markøren",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Hvor meget af boksen der forsvinder under markøren, og hvor langt hullet omkring den når. Hold ⇧ nede for at holde boksen dækkende.",
+  "Pointer Reveal and Click-Through": "Gennemsigtighed og klik gennem boksen",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hvor meget af boksen der forsvinder under markøren, og hvor langt hullet omkring den når. Klik går igennem til appen nedenunder. Hold ⇧ nede for at holde boksen dækkende og trække den. Slået fra tager boksen imod klik og kan trækkes uden ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Peg på boksen for at se igennem den og klikke på det, der ligger under. Hold ⇧ nede for at flytte den",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Boksen forbliver dækkende under markøren og tager imod klik. Træk den for at flytte den.",
   "Forget the stack when idle": "Glem stakken ved stilhed",
   "Otherwise the stack is kept until you pause or quit.": "Ellers gemmes stakken, indtil du sætter på pause eller slutter.",
   "Recent Boxes": "Seneste bokse",
@@ -299,7 +299,6 @@
     "one": "Billedet bag baggrunden sløres med %lld punkt.",
     "other": "Billedet bag baggrunden sløres med %lld punkter."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Boksen forbliver dækkende under markøren. Flyt den i stedet: hold ⇧ nede, og træk.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Peg på boksen, så opløses så meget af den, så langt omkring markøren.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ henter intet frem. Færdige bokse forsvinder, når de ryddes.",
   "⌥ brings back the last box.": "⌥ henter den seneste boks frem.",

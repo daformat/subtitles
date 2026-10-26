@@ -119,8 +119,6 @@
   "Resume Subtitles": "Subtitles 재개",
   "Pause Subtitles": "Subtitles 일시 정지",
   "Show Overlay In Screen Share / Capture": "화면 공유 및 녹화에 오버레이 표시",
-  "Fade Away Under Pointer": "포인터를 올리면 투명하게",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "상자에 포인터를 올리면 비쳐 보이고, ⇧ 키를 누르고 있으면 그대로 보입니다",
   "Recent Boxes On ⌥": "⌥ 키로 최근 상자 보기",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "⌥ 키를 누르고 있으면 최근 상자 몇 개가 다시 쌓이고, 스크롤하면 더 이전 상자가 나옵니다",
   "Reset Overlay Position": "오버레이 위치 재설정",
@@ -181,8 +179,8 @@
   "%lld pt": "%lldpt",
   "Height": "높이",
   "Lines": "줄 수",
-  "%lld lines": {
-    "other": "%lld줄"
+  "Max %lld Lines": {
+    "other": "최대 %lld줄"
   },
   "Background": "배경",
   "Blur": "흐림",
@@ -195,8 +193,10 @@
   "Text": "글자",
   "Subtitle Box": "캡션 상자",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "상자가 몇 줄을 채운 뒤 지우고 새로 시작할지, 글자 뒤 배경이 얼마나 불투명할지, 그 아래 화면을 얼마나 흐리게 할지 정합니다. ⌥ 키로 쌓이는 상자도 이 설정을 따르되, 배경이 조금 더 옅습니다.",
-  "Pointer Reveal": "포인터 투명 효과",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "포인터 아래에서 상자가 얼마나 투명해질지, 그 주변 어디까지 비쳐 보일지 정합니다. ⇧ 키를 누르고 있으면 상자가 그대로 보입니다.",
+  "Pointer Reveal and Click-Through": "포인터 투명 효과 및 클릭 통과",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "포인터 아래에서 상자가 얼마나 투명해질지, 그 주변 어디까지 비쳐 보일지 정합니다. 클릭은 아래에 있는 앱으로 전달되며, ⇧ 키를 누르고 있으면 상자가 그대로 보이고 드래그할 수 있습니다. 끄면 상자가 클릭을 받고 ⇧ 키 없이 드래그할 수 있습니다.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "상자에 포인터를 올리면 비쳐 보이고 아래에 있는 것을 클릭할 수 있으며, ⇧ 키를 누른 채 드래그하면 옮길 수 있습니다",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "포인터를 올려도 상자가 그대로 보이고 클릭을 받습니다. 드래그하면 옮길 수 있습니다.",
   "Forget the stack when idle": "조용하면 쌓인 상자 지우기",
   "Otherwise the stack is kept until you pause or quit.": "끄면 일시 정지하거나 종료할 때까지 쌓인 상자가 남아 있습니다.",
   "Recent Boxes": "최근 상자",
@@ -247,7 +247,6 @@
   "The picture behind the pill is softened by %lld points.": {
     "other": "배경 너머의 화면을 %lldpt만큼 흐리게 합니다."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "포인터를 올려도 상자가 그대로 보입니다. 대신 ⇧ 키를 누른 채 드래그하면 옮길 수 있습니다.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "상자에 포인터를 올리면 포인터 주변 이만큼이 이 정도로 투명해집니다.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ 키로 불러올 상자가 없습니다. 지워진 상자는 사라집니다.",
   "⌥ brings back the last box.": "⌥ 키를 누르면 바로 전 상자가 돌아옵니다.",

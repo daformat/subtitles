@@ -125,8 +125,6 @@
   "Pause Subtitles": "Pausa Subtitles",
   "Save Transcript…": "Spara transkribering…",
   "Show Overlay In Screen Share / Capture": "Visa överlägget vid skärmdelning / inspelning",
-  "Fade Away Under Pointer": "Tona bort under pekaren",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Peka på rutan för att se igenom den; håll ned ⇧ så förblir den ogenomskinlig",
   "Recent Boxes On ⌥": "Senaste rutorna med ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Håll ned ⌥ så staplas de senaste rutorna upp igen; rulla för äldre",
   "Reset Overlay Position": "Återställ överläggets position",
@@ -206,9 +204,9 @@
   "%lld pt": "%lld pt",
   "Height": "Höjd",
   "Lines": "Rader",
-  "%lld lines": {
-    "one": "%lld rad",
-    "other": "%lld rader"
+  "Max %lld Lines": {
+    "one": "Max %lld rad",
+    "other": "Max %lld rader"
   },
   "Background": "Bakgrund",
   "Blur": "Oskärpa",
@@ -222,8 +220,10 @@
   "Text": "Text",
   "Subtitle Box": "Undertextruta",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hur många rader en ruta fylls med innan den töms och en ny börjar, hur ogenomskinlig ytan bakom texten är och hur mycket bilden under den mjukas upp. ⌥-högen följer detta, med en något mer genomskinlig yta.",
-  "Pointer Reveal": "Genomsikt under pekaren",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Hur mycket av rutan som försvinner under pekaren, och hur långt hålet runt den sträcker sig. Håll ned ⇧ så förblir rutan ogenomskinlig.",
+  "Pointer Reveal and Click-Through": "Genomsikt och klick genom rutan",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hur mycket av rutan som försvinner under pekaren, och hur långt hålet runt den sträcker sig. Klick går igenom till appen under; håll ned ⇧ så förblir rutan ogenomskinlig och kan dras. Avstängt tar rutan emot klick och kan dras utan ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Peka på rutan för att se igenom den och klicka på det som ligger under; håll ned ⇧ för att flytta den",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Rutan förblir ogenomskinlig under pekaren och tar emot klick. Dra den för att flytta den.",
   "Forget the stack when idle": "Glöm högen vid tystnad",
   "Otherwise the stack is kept until you pause or quit.": "Annars behålls högen tills du pausar eller avslutar.",
   "Recent Boxes": "Senaste rutorna",
@@ -299,7 +299,6 @@
     "one": "Bilden bakom ytan mjukas upp med %lld punkt.",
     "other": "Bilden bakom ytan mjukas upp med %lld punkter."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Rutan förblir ogenomskinlig under pekaren. Flytta den i stället: håll ned ⇧ och dra.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Peka på rutan så löses så här mycket av den upp, så här långt runt pekaren.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ tar inte tillbaka något. Färdiga rutor försvinner när de töms.",
   "⌥ brings back the last box.": "⌥ tar tillbaka den senaste rutan.",

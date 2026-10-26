@@ -124,8 +124,6 @@
   "Resume Subtitles": "Subtitles फिर शुरू करें",
   "Pause Subtitles": "Subtitles रोकें",
   "Show Overlay In Screen Share / Capture": "स्क्रीन शेयर / रिकॉर्डिंग में ओवरले दिखाएँ",
-  "Fade Away Under Pointer": "पॉइंटर के नीचे फीका करें",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "बॉक्स के आर-पार देखने के लिए उस पर पॉइंटर ले जाएँ; ठोस रखने के लिए ⇧ दबाए रखें",
   "Recent Boxes On ⌥": "⌥ पर पिछले बॉक्स",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "पिछले कुछ बॉक्स का ढेर वापस लाने के लिए ⌥ दबाए रखें; पुराने देखने के लिए स्क्रोल करें",
   "Reset Overlay Position": "ओवरले की जगह रीसेट करें",
@@ -186,9 +184,9 @@
   "%lld pt": "%lld pt",
   "Height": "ऊँचाई",
   "Lines": "लाइनें",
-  "%lld lines": {
-    "one": "%lld लाइन",
-    "other": "%lld लाइनें"
+  "Max %lld Lines": {
+    "one": "अधिकतम %lld लाइन",
+    "other": "अधिकतम %lld लाइनें"
   },
   "Background": "बैकग्राउंड",
   "Blur": "धुँधलापन",
@@ -202,8 +200,10 @@
   "Text": "टेक्स्ट",
   "Subtitle Box": "कैप्शन बॉक्स",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "साफ़ होकर नया शुरू करने से पहले बॉक्स कितनी लाइनें भरे, टेक्स्ट के पीछे का बॉक्स कितना ठोस हो, और उसके नीचे की तस्वीर कितनी धुँधली हो। ⌥ वाला ढेर भी यही सेटिंग्ज़ अपनाता है, बस उसका बॉक्स थोड़ा कम ठोस होता है।",
-  "Pointer Reveal": "पॉइंटर के नीचे पारदर्शिता",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "पॉइंटर के नीचे बॉक्स कितना ओझल हो, और उसके आसपास का छेद कितनी दूर तक फैले। बॉक्स को ठोस रखने के लिए ⇧ दबाए रखें।",
+  "Pointer Reveal and Click-Through": "पॉइंटर के नीचे पारदर्शिता और आर-पार क्लिक",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "पॉइंटर के नीचे बॉक्स कितना ओझल हो, और उसके आसपास का छेद कितनी दूर तक फैले। क्लिक नीचे वाले ऐप तक पहुँचते हैं; बॉक्स को ठोस रखने और खींचने के लिए ⇧ दबाए रखें। यह बंद हो तो बॉक्स क्लिक लेता है, और उसे ⇧ के बिना भी खींचा जा सकता है।",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "बॉक्स के आर-पार देखने और नीचे की चीज़ पर क्लिक करने के लिए उस पर पॉइंटर ले जाएँ; हिलाने के लिए ⇧ दबाए रखकर खींचें",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "पॉइंटर के नीचे बॉक्स ठोस रहता है और क्लिक लेता है। उसे हिलाने के लिए बस खींचें।",
   "Forget the stack when idle": "ख़ामोशी के बाद ढेर मिटाएँ",
   "Otherwise the stack is kept until you pause or quit.": "वरना ढेर तब तक रहता है जब तक आप Subtitles को रोकें या बंद न करें।",
   "Recent Boxes": "पिछले बॉक्स",
@@ -257,7 +257,6 @@
     "one": "बॉक्स के पीछे की तस्वीर %lld पॉइंट धुँधली की गई है।",
     "other": "बॉक्स के पीछे की तस्वीर %lld पॉइंट धुँधली की गई है।"
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "पॉइंटर के नीचे बॉक्स ठोस रहता है। उसे हटाना हो तो ⇧ दबाए रखकर खींचें।",
   "Point at the box and this much of it dissolves, this far around the pointer.": "बॉक्स पर पॉइंटर ले जाएँ, तो उसका इतना हिस्सा घुल जाता है, पॉइंटर के आसपास इतनी दूर तक।",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ कुछ वापस नहीं लाता। पूरे हो चुके बॉक्स साफ़ होते ही चले जाते हैं।",
   "⌥ brings back the last box.": "⌥ आख़िरी बॉक्स वापस लाता है।",

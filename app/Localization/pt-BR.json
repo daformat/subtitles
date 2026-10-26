@@ -124,8 +124,6 @@
   "Resume Subtitles": "Retomar Subtitles",
   "Pause Subtitles": "Pausar Subtitles",
   "Show Overlay In Screen Share / Capture": "Mostrar Overlay ao Compartilhar / Gravar a Tela",
-  "Fade Away Under Pointer": "Sumir sob o Ponteiro",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Aponte para o quadro para ver através dele; segure ⇧ para mantê-lo sólido",
   "Recent Boxes On ⌥": "Quadros Recentes no ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Segure ⌥ para empilhar de volta os últimos quadros; role para ver os mais antigos",
   "Reset Overlay Position": "Redefinir Posição do Overlay",
@@ -186,9 +184,9 @@
   "%lld pt": "%lld pt",
   "Height": "Altura",
   "Lines": "Linhas",
-  "%lld lines": {
-    "one": "%lld linha",
-    "other": "%lld linhas"
+  "Max %lld Lines": {
+    "one": "Máx. %lld linha",
+    "other": "Máx. %lld linhas"
   },
   "Background": "Fundo",
   "Blur": "Desfoque",
@@ -202,8 +200,10 @@
   "Text": "Texto",
   "Subtitle Box": "Quadro de Legendas",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Quantas linhas um quadro enche antes de se limpar e começar outro, quão sólido é o fundo atrás do texto e o quanto a imagem por baixo fica desfocada. A pilha do ⌥ segue os mesmos ajustes, com o fundo um pouco mais transparente.",
-  "Pointer Reveal": "Transparência sob o Ponteiro",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Quanto do quadro some sob o ponteiro e até onde vai o buraco em volta dele. Segure ⇧ para manter o quadro sólido.",
+  "Pointer Reveal and Click-Through": "Transparência sob o Ponteiro e Cliques Através",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Quanto do quadro some sob o ponteiro e até onde vai o buraco em volta dele. Os cliques passam para o app de baixo; segure ⇧ para manter o quadro sólido e arrastá-lo. Com a opção desativada, o quadro recebe os cliques e pode ser arrastado sem ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Aponte para o quadro para ver através dele e clicar no que está embaixo; segure ⇧ para movê-lo",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "O quadro continua sólido sob o ponteiro e recebe os cliques. Arraste-o para movê-lo.",
   "Forget the stack when idle": "Esquecer a pilha após silêncio",
   "Otherwise the stack is kept until you pause or quit.": "Se desligado, a pilha fica guardada até você pausar ou encerrar o app.",
   "Recent Boxes": "Quadros Recentes",
@@ -257,7 +257,6 @@
     "one": "A imagem atrás do quadro é desfocada em %lld ponto.",
     "other": "A imagem atrás do quadro é desfocada em %lld pontos."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "O quadro continua sólido sob o ponteiro. Para movê-lo, segure ⇧ e arraste.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Aponte para o quadro e esta parte dele se dissolve, até esta distância do ponteiro.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "O ⌥ não traz nada de volta. Os quadros terminados somem assim que se limpam.",
   "⌥ brings back the last box.": "O ⌥ traz de volta o último quadro.",

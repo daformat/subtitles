@@ -124,8 +124,6 @@
  "Resume Subtitles": "Riattiva Subtitles",
  "Pause Subtitles": "Sospendi Subtitles",
  "Show Overlay In Screen Share / Capture": "Mostra l'overlay in condivisione e registrazione schermo",
- "Fade Away Under Pointer": "Dissolvi sotto il puntatore",
- "Point at the box to see through it; hold ⇧ to keep it solid": "Punta il riquadro per vederci attraverso; tieni premuto ⇧ per lasciarlo opaco",
  "Recent Boxes On ⌥": "Riquadri recenti con ⌥",
  "Hold ⌥ to stack the last few boxes back up; scroll for older": "Tieni premuto ⌥ per riavere in pila gli ultimi riquadri; scorri per i precedenti",
  "Reset Overlay Position": "Ripristina posizione dell'overlay",
@@ -186,9 +184,9 @@
  "%lld pt": "%lld pt",
  "Height": "Altezza",
  "Lines": "Righe",
- "%lld lines": {
-  "one": "%lld riga",
-  "other": "%lld righe"
+ "Max %lld Lines": {
+  "one": "Max %lld riga",
+  "other": "Max %lld righe"
  },
  "Background": "Sfondo",
  "Blur": "Sfocatura",
@@ -202,8 +200,10 @@
  "Text": "Testo",
  "Subtitle Box": "Riquadro dei sottotitoli",
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Quante righe riempie un riquadro prima di svuotarsi e ricominciare, quanto è pieno lo sfondo dietro il testo e quanto viene sfocata l'immagine sotto. La pila di ⌥ segue queste scelte, con uno sfondo un po' meno pieno.",
- "Pointer Reveal": "Dissolvenza sotto il puntatore",
- "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Quanta parte del riquadro scompare sotto il puntatore e quanto si allarga il foro intorno. Tieni premuto ⇧ per lasciare il riquadro opaco.",
+ "Pointer Reveal and Click-Through": "Dissolvenza sotto il puntatore e clic attraverso",
+ "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Quanta parte del riquadro scompare sotto il puntatore e quanto si allarga il foro intorno. I clic passano all'app sottostante; tieni premuto ⇧ per lasciare il riquadro opaco e trascinarlo. Se la disattivi, il riquadro riceve i clic e puoi trascinarlo senza ⇧.",
+ "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Punta il riquadro per vederci attraverso e fare clic su ciò che c'è sotto; tieni premuto ⇧ per spostarlo",
+ "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Il riquadro resta opaco sotto il puntatore e riceve i clic. Trascinalo per spostarlo.",
  "Forget the stack when idle": "Svuota la pila dopo un silenzio",
  "Otherwise the stack is kept until you pause or quit.": "Altrimenti la pila resta finché non sospendi o esci.",
  "Recent Boxes": "Riquadri recenti",
@@ -257,7 +257,6 @@
   "one": "L'immagine dietro lo sfondo è sfocata di %lld punto.",
   "other": "L'immagine dietro lo sfondo è sfocata di %lld punti."
  },
- "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Il riquadro resta opaco sotto il puntatore. Per spostarlo, tieni premuto ⇧ e trascina.",
  "Point at the box and this much of it dissolves, this far around the pointer.": "Punta il riquadro e se ne dissolve questa parte, fin qui intorno al puntatore.",
  "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ non riporta niente. I riquadri finiti spariscono appena si svuotano.",
  "⌥ brings back the last box.": "⌥ riporta l'ultimo riquadro.",

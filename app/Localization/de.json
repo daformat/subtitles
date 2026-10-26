@@ -124,8 +124,6 @@
   "Resume Subtitles": "Subtitles fortsetzen",
   "Pause Subtitles": "Subtitles pausieren",
   "Show Overlay In Screen Share / Capture": "Overlay bei Bildschirmfreigabe / -aufnahme zeigen",
-  "Fade Away Under Pointer": "Unter dem Zeiger ausblenden",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Zeig auf das Feld, um hindurchzusehen; halte ⇧ gedrückt, damit es deckend bleibt",
   "Recent Boxes On ⌥": "Letzte Felder mit ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Halte ⌥ gedrückt, und die letzten Felder stapeln sich wieder auf; scrolle für ältere",
   "Reset Overlay Position": "Overlay-Position zurücksetzen",
@@ -186,9 +184,9 @@
   "%lld pt": "%lld pt",
   "Height": "Höhe",
   "Lines": "Zeilen",
-  "%lld lines": {
-    "one": "%lld Zeile",
-    "other": "%lld Zeilen"
+  "Max %lld Lines": {
+    "one": "Max. %lld Zeile",
+    "other": "Max. %lld Zeilen"
   },
   "Background": "Hintergrund",
   "Blur": "Unschärfe",
@@ -202,8 +200,10 @@
   "Text": "Text",
   "Subtitle Box": "Untertitelfeld",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Wie viele Zeilen ein Feld füllt, bevor es sich leert und ein neues beginnt, wie deckend die Fläche hinter dem Text ist und wie stark das Bild darunter weichgezeichnet wird. Der ⌥-Stapel übernimmt das, mit einer etwas durchscheinenderen Fläche.",
-  "Pointer Reveal": "Durchsicht unter dem Zeiger",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Wie viel vom Feld unter dem Zeiger verschwindet und wie weit das Loch darum reicht. Halte ⇧ gedrückt, damit das Feld deckend bleibt.",
+  "Pointer Reveal and Click-Through": "Durchsicht und Durchklicken unter dem Zeiger",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Wie viel vom Feld unter dem Zeiger verschwindet und wie weit das Loch darum reicht. Klicks gehen an die App darunter; halte ⇧ gedrückt, damit das Feld deckend bleibt, und zieh es. Ausgeschaltet nimmt das Feld Klicks an und lässt sich ohne ⇧ ziehen.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Zeig auf das Feld, um hindurchzusehen und anzuklicken, was darunter liegt; halte ⇧ gedrückt, um es zu verschieben",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Das Feld bleibt unter dem Zeiger deckend und nimmt Klicks an. Zieh es, um es zu verschieben.",
   "Forget the stack when idle": "Stapel bei Stille vergessen",
   "Otherwise the stack is kept until you pause or quit.": "Sonst bleibt der Stapel, bis du pausierst oder die App beendest.",
   "Recent Boxes": "Letzte Felder",
@@ -257,7 +257,6 @@
     "one": "Das Bild hinter der Fläche wird um %lld Punkt weichgezeichnet.",
     "other": "Das Bild hinter der Fläche wird um %lld Punkt weichgezeichnet."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Das Feld bleibt unter dem Zeiger deckend. Verschieb es stattdessen: Halte ⇧ gedrückt und zieh.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Zeig auf das Feld, und so viel davon löst sich auf, so weit um den Zeiger herum.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ holt nichts zurück. Fertige Felder sind weg, sobald sie sich leeren.",
   "⌥ brings back the last box.": "⌥ holt das letzte Feld zurück.",

@@ -119,8 +119,6 @@
  "Resume Subtitles": "恢复 Subtitles",
  "Pause Subtitles": "暂停 Subtitles",
  "Show Overlay In Screen Share / Capture": "在屏幕共享和录屏中显示浮层",
- "Fade Away Under Pointer": "指针移上时淡出",
- "Point at the box to see through it; hold ⇧ to keep it solid": "指针移到字幕块上即可透过它看；按住 ⇧ 则保持不透明",
  "Recent Boxes On ⌥": "用 ⌥ 调出最近的字幕块",
  "Hold ⌥ to stack the last few boxes back up; scroll for older": "按住 ⌥ 叠出最近几个字幕块；滚动可查看更早的",
  "Reset Overlay Position": "重置浮层位置",
@@ -181,8 +179,8 @@
  "%lld pt": "%lld 点",
  "Height": "高度",
  "Lines": "行数",
- "%lld lines": {
-  "other": "%lld 行"
+ "Max %lld Lines": {
+  "other": "最多 %lld 行"
  },
  "Background": "背景",
  "Blur": "模糊",
@@ -195,8 +193,10 @@
  "Text": "文字",
  "Subtitle Box": "字幕块",
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "一个字幕块写满几行后清空重来、文字背后的底板有多不透明、底下的画面模糊到什么程度。⌥ 调出的这一叠也沿用这些设置，只是底板稍淡一些。",
- "Pointer Reveal": "指针下淡出",
- "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "指针下的字幕块透明到什么程度，透明区域向四周延伸多远。按住 ⇧ 可让字幕块保持不透明。",
+ "Pointer Reveal and Click-Through": "指针下淡出与点按穿透",
+ "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "指针下的字幕块透明到什么程度，透明区域向四周延伸多远。点按会穿过字幕块到达下面的 App；按住 ⇧ 可让字幕块保持不透明并拖动它。关闭后，字幕块会接收点按，不按 ⇧ 也能拖动。",
+ "Point at the box to see through it and click what is under it; hold ⇧ to move it": "指针移到字幕块上即可透过它看，并点按下面的内容；按住 ⇧ 拖动即可移动它",
+ "The box stays solid under the pointer and takes clicks. Drag it to move it.": "指针下的字幕块保持不透明，并接收点按。拖动即可移动它。",
  "Forget the stack when idle": "闲置后清空这一叠",
  "Otherwise the stack is kept until you pause or quit.": "否则这一叠会一直保留，直到你暂停或退出。",
  "Recent Boxes": "最近的字幕块",
@@ -247,7 +247,6 @@
  "The picture behind the pill is softened by %lld points.": {
   "other": "底板后面的画面模糊 %lld 点。"
  },
- "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "指针下的字幕块保持不透明。想挪开它：按住 ⇧ 拖动。",
  "Point at the box and this much of it dissolves, this far around the pointer.": "指向字幕块时，指针周围这么大的范围会化开，透明到这个程度。",
  "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ 不会调出任何内容。字幕块一清空就消失了。",
  "⌥ brings back the last box.": "⌥ 会调出上一个字幕块。",

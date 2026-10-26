@@ -1639,6 +1639,12 @@ if useOverlay {
         controller.maxLines = lines
         UserDefaults.standard.set(lines, forKey: Defaults.maxLines)
     }
+    // Lines set by dragging the box's edge: kept, and shown in Settings if
+    // it is open.
+    controller.onMaxLinesChosen = { lines in
+        UserDefaults.standard.set(lines, forKey: Defaults.maxLines)
+        settings.refreshPreview(changed: [.maxLines])
+    }
     settings.historyDepth = { controller.historyDepth }
     settings.onHistoryDepth = { depth in
         controller.historyDepth = depth
@@ -1963,7 +1969,7 @@ var finalCaptionCutShort = false
 
 /// Counts the line's time on screen, the time the pointer spends over it
 /// left out.
-nonisolated(unsafe) var finalCaptionTimer: Timer?
+nonisolated(unsafe) var finalCaptionClock: FrameClock?
 
 /// An expired trial's free window closed: the box says so, over the glow,
 /// which the tap goes on feeding while the recognizer hears nothing more;
@@ -1984,21 +1990,21 @@ func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) 
         action: (L("Buy a License", "Button in the caption box when the trial's free minutes end: opens the store"),
                  { NSWorkspace.shared.open(LicenseController.buyURL) }),
         hint: LF("%@ is in the Subtitles menu.", license.entitlement.menuTitle))
-    finalCaptionTimer?.invalidate()
+    finalCaptionClock?.stop()
     finalCaptionCutShort = false
     var shown: TimeInterval = 0
     var tickedAt = Date()
-    // At frame rate: it moves the bar along the box's bottom edge, the same
-    // bar as the offer to save the transcript, and a coarser tick steps it.
-    let tick: TimeInterval = 1.0 / 60
     overlay.setFinalCaptionProgress(0)
-    let timer = Timer(timeInterval: tick, repeats: true) { timer in
+    // On the display's frames: it moves the bar along the box's bottom edge,
+    // the same bar as the offer to save the transcript, and a coarser tick
+    // steps it.
+    let clock = FrameClock {
         // A pause or a key in the meantime has already settled it.
         guard holdingFinalCaption else {
-            timer.invalidate()
+            finalCaptionClock?.stop()
             return
         }
-        // The clock, not the tick count: a timer that fires late would
+        // The clock, not the tick count: a frame that comes late would
         // otherwise stretch the hold.
         let now = Date()
         if !overlay.isPointerOverBox { shown += now.timeIntervalSince(tickedAt) }
@@ -2007,7 +2013,7 @@ func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) 
         if finalCaptionCutShort { shown = finalCaptionHold }
         overlay.setFinalCaptionProgress(CGFloat(shown / finalCaptionHold))
         guard shown >= finalCaptionHold else { return }
-        timer.invalidate()
+        finalCaptionClock?.stop()
         holdingFinalCaption = false
         guard !isPaused, !license.allowsTranscription else {
             onHeld?()
@@ -2016,9 +2022,8 @@ func endFreeMinutes(on overlay: OverlayController, onHeld: (() -> Void)? = nil) 
         togglePause()
         pausedByLicense = true
     }
-    // In `.common`, so the bar keeps moving while a menu is open.
-    RunLoop.main.add(timer, forMode: .common)
-    finalCaptionTimer = timer
+    if let screen = NSScreen.main { clock.start(on: screen) }
+    finalCaptionClock = clock
 }
 // [/main-edition]
 

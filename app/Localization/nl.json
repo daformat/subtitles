@@ -124,8 +124,6 @@
   "Resume Subtitles": "Hervat Subtitles",
   "Pause Subtitles": "Pauzeer Subtitles",
   "Show Overlay In Screen Share / Capture": "Toon overlay bij scherm delen / opnemen",
-  "Fade Away Under Pointer": "Vervaag onder de aanwijzer",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Wijs het vak aan om erdoorheen te kijken; houd ⇧ ingedrukt om het dekkend te houden",
   "Recent Boxes On ⌥": "Recente vakken met ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Houd ⌥ ingedrukt om de laatste vakken weer op te stapelen; scroll voor oudere",
   "Reset Overlay Position": "Herstel positie van overlay",
@@ -186,9 +184,9 @@
   "%lld pt": "%lld pt",
   "Height": "Hoogte",
   "Lines": "Regels",
-  "%lld lines": {
-    "one": "%lld regel",
-    "other": "%lld regels"
+  "Max %lld Lines": {
+    "one": "Max. %lld regel",
+    "other": "Max. %lld regels"
   },
   "Background": "Achtergrond",
   "Blur": "Vervaging",
@@ -202,8 +200,10 @@
   "Text": "Tekst",
   "Subtitle Box": "Ondertitelvak",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hoeveel regels een vak vult voordat het leegloopt en er een nieuw begint, hoe dekkend de achtergrond achter de tekst is, en hoe sterk het beeld eronder vervaagt. De vakken in de ⌥-stapel nemen dit over, met een net iets minder dekkende achtergrond.",
-  "Pointer Reveal": "Doorkijken met de aanwijzer",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "Hoeveel van het vak onder de aanwijzer verdwijnt, en hoe ver het gat eromheen reikt. Houd ⇧ ingedrukt om het vak dekkend te houden.",
+  "Pointer Reveal and Click-Through": "Doorkijken en doorklikken met de aanwijzer",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hoeveel van het vak onder de aanwijzer verdwijnt, en hoe ver het gat eromheen reikt. Klikken gaan door naar de app eronder; houd ⇧ ingedrukt om het vak dekkend te houden en te slepen. Uitgeschakeld vangt het vak klikken op en sleep je het zonder ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Wijs het vak aan om erdoorheen te kijken en te klikken op wat eronder ligt; houd ⇧ ingedrukt om het te verplaatsen",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Het vak blijft dekkend onder de aanwijzer en vangt klikken op. Sleep het om het te verplaatsen.",
   "Forget the stack when idle": "Wis de stapel bij stilte",
   "Otherwise the stack is kept until you pause or quit.": "Anders blijft de stapel bewaard tot je pauzeert of stopt.",
   "Recent Boxes": "Recente vakken",
@@ -257,7 +257,6 @@
     "one": "Het beeld achter het vak wordt %lld punt vervaagd.",
     "other": "Het beeld achter het vak wordt %lld punten vervaagd."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Het vak blijft dekkend onder de aanwijzer. Wil je erlangs kijken, verplaats het dan: houd ⇧ ingedrukt en sleep.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Wijs het vak aan en zoveel ervan lost op, zo ver rond de aanwijzer.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ haalt niets terug. Afgeronde vakken zijn weg zodra ze verdwijnen.",
   "⌥ brings back the last box.": "⌥ haalt het laatste vak terug.",

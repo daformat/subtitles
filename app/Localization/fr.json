@@ -124,8 +124,6 @@
   "Resume Subtitles": "Reprendre Subtitles",
   "Pause Subtitles": "Mettre Subtitles en pause",
   "Show Overlay In Screen Share / Capture": "Afficher les sous-titres dans les partages et captures d'écran",
-  "Fade Away Under Pointer": "Transparence sous le pointeur",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Pointez le bloc pour voir au travers ; maintenez ⇧ pour le garder opaque",
   "Recent Boxes On ⌥": "Blocs récents avec ⌥",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Maintenez ⌥ pour réafficher les derniers blocs ; faites défiler pour les plus anciens",
   "Reset Overlay Position": "Réinitialiser la position des sous-titres",
@@ -186,9 +184,9 @@
   "%lld pt": "%lld pt",
   "Height": "Hauteur",
   "Lines": "Lignes",
-  "%lld lines": {
-    "one": "%lld ligne",
-    "other": "%lld lignes"
+  "Max %lld Lines": {
+    "one": "%lld ligne max",
+    "other": "%lld lignes max"
   },
   "Background": "Fond",
   "Blur": "Flou",
@@ -202,8 +200,10 @@
   "Text": "Texte",
   "Subtitle Box": "Bloc de sous-titres",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Le nombre de lignes qu'un bloc remplit avant de s'effacer pour laisser place au suivant, l'opacité du fond derrière le texte et le flou de l'image en dessous. La pile ⌥ reprend ces réglages, avec un fond un peu plus transparent.",
-  "Pointer Reveal": "Transparence sous le pointeur",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "À quel point le bloc disparaît sous le pointeur, et jusqu'où s'étend la zone transparente autour. Maintenez ⇧ pour garder le bloc opaque.",
+  "Pointer Reveal and Click-Through": "Transparence sous le pointeur et clic au travers",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "À quel point le bloc disparaît sous le pointeur, et jusqu'où s'étend la zone transparente autour. Les clics le traversent jusqu'à l'app en dessous ; maintenez ⇧ pour garder le bloc opaque et le faire glisser. Si l'option est désactivée, le bloc reçoit les clics et se laisse déplacer sans ⇧.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Pointez le bloc pour voir au travers et cliquer sur ce qui est dessous ; maintenez ⇧ pour le déplacer",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Le bloc reste opaque sous le pointeur et reçoit les clics. Faites-le glisser pour le déplacer.",
   "Forget the stack when idle": "Effacer après un silence",
   "Otherwise the stack is kept until you pause or quit.": "Sinon, la pile est conservée jusqu'à ce que vous mettiez en pause ou quittiez l'app.",
   "Recent Boxes": "Blocs récents",
@@ -257,7 +257,6 @@
     "one": "L'image derrière le fond est floutée de %lld point.",
     "other": "L'image derrière le fond est floutée de %lld points."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Le bloc reste opaque sous le pointeur. Pour le déplacer, maintenez ⇧ et faites-le glisser.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "Pointez le bloc : voici à quel point il se dissout, et jusqu'où autour du pointeur.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ ne fait rien revenir. Les blocs terminés disparaissent dès qu'ils s'effacent.",
   "⌥ brings back the last box.": "⌥ fait revenir le dernier bloc.",

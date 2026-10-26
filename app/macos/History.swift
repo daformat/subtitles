@@ -850,10 +850,10 @@ final class HistoryController {
     private static let fadeHeight: CGFloat = 150
 
     /// Ceiling on the fade at the near edge, there only once the reader has
-    /// scrolled away from the live box. Much shorter than the far one: that edge
-    /// is where the newest boxes are, and the band is a hint that they are just
-    /// out of sight, not an invitation to keep going.
-    private static let nearFadeHeight: CGFloat = 60
+    /// scrolled away from the live box. The far one's: a shorter band was tried,
+    /// to dim less of the newest boxes, and it brought the blur back under them
+    /// so quickly that it read as a hard edge where the top eases off.
+    private static let nearFadeHeight: CGFloat = fadeHeight
 
     private let panel = HistoryPanel()
 
@@ -1564,13 +1564,12 @@ final class HistoryController {
 
     /// Fade each edge that has boxes beyond it — and only those.
     ///
-    /// The far edge carries the tall fade: it is at the top when the stack is
-    /// drawn above the live box and at the bottom when it is drawn below, which
-    /// are the only directions older boxes can be in. The near edge gets a much
-    /// shorter one, and only once the reader has scrolled away from the live
-    /// box, because until then the box against it is the newest, the one being
+    /// The far edge is at the top when the stack is drawn above the live box
+    /// and at the bottom when it is drawn below, which are the only directions
+    /// older boxes can be in. The near edge gets the same band, but only once
+    /// the reader has scrolled away from the live box, because until then the box against it is the newest, the one being
     /// read, and dimming it would be backwards. Scrolled, that edge hides newer
-    /// boxes, and the short band says so without swallowing what is being read.
+    /// boxes, and its band says so.
     ///
     /// Driven by the clip view's bounds notification, so it tracks the wheel
     /// rather than only the moment the stack is built.

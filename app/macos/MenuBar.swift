@@ -522,11 +522,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         share.state = screenShareEnabled() ? .on : .off
         menu.addItem(share)
 
-        let reveal = NSMenuItem(title: L("Fade Away Under Pointer", "Menu switch: the caption box turns see-through where the mouse pointer is over it"),
+        let reveal = NSMenuItem(title: L("Pointer Reveal and Click-Through"),
                                 action: #selector(toggleReveal), keyEquivalent: "")
         reveal.target = self
         reveal.state = revealEnabled() ? .on : .off
-        reveal.toolTip = L("Point at the box to see through it; hold ⇧ to keep it solid")
+        reveal.toolTip = L("Point at the box to see through it and click what is under it; hold ⇧ to move it")
         menu.addItem(reveal)
 
         let history = NSMenuItem(title: L("Recent Boxes On ⌥", "Menu switch: holding the ⌥ key brings back the last few caption boxes"),

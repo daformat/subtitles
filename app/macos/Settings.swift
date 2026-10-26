@@ -140,6 +140,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var body: NSView?
     /// Rows hold their own action closures, so they have to outlive `build`.
     private var rows: [SliderRow] = []
+    private var linesRow: NumberRow?
     /// The screen at the top of the UI pane. Nil while that pane has never been
     /// built, and again after the window closes.
     private var preview: SettingsPreview?
@@ -182,7 +183,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var revealRows: [SliderRow] = []
     private var historyRows: [SliderRow] = []
     /// Governed by the section switch *and* by its own, so it is held apart.
-    private var expiryRow: SecondsRow?
+    private var expiryRow: NumberRow?
     private var expiryToggle: ToggleRow?
     /// Settings ▸ Transcript's offer: its switch, and the slider it dims.
     /// The slider needs the stack to clear too, which is UI's to say.
@@ -225,6 +226,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         window = nil
         rows = []
+        linesRow = nil
         stacks = []
         buttons = []
         body = nil
@@ -391,28 +393,29 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    /// A duration in seconds: a slider for the common range, and a field for
-    /// anything outside it.
+    /// A whole number: a slider for the common range, and a field for anything
+    /// outside it.
     ///
     /// The field is the value, not a readout of the slider. The slider covers
-    /// 20 seconds to 5 minutes, which is the range anyone actually reaches for;
-    /// someone who wants an hour types it, and the slider then sits at its
-    /// nearest end rather than pretending to hold a number it cannot reach.
-    /// Nothing goes under `OverlayController.minHistoryExpiry`, typed or
-    /// stepped: the box offers to save the transcript in the last seconds
-    /// before the stack goes, and needs a quiet spell ahead of that.
-    private final class SecondsRow: NSObject, NSTextFieldDelegate {
-        let title = NSTextField(labelWithString: L("Clear after", "Settings slider label: how long the recent boxes are kept after nothing is said"))
+    /// the range anyone actually reaches for; someone who wants more types it,
+    /// and the slider then sits at its nearest end rather than pretending to
+    /// hold a number it cannot reach. Nothing goes under `floor`, typed or
+    /// stepped, nor over `ceiling`, which is there so a long run of digits
+    /// cannot overflow whoever turns the value into an `Int`.
+    private final class NumberRow: NSObject, NSTextFieldDelegate {
+        let title: NSTextField
         let slider = NSSlider()
         private let field = NSTextField()
         private let stepper = NSStepper()
-        private let unit = NSTextField(labelWithString: L("sec", "Short for seconds, after a number field"))
-        private let trailing = NSStackView()
+        private let unit: NSTextField?
+        private let trailing = NSView()
+        private let floor: Double
+        private let ceiling: Double
         private let apply: (Double) -> Void
 
         /// The value the three controls are showing. Kept so an emptied field can
         /// be put back rather than read as nought.
-        private var seconds: Double
+        private var number: Double
 
         var cells: [NSView] { [title, slider, trailing] }
 
@@ -422,7 +425,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 field.isEnabled = isEnabled
                 stepper.isEnabled = isEnabled
                 title.textColor = isEnabled ? .labelColor : .disabledControlTextColor
-                unit.textColor = isEnabled ? .secondaryLabelColor : .disabledControlTextColor
+                unit?.textColor = isEnabled ? .secondaryLabelColor : .disabledControlTextColor
             }
         }
 
@@ -444,13 +447,21 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             }
         }
 
-        init(seconds: Double, apply: @escaping (Double) -> Void) {
+        /// No `unit` puts the field and stepper on the right margin, where the
+        /// readouts of the slider rows around it sit.
+        init(_ title: String, value: Double, slider range: ClosedRange<Double>,
+             floor: Double, ceiling: Double, unit: String? = nil,
+             apply: @escaping (Double) -> Void) {
+            self.title = NSTextField(labelWithString: title)
+            self.unit = unit.map { NSTextField(labelWithString: $0) }
+            self.floor = floor
+            self.ceiling = ceiling
             self.apply = apply
-            self.seconds = max(seconds.rounded(), OverlayController.minHistoryExpiry)
+            self.number = min(max(value.rounded(), floor), ceiling)
             super.init()
 
-            slider.minValue = OverlayController.minHistoryExpiry
-            slider.maxValue = 300
+            slider.minValue = range.lowerBound
+            slider.maxValue = range.upperBound
             slider.isContinuous = true
             slider.target = self
             slider.action = #selector(sliderMoved)
@@ -462,46 +473,69 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             field.alignment = .right
             field.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
                                                     weight: .regular)
+            field.setAccessibilityLabel(title)
             field.delegate = self
             field.target = self
             field.action = #selector(fieldCommitted)
-            field.widthAnchor.constraint(equalToConstant: 40).isActive = true
+            field.controlSize = .small
 
-            stepper.minValue = OverlayController.minHistoryExpiry
-            stepper.maxValue = 86_400
+            stepper.minValue = floor
+            stepper.maxValue = ceiling
+            stepper.controlSize = .small
             stepper.increment = 1
             stepper.valueWraps = false
             stepper.target = self
             stepper.action = #selector(stepped)
 
-            unit.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-            unit.textColor = .secondaryLabelColor
+            if let unit = self.unit {
+                unit.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+                unit.textColor = .secondaryLabelColor
+            }
 
-            trailing.orientation = .horizontal
-            trailing.spacing = 4
-            trailing.alignment = .centerY
-            trailing.setViews([field, stepper, unit], in: .leading)
-            trailing.widthAnchor.constraint(equalToConstant: readoutWidth).isActive = true
+            // A plain view rather than a stack, held to a slider's height: the
+            // field and stepper stand a few points taller, and a stack would
+            // grow to hold them and leave this row taller than its neighbors.
+            // Centered on it instead, they reach into the row spacing.
+            let views = [field, stepper] + (self.unit.map { [$0] } ?? [])
+            trailing.translatesAutoresizingMaskIntoConstraints = false
+            var constraints = [
+                trailing.widthAnchor.constraint(equalToConstant: readoutWidth),
+                trailing.heightAnchor.constraint(equalToConstant: slider.fittingSize.height),
+                field.widthAnchor.constraint(equalToConstant: 40),
+                field.heightAnchor.constraint(equalToConstant: 19),
+            ]
+            for (index, view) in views.enumerated() {
+                view.translatesAutoresizingMaskIntoConstraints = false
+                trailing.addSubview(view)
+                constraints.append(view.centerYAnchor.constraint(equalTo: trailing.centerYAnchor))
+                if index > 0 {
+                    constraints.append(view.leadingAnchor.constraint(
+                        equalTo: views[index - 1].trailingAnchor, constant: 4))
+                }
+            }
+            constraints.append(self.unit == nil
+                ? stepper.trailingAnchor.constraint(equalTo: trailing.trailingAnchor)
+                : field.leadingAnchor.constraint(equalTo: trailing.leadingAnchor))
+            NSLayoutConstraint.activate(constraints)
 
-            set(self.seconds, notify: false)
-        }
-
-        private static func text(_ seconds: Double) -> String {
-            String(Int(seconds.rounded()))
+            set(number, notify: false)
         }
 
         /// One place where all three controls agree.
         ///
         /// The slider parks at whichever end it can reach and the field keeps the
-        /// real number, so a value over 300 still shows honestly. One under the
-        /// floor is raised to it, and the field shows the floor.
+        /// real number, so a value past the slider still shows honestly. One
+        /// under the floor is raised to it, and the field shows the floor.
         private func set(_ value: Double, notify: Bool = true) {
-            seconds = max(value.rounded(), OverlayController.minHistoryExpiry)
-            field.stringValue = Self.text(seconds)
-            stepper.doubleValue = seconds
-            slider.doubleValue = min(max(seconds, slider.minValue), slider.maxValue)
-            if notify { apply(seconds) }
+            number = min(max(value.rounded(), floor), ceiling)
+            field.stringValue = String(Int(number))
+            stepper.doubleValue = number
+            slider.doubleValue = min(max(number, slider.minValue), slider.maxValue)
+            if notify { apply(number) }
         }
+
+        /// A value changed somewhere else, shown without being applied again.
+        func show(_ value: Double) { set(value, notify: false) }
 
         @objc private func sliderMoved(_ sender: NSSlider) { set(sender.doubleValue) }
 
@@ -511,7 +545,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let typed = sender.stringValue.trimmingCharacters(in: .whitespaces)
             // Cleared and left cleared: put back what was there, rather than
             // reading an empty field as a request for the floor.
-            set(typed.isEmpty ? seconds : sender.doubleValue)
+            set(typed.isEmpty ? number : sender.doubleValue)
         }
 
         /// Committed on losing focus as well as on return, or a number typed and
@@ -830,13 +864,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self.syncPreview(.reveal, changed: [.revealSize])
             })
 
-        let lines = SliderRow(
-            L("Lines", "Settings slider: how many lines of text a caption box holds"), range: 1...5, value: Double(maxLines()), snaps: true,
-            format: { LP("%lld lines", one: "%lld line", Int($0.rounded())) },
-            apply: { [weak self] in
-                self?.onMaxLines?(Int($0.rounded()))
+        // Five on the slider, which is all most screens want; a tall one can
+        // type more. Never under one: a box allowed no lines never fits a word.
+        let lines = NumberRow(
+            L("Lines", "Settings slider: how many lines of text a caption box holds"),
+            value: Double(maxLines()), slider: 1...5, floor: 1, ceiling: 99) { [weak self] in
+                self?.onMaxLines?(Int($0))
                 self?.syncPreview(.lines, changed: [.maxLines])
-            })
+            }
+        linesRow = lines
 
         let background = SliderRow(
             L("Background", "Settings slider: how solid the box behind the caption text is"), range: 0...1, value: Double(boxOpacity()),
@@ -890,11 +926,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.dimness, changed: [.historyTextOpacity])
             })
 
-        rows = [lines, background, blur, opacity, width, height, depth, dimness]
+        rows = [background, blur, opacity, width, height, depth, dimness]
         // The labels' column, as wide as the widest label in the app's
         // language and never narrower than English needs, so the sliders
         // still line up from one section to the next.
-        let titles = rows.map(\.title) + [NSTextField(labelWithString: L("Clear after")),
+        let titles = rows.map(\.title) + [lines.title, NSTextField(labelWithString: L("Clear after")),
                                           NSTextField(labelWithString: Self.offerDurationTitle)]
         Self.labelWidth = max(84, ceil(titles.map(\.fittingSize.width).max() ?? 0))
 
@@ -921,9 +957,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         revealSwitch.state = revealEnabled() ? .on : .off
         revealRows = [opacity, width, height]
 
-        section(L("Pointer Reveal", "Settings section: the box turning see-through under the mouse pointer"),
+        section(L("Pointer Reveal and Click-Through", "Settings section and menu switch: the box turning see-through under the mouse pointer, and clicks passing through it to the app underneath"),
                 L("How much of the box disappears under the pointer, and how far the "
-                + "hole around it reaches. Hold ⇧ to keep the box solid."),
+                + "hole around it reaches. Clicks go through to the app underneath; "
+                + "hold ⇧ to keep the box solid and drag it. Turned off, the box "
+                + "takes clicks and drags without ⇧."),
                 Self.grid(revealRows.map(\.cells)), revealSwitch)
         syncRevealEnabled()
         historySwitch.target = self
@@ -931,7 +969,15 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         historySwitch.state = historyEnabled() ? .on : .off
         historyRows = [depth, dimness]
 
-        let expiry = SecondsRow(seconds: historyExpiry()) { [weak self] in
+        // 20 seconds to 5 minutes on the slider; someone who wants an hour
+        // types it. Never under `minHistoryExpiry`: the box offers to save the
+        // transcript in the last seconds before the stack goes, and needs a
+        // quiet spell ahead of that.
+        let expiry = NumberRow(
+            L("Clear after", "Settings slider label: how long the recent boxes are kept after nothing is said"),
+            value: historyExpiry(), slider: OverlayController.minHistoryExpiry...300,
+            floor: OverlayController.minHistoryExpiry, ceiling: 86_400,
+            unit: L("sec", "Short for seconds, after a number field")) { [weak self] in
             self?.onHistoryExpiry?($0)
             self?.syncPreview(.expiry, changed: [.historyExpiry])
         }
@@ -1499,6 +1545,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// window is open — what follows the style through `onStyleChange` is
     /// not in it. `changed` names the field the menu changed, if one did.
     func refreshPreview(changed: Set<PreviewStyle.Field> = []) {
+        linesRow?.show(Double(maxLines()))
         revealSwitch.state = revealEnabled() ? .on : .off
         syncRevealEnabled()
         historySwitch.state = historyEnabled() ? .on : .off
@@ -1583,6 +1630,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 8
         grid.columnSpacing = 10
+        // Centered, not the default top: a number field and its stepper stand
+        // taller than a slider, and would otherwise hang below it.
+        grid.yPlacement = .center
         grid.column(at: 0).xPlacement = .trailing
         // Wide enough for the longest label, and fixed rather than sized to
         // content so the sliders line up across sections that do not share a

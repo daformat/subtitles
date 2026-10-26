@@ -119,8 +119,6 @@
  "Resume Subtitles": "Subtitles を再開",
  "Pause Subtitles": "Subtitles を一時停止",
  "Show Overlay In Screen Share / Capture": "画面共有・収録時もオーバーレイを表示",
- "Fade Away Under Pointer": "ポインタの下を透かす",
- "Point at the box to see through it; hold ⇧ to keep it solid": "ボックスにポインタを置くと透けて見えます。⇧ を押している間は透けません",
  "Recent Boxes On ⌥": "⌥ で直近のボックスを表示",
  "Hold ⌥ to stack the last few boxes back up; scroll for older": "⌥ を押し続けると直近のボックスが積み重なって戻ります。スクロールでさらに前へ",
  "Reset Overlay Position": "オーバーレイの位置をリセット",
@@ -181,8 +179,8 @@
  "%lld pt": "%lld pt",
  "Height": "高さ",
  "Lines": "行数",
- "%lld lines": {
-  "other": "%lld 行"
+ "Max %lld Lines": {
+  "other": "最大 %lld 行"
  },
  "Background": "背景の濃さ",
  "Blur": "ぼかし",
@@ -195,8 +193,10 @@
  "Text": "文字の濃さ",
  "Subtitle Box": "字幕ボックス",
  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "ボックスが何行で埋まり、消えて次に移るか。文字の後ろのボックスをどれだけ濃くするか。その下の画面をどれだけぼかすか。⌥ のスタックもこれに従い、ボックスはひと回り淡く表示されます。",
- "Pointer Reveal": "ポインタで透かす",
- "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "ポインタの下でボックスがどれだけ消えるか、その穴がどこまで広がるか。⇧ を押している間は、ボックスは透けません。",
+ "Pointer Reveal and Click-Through": "ポインタで透かす・クリックを通す",
+ "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "ポインタの下でボックスがどれだけ消えるか、その穴がどこまで広がるか。クリックは下のアプリに届きます。⇧ を押している間はボックスが透けず、ドラッグで動かせます。オフにすると、ボックスがクリックを受け取り、⇧ なしでドラッグできます。",
+ "Point at the box to see through it and click what is under it; hold ⇧ to move it": "ボックスにポインタを置くと透けて見え、下にあるものをクリックできます。⇧ を押したままドラッグすると動かせます",
+ "The box stays solid under the pointer and takes clicks. Drag it to move it.": "ポインタを置いてもボックスは透けず、クリックを受け取ります。ドラッグして動かせます。",
  "Forget the stack when idle": "話が途切れたらスタックを消去",
  "Otherwise the stack is kept until you pause or quit.": "オフにすると、一時停止か終了までスタックを保持します。",
  "Recent Boxes": "直近のボックス",
@@ -247,7 +247,6 @@
  "The picture behind the pill is softened by %lld points.": {
   "other": "下地の後ろの映像を %lld ポイントぼかしています。"
  },
- "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "ポインタを置いてもボックスは透けません。動かすときは ⇧ を押したままドラッグします。",
  "Point at the box and this much of it dissolves, this far around the pointer.": "ボックスにポインタを置くと、そのまわりのこの範囲が、これだけ透けます。",
  "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ では何も戻りません。終わったボックスは、消えたらそれきりです。",
  "⌥ brings back the last box.": "⌥ で直前のボックスが戻ります。",

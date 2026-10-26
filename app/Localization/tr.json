@@ -122,8 +122,6 @@
   "Resume Subtitles": "Subtitles'ı Sürdür",
   "Pause Subtitles": "Subtitles'ı Duraklat",
   "Show Overlay In Screen Share / Capture": "Kaplamayı Ekran Paylaşımında / Kayıtta Göster",
-  "Fade Away Under Pointer": "İmlecin Altında Saydamlaş",
-  "Point at the box to see through it; hold ⇧ to keep it solid": "Arkasını görmek için imleci kutunun üzerine getirin; opak kalması için ⇧ tuşunu basılı tutun",
   "Recent Boxes On ⌥": "⌥ ile Son Kutular",
   "Hold ⌥ to stack the last few boxes back up; scroll for older": "Son birkaç kutuyu yeniden dizmek için ⌥ tuşunu basılı tutun; eskiler için kaydırın",
   "Reset Overlay Position": "Kaplama Konumunu Sıfırla",
@@ -185,9 +183,9 @@
   "%lld pt": "%lld pt",
   "Height": "Yükseklik",
   "Lines": "Satır",
-  "%lld lines": {
-    "one": "%lld satır",
-    "other": "%lld satır"
+  "Max %lld Lines": {
+    "one": "En fazla %lld satır",
+    "other": "En fazla %lld satır"
   },
   "Background": "Zemin",
   "Blur": "Bulanıklık",
@@ -201,8 +199,10 @@
   "Text": "Yazı",
   "Subtitle Box": "Altyazı Kutusu",
   "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Bir kutunun temizlenip yenisine geçmeden önce kaç satır dolduracağı, yazının arkasındaki zeminin ne kadar opak olacağı ve altında kalan görüntünün ne kadar bulanıklaşacağı. ⌥ yığını da bu ayarları izler, zemini biraz daha saydam olarak.",
-  "Pointer Reveal": "İmleç Altında Saydamlık",
-  "How much of the box disappears under the pointer, and how far the hole around it reaches. Hold ⇧ to keep the box solid.": "İmlecin altında kutunun ne kadar kaybolacağı ve imlecin çevresindeki boşluğun ne kadar genişleyeceği. Kutunun opak kalması için ⇧ tuşunu basılı tutun.",
+  "Pointer Reveal and Click-Through": "İmleç Altında Saydamlık ve Tıklama Geçişi",
+  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "İmlecin altında kutunun ne kadar kaybolacağı ve imlecin çevresindeki boşluğun ne kadar genişleyeceği. Tıklamalar alttaki uygulamaya geçer; kutunun opak kalması ve sürüklenmesi için ⇧ tuşunu basılı tutun. Kapalıyken kutu tıklamaları alır ve ⇧ olmadan sürüklenir.",
+  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Arkasını görmek ve altındakine tıklamak için imleci kutunun üzerine getirin; taşımak için ⇧ tuşunu basılı tutun",
+  "The box stays solid under the pointer and takes clicks. Drag it to move it.": "Kutu imlecin altında opak kalır ve tıklamaları alır. Taşımak için sürükleyin.",
   "Forget the stack when idle": "Sessizlikte yığını unut",
   "Otherwise the stack is kept until you pause or quit.": "Kapalıyken yığın, siz duraklatana ya da çıkana kadar saklanır.",
   "Recent Boxes": "Son Kutular",
@@ -255,7 +255,6 @@
     "one": "Zeminin arkasındaki görüntü %lld punto bulanıklaştırılır.",
     "other": "Zeminin arkasındaki görüntü %lld punto bulanıklaştırılır."
   },
-  "The box stays solid under the pointer. Move it instead: hold ⇧ and drag.": "Kutu imlecin altında opak kalır. Onun yerine taşıyabilirsiniz: ⇧ tuşunu basılı tutup sürükleyin.",
   "Point at the box and this much of it dissolves, this far around the pointer.": "İmleci kutunun üzerine getirin: imlecin çevresinde bu genişlikte bir alan, bu oranda eriyip dağılır.",
   "⌥ brings nothing back. Finished boxes are gone once they clear.": "⌥ hiçbir şeyi geri getirmez. Biten kutular temizlenince kaybolur.",
   "⌥ brings back the last box.": "⌥ son kutuyu geri getirir.",
