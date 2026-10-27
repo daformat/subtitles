@@ -4,6 +4,21 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.20.0 · 2026-10-27
+
+- **Copy a box's text.** A Copy button shows at the top end of the box
+  while the pointer is over it and the box takes clicks: with ⇧ or ⌥
+  held, or with Pointer Reveal and Click-Through off. One click puts the
+  box's text on the clipboard, with the other language under it when both
+  are shown, and the button says Copied. The words around it fade out so
+  it stands clear of them, and with a name tab it sits level with the tab
+  instead.
+- **Copy from the ⌥ stack.** Each box in the stack shows the same button
+  while the pointer is over it.
+- **The search pill brightens.** Under the pointer, the ⌥F search pill's
+  symbol, placeholder and hint come up a step, as the Copy button's
+  symbol and word do.
+
 ## 1.19.0 · 2026-10-27
 
 - **Line up the ⌥ stack.** Settings ▸ UI ▸ Recent Boxes has a new Align
