@@ -396,5 +396,7 @@
     "other": "Den gratis prøveperioden varer i %lld dager og starter med de første undertekstene."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transkriberer lyden Macen spiller av, slik at appen kan vise undertekster i sanntid.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkriberer det mikrofonen hører når du velger den som kilde, slik at appen kan vise undertekster i sanntid."
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkriberer det mikrofonen hører når du velger den som kilde, slik at appen kan vise undertekster i sanntid.",
+  "Copy": "Kopier",
+  "Copied": "Kopiert"
 }

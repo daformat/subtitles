@@ -396,5 +396,7 @@
     "other": "Din kostnadsfria provperiod varar i %lld dagar och börjar med första textningen."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transkriberar ljudet som din Mac spelar upp för att kunna visa undertexter i realtid.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkriberar det mikrofonen hör när du väljer den som källa, för att kunna visa undertexter i realtid."
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkriberar det mikrofonen hör när du väljer den som källa, för att kunna visa undertexter i realtid.",
+  "Copy": "Kopiera",
+  "Copied": "Kopierat"
 }

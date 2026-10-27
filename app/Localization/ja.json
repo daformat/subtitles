@@ -380,5 +380,7 @@
  "Show in Finder": "Finderに表示",
  "Format": "フォーマット",
  "Last Used Format": "前回使用したフォーマット",
- "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "「書き起こしを保存…」で最初に選ばれ、「確認せずに保存」で使われる形式です。「前回使用したフォーマット」は前の書き起こしの形式で、初回は「標準テキスト」です。"
+ "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "「書き起こしを保存…」で最初に選ばれ、「確認せずに保存」で使われる形式です。「前回使用したフォーマット」は前の書き起こしの形式で、初回は「標準テキスト」です。",
+ "Copy": "コピー",
+ "Copied": "コピーしました"
 }

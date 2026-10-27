@@ -380,5 +380,7 @@
   "Show in Finder": "Finder에서 보기",
   "Format": "포맷",
   "Last Used Format": "마지막으로 사용한 포맷",
-  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "대본 저장…이 먼저 제안하고 묻지 않고 저장이 사용하는 포맷입니다. 마지막으로 사용한 포맷은 이전 대본의 포맷이며, 처음에는 일반 텍스트입니다."
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "대본 저장…이 먼저 제안하고 묻지 않고 저장이 사용하는 포맷입니다. 마지막으로 사용한 포맷은 이전 대본의 포맷이며, 처음에는 일반 텍스트입니다.",
+  "Copy": "복사",
+  "Copied": "복사됨"
 }

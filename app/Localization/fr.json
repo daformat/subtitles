@@ -396,5 +396,7 @@
   "Show in Finder": "Afficher dans le Finder",
   "Format": "Format",
   "Last Used Format": "Dernier format utilisé",
-  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Ce que propose d'abord Enregistrer la transcription…, et ce qu'écrit Enregistrer sans demander. Dernier format utilisé est celui de la transcription précédente, Texte brut la première fois."
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Ce que propose d'abord Enregistrer la transcription…, et ce qu'écrit Enregistrer sans demander. Dernier format utilisé est celui de la transcription précédente, Texte brut la première fois.",
+  "Copy": "Copier",
+  "Copied": "Copié"
 }

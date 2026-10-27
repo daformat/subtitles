@@ -428,5 +428,7 @@
  "Show in Finder": "Показать в Finder",
  "Format": "Формат",
  "Last Used Format": "Последний формат",
- "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Что «Сохранить расшифровку…» предлагает первым и в чём сохраняет «Сохранять без вопроса». «Последний формат» означает формат предыдущей расшифровки, в первый раз «Простой текст»."
+ "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Что «Сохранить расшифровку…» предлагает первым и в чём сохраняет «Сохранять без вопроса». «Последний формат» означает формат предыдущей расшифровки, в первый раз «Простой текст».",
+ "Copy": "Копировать",
+ "Copied": "Скопировано"
 }

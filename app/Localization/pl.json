@@ -428,5 +428,7 @@
     "other": "Bezpłatny okres próbny trwa %lld dnia i zaczyna się wraz z napisami."
   },
   "InfoPlist|NSAudioCaptureUsageDescription": "Subtitles transkrybuje dźwięk odtwarzany przez Twojego Maca, aby wyświetlać napisy w czasie rzeczywistym.",
-  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkrybuje to, co słyszy mikrofon, gdy wybierzesz go jako źródło, aby wyświetlać napisy w czasie rzeczywistym."
+  "InfoPlist|NSMicrophoneUsageDescription": "Subtitles transkrybuje to, co słyszy mikrofon, gdy wybierzesz go jako źródło, aby wyświetlać napisy w czasie rzeczywistym.",
+  "Copy": "Kopiuj",
+  "Copied": "Skopiowano"
 }

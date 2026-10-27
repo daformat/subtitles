@@ -346,6 +346,66 @@ final class SubtitleView: NSView {
     @objc private func pressAction() { action?.press() }
     @objc private func pressSecondaryAction() { secondaryAction?.press() }
 
+    // MARK: Copy
+
+    /// The Copy button at the box's top end, shown while the controller says
+    /// so: while the pointer is over a box that takes clicks.
+    private lazy var copyPill: CopyPill = {
+        let pill = CopyPill(look: copyLook)
+        pill.text = { [weak self] in self?.copyText ?? "" }
+        addSubview(pill)
+        return pill
+    }()
+
+    private var copyLook: CopyPill.Look {
+        CopyPill.Look(fontSize: fontSize, fill: backgroundOpacity, textOpacity: 1,
+                      blur: backdrop?.radius ?? Pill.backdropBlur,
+                      tabHeight: iconRoom.top > 0 ? iconRoom.top : nil)
+    }
+
+    var showsCopy = false {
+        didSet {
+            guard showsCopy != oldValue else { return }
+            if showsCopy { layoutCopyPill() }
+            copyPill.show(showsCopy)
+            needsDisplay = true
+        }
+    }
+
+    /// Where the text fades out around the Copy button: while it shows on the
+    /// box, not while it floats beside a name tab, clear of the text.
+    private var copyFadeHole: NSRect? {
+        showsCopy && iconRoom.top == 0 ? copyPill.frame : nil
+    }
+
+    /// What Copy puts on the clipboard: the caption as it reads now, and the
+    /// other language under it when both are shown.
+    var copyText: String {
+        let caption = [committed, tentative].filter { !$0.isEmpty }.joined(separator: " ")
+        let under = [secondary, secondaryTentative].filter { !$0.isEmpty }.joined(separator: " ")
+        return [caption, under].filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// Whether the pointer is on the Copy button while it shows: the one
+    /// place a box held under ⌥ catches the click.
+    var isPointerOnCopy: Bool {
+        guard showsCopy, let point = pointerInView else { return false }
+        return copyPill.frame.contains(point)
+    }
+
+    /// The pointer on the Copy button brings its word up to full strength.
+    func syncCopyHover() {
+        let on = isPointerOnCopy
+        if showsCopy || !on { copyPill.isHovered = on }
+    }
+
+    private func layoutCopyPill() {
+        copyPill.look = copyLook
+        copyPill.frame = Pill.copyFrame(size: copyPill.pillSize, in: boxRect, room: iconRoom,
+                                        fontSize: fontSize, firstLine: iconRoom == Pill.IconRoom(),
+                                        rtl: isRightToLeft, lift: Self.pad - 0.5)
+    }
+
     // MARK: VoiceOver
 
     /// Whether VoiceOver finds the box and reads what it says. Off for the
@@ -411,6 +471,7 @@ final class SubtitleView: NSView {
 
     override func layout() {
         super.layout()
+        if showsCopy { layoutCopyPill() }
         guard !actionButtons.isEmpty else { return }
         let text = Pill.textRect(in: boxRect, room: iconRoom)
         // Laid from the trailing edge inwards, so `action`'s button keeps the
@@ -563,7 +624,12 @@ final class SubtitleView: NSView {
     /// How solid the pill behind the text is. Zero is a legitimate setting —
     /// bare text over the picture, the way some players draw subtitles.
     var backgroundOpacity = SubtitleView.defaultBackgroundOpacity {
-        didSet { if backgroundOpacity != oldValue { needsDisplay = true } }
+        didSet {
+            guard backgroundOpacity != oldValue else { return }
+            needsDisplay = true
+            // The Copy button wears the same fill.
+            needsLayout = true
+        }
     }
 
     static let defaultBackgroundOpacity: CGFloat = 0.72
@@ -862,11 +928,29 @@ final class SubtitleView: NSView {
             ring.stroke()
         }
 
+        // What the Copy button sits on, in a layer of its own while it shows,
+        // so the glow around it takes that and not the pill: the header row
+        // when there is one, and only it; the text when there is not. Closed
+        // before the reveal's: defers run last first.
+        let fadeHole = copyFadeHole
+        let fadesHeader = iconRoom.inside > 0
+        if fadeHole != nil { ctx?.beginTransparencyLayer(auxiliaryInfo: nil) }
+        defer {
+            if let ctx, let fadeHole, !fadesHeader {
+                Pill.eraseGlow(around: fadeHole, in: ctx)
+                ctx.endTransparencyLayer()
+            }
+        }
+
         // Inside the transparency layer with the rest, so the reveal opens
         // through the icon as it does through the text.
         if let icon {
             Pill.draw(icon: icon, name: appName, style: iconStyle, on: box,
                       size: fontSize, fill: backgroundOpacity, rtl: rtl, scale: scale, filled: false)
+        }
+        if let ctx, let fadeHole, fadesHeader {
+            Pill.eraseGlow(around: fadeHole, in: ctx)
+            ctx.endTransparencyLayer()
         }
         let textRect = captionRect(for: text)
         if resizeVeil > 0 {
@@ -1369,7 +1453,7 @@ final class OverlayController {
     private func syncClickThrough() {
         let catches = !isSuppressed
             && (isDraggable || isHandled || view.action != nil
-                || (!isRevealEnabled && panel.alphaValue > 0))
+                || (!isRevealEnabled && panel.alphaValue > 0) || view.isPointerOnCopy)
         if panel.ignoresMouseEvents == catches { panel.ignoresMouseEvents = !catches }
     }
 
@@ -2017,6 +2101,7 @@ final class OverlayController {
         tickRevealLevel()
         updateMask()
         updateDragOutline()
+        updateCopyButton()
         tickAudioBorealis()
         tickTranscriptOffer()
         tickFrameEase()
@@ -2078,6 +2163,7 @@ final class OverlayController {
             // The live box resizes on every word; the stack rides along with it.
             history.reposition(anchor: panel.frame, centreX: boxCentreX)
         }
+        history.updateHover()
     }
 
     /// One frame of the glow: read the meter, advance the driver, paint.
@@ -2894,6 +2980,21 @@ final class OverlayController {
         let edge: SubtitleView.ResizeEdge? = resizable ? (anchorsTop ? .bottom : .top) : nil
         if view.resizableEdge != edge { view.resizableEdge = edge }
         view.refreshCursor()
+    }
+
+    /// The Copy button, while the pointer is over a box that takes clicks:
+    /// with ⇧ or ⌥ held, or click-through off. Not on a box with a button of
+    /// its own, nor while it is being dragged or resized. Under ⌥ alone the
+    /// box still lets clicks through, except on the button itself.
+    private func updateCopyButton() {
+        let flags = NSEvent.modifierFlags
+        let takesClicks = flags.contains(.shift) || flags.contains(.option) || !isRevealEnabled
+        let wanted = takesClicks && !isSuppressed && !isHandled && panel.alphaValue > 0
+            && view.action == nil && panel.frame.contains(NSEvent.mouseLocation)
+            && !view.copyText.isEmpty
+        if view.showsCopy != wanted { view.showsCopy = wanted }
+        view.syncCopyHover()
+        syncClickThrough()
     }
 
     /// How far the veil over the text has got, 0 to 1, before easing.

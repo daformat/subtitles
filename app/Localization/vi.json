@@ -380,5 +380,7 @@
   "Show in Finder": "Hiển thị trong Finder",
   "Format": "Định dạng",
   "Last Used Format": "Định dạng dùng gần nhất",
-  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Định dạng “Lưu bản ghi…” đề xuất trước và “Lưu mà không hỏi” sử dụng. “Định dạng dùng gần nhất” là định dạng của bản ghi trước, lần đầu là “Văn bản thường”."
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Định dạng “Lưu bản ghi…” đề xuất trước và “Lưu mà không hỏi” sử dụng. “Định dạng dùng gần nhất” là định dạng của bản ghi trước, lần đầu là “Văn bản thường”.",
+  "Copy": "Sao chép",
+  "Copied": "Đã sao chép"
 }

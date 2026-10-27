@@ -334,6 +334,41 @@ final class HistoryPillView: NSView {
     /// Where the box was last put sideways — see `place`.
     private(set) var placement: BoxPlacement?
 
+    /// The Copy button at the box's top end, while the pointer is over it.
+    private lazy var copyPill: CopyPill = {
+        let pill = CopyPill(look: CopyPill.Look(fontSize: style.fontSize, fill: style.fill,
+                                                textOpacity: style.textOpacity, blur: style.blur,
+                                                tabHeight: room.top > 0 ? room.top : nil))
+        pill.text = { [weak self] in
+            guard let self else { return "" }
+            return [self.entry.text, self.entry.under].filter { !$0.isEmpty }.joined(separator: "\n")
+        }
+        addSubview(pill)
+        return pill
+    }()
+
+    var showsCopy = false {
+        didSet {
+            guard showsCopy != oldValue else { return }
+            if showsCopy { layoutCopyPill() }
+            copyPill.show(showsCopy)
+            face.needsDisplay = true
+        }
+    }
+
+    private func layoutCopyPill() {
+        copyPill.frame = Pill.copyFrame(size: copyPill.pillSize,
+                                        in: Pill.pillRect(in: bounds, pad: 0, room: room),
+                                        room: room, fontSize: style.fontSize,
+                                        firstLine: room == Pill.IconRoom(), rtl: isRightToLeft)
+    }
+
+    /// Whether `point`, in the superview's coordinates, is on the Copy button,
+    /// which brings its word up to full strength.
+    func syncCopyHover(at point: NSPoint) {
+        copyPill.isHovered = showsCopy && copyPill.frame.contains(convert(point, from: superview))
+    }
+
     /// Put the box at `placement`, against a live box whose centre is at
     /// `centreX` in the superview's coordinates.
     func place(_ placement: BoxPlacement, centreX: CGFloat, y: CGFloat, height: CGFloat) {
@@ -465,6 +500,7 @@ final class HistoryPillView: NSView {
         super.layout()
         blur.frame = bounds
         face.frame = bounds
+        if showsCopy { layoutCopyPill() }
         blur.radius = style.blur
         // No pill, no blur: at zero the setting says bare text over the picture.
         // The pill only, not the icon's room around it.
@@ -492,10 +528,28 @@ final class HistoryPillView: NSView {
             Pill.outline(pill: pill, style: style.iconStyle, icon: entry.icon != nil,
                          name: entry.name, size: style.fontSize, rtl: rtl, scale: scale)
         }
+        // What the Copy button sits on, in a layer of its own while it shows,
+        // so the glow around it takes that and not the pill: the header row
+        // when there is one, and only it; the text when there is not. Not
+        // beside a name tab, where it is clear of both.
+        let ctx = NSGraphicsContext.current?.cgContext
+        let fadeHole = showsCopy && room.top == 0 ? copyPill.frame : nil
+        let fadesHeader = room.inside > 0
+        if fadeHole != nil { ctx?.beginTransparencyLayer(auxiliaryInfo: nil) }
+        defer {
+            if let ctx, let fadeHole, !fadesHeader {
+                Pill.eraseGlow(around: fadeHole, in: ctx)
+                ctx.endTransparencyLayer()
+            }
+        }
         // At full strength, unlike the text — see `Pill.draw(icon:...)`.
         if let icon = entry.icon {
             Pill.draw(icon: icon, name: entry.name, style: style.iconStyle, on: pill,
                       size: style.fontSize, fill: style.fill, rtl: rtl, scale: scale)
+        }
+        if let ctx, let fadeHole, fadesHeader {
+            Pill.eraseGlow(around: fadeHole, in: ctx)
+            ctx.endTransparencyLayer()
         }
         let textRect = Pill.textRect(in: pill, room: room)
         attributed.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
@@ -511,7 +565,7 @@ final class HistoryPillView: NSView {
 
 /// The face of a pill — its fill and whatever sits on it — drawn over its blur
 /// by whichever pill owns it.
-private final class PillFace: NSView {
+final class PillFace: NSView {
     var drawing: ((NSRect) -> Void)?
 
     override func draw(_ dirtyRect: NSRect) {
@@ -618,6 +672,12 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
 
     var text: String { field.stringValue }
 
+    /// The pointer is on the pill: the symbol, the placeholder and the hint
+    /// come up a step. Polled by the controller with the rest of the stack.
+    var isHovered = false {
+        didSet { if isHovered != oldValue { apply(style: style) } }
+    }
+
     init(style: HistoryStyle) {
         self.style = style
         blur = BackdropBlurView(blending: style.backdrop)
@@ -687,17 +747,19 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         field.font = font
         // In the boxes' ink, which follows the theme the way the fill does.
         field.textColor = Pill.ink.withAlphaComponent(style.textOpacity)
+        // A step stronger under the pointer.
+        let lift: CGFloat = isHovered ? 0.25 : 0
         field.placeholderAttributedString = NSAttributedString(
             string: L("Search", "Placeholder in the search field over the recent boxes"), attributes: [
                 .font: font,
-                .foregroundColor: Pill.ink.withAlphaComponent(style.textOpacity * 0.5),
+                .foregroundColor: Pill.ink.withAlphaComponent(style.textOpacity * (0.5 + lift)),
             ])
-        icon.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.75)
+        icon.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * (0.75 + lift))
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                 weight: .semibold)
-        clearButton.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.75)
+        clearButton.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * (0.75 + lift))
         hint.font = Pill.font(ofSize: (fontSize * 0.85).rounded())
-        hint.textColor = Pill.ink.withAlphaComponent(style.textOpacity * 0.5)
+        hint.textColor = Pill.ink.withAlphaComponent(style.textOpacity * (0.5 + lift))
         clearButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                        weight: .semibold)
         needsLayout = true
@@ -1204,6 +1266,35 @@ final class HistoryController {
             }
         }
     }
+
+    /// Show the Copy button on the box under the pointer, and on no other.
+    /// Polled with the frames, as the stack's following of the live box is:
+    /// the boxes move under a still pointer as often as the other way round.
+    func updateHover() {
+        var hit: HistoryPillView?
+        if isVisible, !isParked, !scroll.isHidden {
+            let inScroll = scroll.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation),
+                                          from: nil)
+            if scroll.bounds.contains(inScroll) {
+                let inDocument = document.convert(inScroll, from: scroll)
+                hit = stackPills.first { $0.frame.contains(inDocument) }
+            }
+        }
+        // The search pill brightens under the pointer as the Copy buttons do.
+        let inRoot = root.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        search.isHovered = isVisible && !isParked && search.frame.contains(inRoot)
+        if hit !== hovered {
+            hovered?.showsCopy = false
+            hit?.showsCopy = true
+            hovered = hit
+        }
+        if let hit {
+            hit.syncCopyHover(at: document.convert(inRoot, from: root))
+        }
+    }
+
+    /// The box showing its Copy button.
+    private weak var hovered: HistoryPillView?
 
     /// Lay out the boxes the search lets through and put the panel against the
     /// live box. Returns whether there was room for it.

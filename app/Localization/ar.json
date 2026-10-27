@@ -460,5 +460,7 @@
   "Show in Finder": "إظهار في Finder",
   "Format": "التنسيق",
   "Last Used Format": "آخر تنسيق مستخدم",
-  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "ما يعرضه «حفظ النص…» أولًا، وما يكتبه «الحفظ دون سؤال». «آخر تنسيق مستخدم» هو تنسيق النص السابق، و«نص عادي» في المرة الأولى."
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "ما يعرضه «حفظ النص…» أولًا، وما يكتبه «الحفظ دون سؤال». «آخر تنسيق مستخدم» هو تنسيق النص السابق، و«نص عادي» في المرة الأولى.",
+  "Copy": "نسخ",
+  "Copied": "تم النسخ"
 }

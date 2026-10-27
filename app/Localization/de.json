@@ -396,5 +396,7 @@
   "Show in Finder": "Im Finder anzeigen",
   "Format": "Format",
   "Last Used Format": "Zuletzt verwendetes Format",
-  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Was „Transkript sichern…“ zuerst anbietet und „Ohne Nachfrage sichern“ schreibt. „Zuletzt verwendetes Format“ ist das des vorigen Transkripts, beim ersten Mal „Reiner Text“."
+  "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "Was „Transkript sichern…“ zuerst anbietet und „Ohne Nachfrage sichern“ schreibt. „Zuletzt verwendetes Format“ ist das des vorigen Transkripts, beim ersten Mal „Reiner Text“.",
+  "Copy": "Kopieren",
+  "Copied": "Kopiert"
 }

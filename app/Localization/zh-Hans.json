@@ -380,5 +380,7 @@
  "Show in Finder": "在访达中显示",
  "Format": "格式",
  "Last Used Format": "上次使用的格式",
- "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "“存储文字记录…”首先提供、“无需询问直接存储”所用的格式。“上次使用的格式”是上一份文字记录的格式，首次为“纯文本”。"
+ "What Save Transcript… offers first, and what Save without asking writes. Last Used Format is the one the previous transcript was saved in, Plain Text the first time.": "“存储文字记录…”首先提供、“无需询问直接存储”所用的格式。“上次使用的格式”是上一份文字记录的格式，首次为“纯文本”。",
+ "Copy": "拷贝",
+ "Copied": "已拷贝"
 }
