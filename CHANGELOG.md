@@ -4,6 +4,20 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.19.0 · 2026-10-27
+
+- **Line up the ⌥ stack.** Settings ▸ UI ▸ Recent Boxes has a new Align
+  choice: Start, Center or End. Start lines the recent boxes up on the
+  side their lines begin, the left for most languages and the right for
+  Arabic and Hebrew, so short and long boxes read down one edge. End lines
+  them up on the other side, and Center keeps them centered on the live
+  box, as before. Start is the new default.
+- **Changes show at once.** Changing Align or Text in Settings while ⌥
+  holds the stack up redraws it on the spot, and a new alignment slides
+  the boxes across rather than jumping.
+- **The search stays centered.** The ⌥F search pill stays in the middle
+  of the live box whichever side the boxes take.
+
 ## 1.18.0 · 2026-10-26
 
 - **Resize the box by its edge.** Whenever the box can be moved, with ⇧
