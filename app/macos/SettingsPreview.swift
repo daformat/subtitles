@@ -44,7 +44,8 @@ struct PreviewStyle: Equatable, Encodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case fontSize, maxLines, boxOpacity, blur
         case revealOpacity, revealSize, revealEnabled
-        case historyEnabled, historyDepth, historyTextOpacity, historyExpiry, historyExpires
+        case historyEnabled, historyDepth, historyTextOpacity, historyAlignment
+        case historyExpiry, historyExpires
         case iconStyle, textAlignment, theme
         case bothLanguages, microphone
         case borealis, borealisStrength
@@ -61,6 +62,8 @@ struct PreviewStyle: Equatable, Encodable {
     var historyEnabled = true
     var historyDepth = OverlayController.defaultHistoryDepth
     var historyTextOpacity = HistoryPillView.defaultTextOpacity
+    /// See `StackLayout.Alignment`.
+    var historyAlignment: StackLayout.Alignment = .start
     var historyExpiry = OverlayController.defaultHistoryExpiry
     var historyExpires = true
     /// See `Pill.IconStyle`.
@@ -84,7 +87,7 @@ struct PreviewStyle: Equatable, Encodable {
 
 /// Which control was last touched, so the box can explain that one.
 enum PreviewTopic {
-    case lines, background, blur, reveal, keep, dimness, expiry
+    case lines, background, blur, reveal, keep, dimness, alignment, expiry
 }
 
 // MARK: - Palette
@@ -749,6 +752,14 @@ final class SettingsPreview: NSView {
     /// What the pills were built from, so nine ticks a second do not rebuild
     /// half a dozen views that have not changed.
     private var pillKey = ""
+    /// A change of alignment on its way, as on the overlay's stack: where each
+    /// box was, by its text, and each box in the document with where it is
+    /// headed.
+    private let morph = SpringValue(1000, stiffness: 500, dampingRatio: 1)
+    private var morphFrom: [String: BoxPlacement] = [:]
+    private var targets: [(pill: HistoryPillView, to: BoxPlacement)] = []
+    /// The alignment the boxes were last laid at.
+    private var laidAlignment: StackLayout.Alignment?
 
     private var style = PreviewStyle()
 
@@ -846,6 +857,8 @@ final class SettingsPreview: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
+        morph.view = self
+        morph.onTick = { [weak self] _ in self?.stepMorph() }
         // Decorative through and through — a scripted loop and drawings of
         // boxes. The rows underneath say all of this in words, and that is what
         // VoiceOver should be reading.
@@ -989,7 +1002,7 @@ final class SettingsPreview: NSView {
         focusUntil = Date().addingTimeInterval(Self.focusGrace)
         parkReveal = topic == .reveal && style.revealEnabled
         switch topic {
-        case .keep, .dimness, .expiry:
+        case .keep, .dimness, .alignment, .expiry:
             // Not while settling: a control being given its value as the window
             // is built is not somebody touching it.
             if Date() > settledAt { stackUntil = focusUntil }
@@ -1044,6 +1057,12 @@ final class SettingsPreview: NSView {
             }
         case .dimness:
             return LF("The stack's text is %lld%% as strong as the live box's.", pct(style.historyTextOpacity))
+        case .alignment:
+            switch style.historyAlignment {
+            case .start: return L("The stack's boxes line up on the side their lines begin.")
+            case .center: return L("The stack's boxes are centered on the live box.")
+            case .end: return L("The stack's boxes line up on the side their lines end.")
+            }
         case .expiry:
             guard style.historyExpires else {
                 return L("The stack is kept until you pause or quit.")
@@ -1213,11 +1232,12 @@ final class SettingsPreview: NSView {
             // The stage is the boxes' desktop, and it is this window's own drawing.
             backdrop: .withinWindow,
             iconStyle: style.iconStyle,
-            textAlignment: style.textAlignment)
+            textAlignment: style.textAlignment,
+            alignment: style.historyAlignment)
 
         let key = "\(visible.joined(separator: "\u{1}"))|\(pillStyle.fontSize)"
             + "|\(pillStyle.fill)|\(pillStyle.textOpacity)|\(ceiling)|\(pillStyle.iconStyle)"
-            + "|\(pillStyle.textAlignment)"
+            + "|\(pillStyle.textAlignment)|\(pillStyle.alignment)"
         if key != pillKey {
             pillKey = key
             rebuild(visible, style: pillStyle)
@@ -1248,6 +1268,17 @@ final class SettingsPreview: NSView {
         // Boxes that were already up keep their place and do not animate again —
         // the same rule the overlay's stack follows.
         let carried = Set(laidOut)
+        // A new alignment under a stack that is up carries the boxes across,
+        // from wherever they are, a morph already under way included.
+        if isStackUp, let laidAlignment, laidAlignment != pillStyle.alignment {
+            morphFrom = [:]
+            for pill in pills {
+                if let placement = pill.placement { morphFrom[pill.entry.text] = placement }
+            }
+            morph.snap(to: 0)
+            morph.animate(to: 1000)
+        }
+        laidAlignment = pillStyle.alignment
         pills.forEach { $0.removeFromSuperview() }
         pills = []
         laidOut = []
@@ -1274,11 +1305,21 @@ final class SettingsPreview: NSView {
 
         // Document coordinates are y-up and the stack sits above the live box, so
         // the newest box is laid at the bottom and the older ones climb away.
+        // Sideways as the overlay lays them: centered on the live box, which
+        // is centered on the stage, or on a side of the widest box the stack
+        // can hold.
+        let rtl = Pill.isRightToLeft(visible.first ?? "")
+        let centre = stage.bounds.width / 2
+        let t = morph.isAnimating ? morph.value / 1000 : 1
+        targets = []
         var offset: CGFloat = 0
         for (i, pill) in pills.enumerated() {
             let size = sizes[i]
-            pill.frame = NSRect(x: ((stage.bounds.width - size.width) / 2).rounded(),
-                                y: offset.rounded(), width: size.width, height: size.height)
+            let to = BoxPlacement(width: size.width, centreX: centre, column: historyCeiling,
+                                  alignment: pillStyle.alignment, rtl: rtl)
+            targets.append((pill, to))
+            pill.place((morphFrom[visible[i]] ?? to).blended(to: to, by: t),
+                       centreX: centre, y: offset.rounded(), height: size.height)
             document.addSubview(pill)
             offset += size.height + Self.gap
         }
@@ -1293,6 +1334,17 @@ final class SettingsPreview: NSView {
 
         // A page closing while the stack is up joins it there and then.
         if isStackUp, !fresh.isEmpty, fresh.count < pills.count { animateIn(fresh) }
+    }
+
+    /// One frame of the boxes on their way to a new alignment.
+    private func stepMorph() {
+        let t = morph.value / 1000
+        let centre = stage.bounds.width / 2
+        for (pill, to) in targets {
+            pill.place((morphFrom[pill.entry.text] ?? to).blended(to: to, by: t),
+                       centreX: centre, y: pill.frame.minY, height: pill.frame.height)
+        }
+        if !morph.isAnimating { morphFrom = [:] }
     }
 
     private var maxScrollOffset: CGFloat {

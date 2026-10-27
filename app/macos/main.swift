@@ -153,6 +153,8 @@ enum Defaults {
     static let boxOpacity = "overlay.boxOpacity"
     static let backdropBlur = "overlay.backdropBlur"
     static let historyTextOpacity = "overlay.historyTextOpacity"
+    /// See `StackLayout.Alignment`.
+    static let historyAlignment = "overlay.historyAlignment"
     // Seconds. A new key rather than the minutes one it replaces: the old
     // values are numerically valid seconds, so reusing it would quietly turn
     // someone's five minutes into five seconds.
@@ -1419,6 +1421,8 @@ if useOverlay {
         UserDefaults.standard.object(forKey: Defaults.historyTextOpacity) as? Double
             ?? Double(HistoryPillView.defaultTextOpacity)),
         HistoryPillView.minTextOpacity), 1)
+    controller.historyAlignment = UserDefaults.standard.string(forKey: Defaults.historyAlignment)
+        .flatMap(StackLayout.Alignment.init(rawValue:)) ?? .start
     controller.boxOpacity = CGFloat(
         UserDefaults.standard.object(forKey: Defaults.boxOpacity) as? Double
             ?? Double(SubtitleView.defaultBackgroundOpacity))
@@ -1484,7 +1488,7 @@ if useOverlay {
         for key in [Defaults.fontSize, Defaults.reveal, Defaults.borealis,
                     Defaults.borealisLook, Defaults.borealisStrength, Defaults.history,
                     Defaults.historyDepth, Defaults.historyTextOpacity,
-                    Defaults.historyExpiry, Defaults.historyExpires,
+                    Defaults.historyAlignment, Defaults.historyExpiry, Defaults.historyExpires,
                     Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
                     Defaults.revealOpacity,
                     Defaults.revealWidth, Defaults.revealHeight,
@@ -1518,6 +1522,7 @@ if useOverlay {
         controller.backdropBlur = Pill.backdropBlur
         controller.historyDepth = OverlayController.defaultHistoryDepth
         controller.historyTextOpacity = HistoryPillView.defaultTextOpacity
+        controller.historyAlignment = .start
         controller.historyExpiry = OverlayController.defaultHistoryExpiry
         controller.isHistoryExpiryEnabled = true
         controller.revealOpacity = SubtitleView.defaultMaskStrength
@@ -1622,6 +1627,11 @@ if useOverlay {
     settings.onHistoryTextOpacity = { value in
         controller.historyTextOpacity = value
         UserDefaults.standard.set(Double(value), forKey: Defaults.historyTextOpacity)
+    }
+    settings.historyAlignment = { controller.historyAlignment }
+    settings.onHistoryAlignment = { alignment in
+        controller.historyAlignment = alignment
+        UserDefaults.standard.set(alignment.rawValue, forKey: Defaults.historyAlignment)
     }
     settings.fontSize = { fontSize }
     settings.boxOpacity = { controller.boxOpacity }

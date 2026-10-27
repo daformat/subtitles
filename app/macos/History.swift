@@ -163,6 +163,9 @@ struct HistoryStyle: Equatable {
     var iconStyle: Pill.IconStyle = .header
     /// How the text sits in each box — see `Pill.TextAlignment`.
     var textAlignment: Pill.TextAlignment = .start
+    /// Which side of the stack the boxes line up on — see
+    /// `StackLayout.Alignment`.
+    var alignment: StackLayout.Alignment = .start
 }
 
 /// The fade at the stack's clipped edge, as each box wears it.
@@ -263,6 +266,32 @@ struct HistoryEntry: Hashable {
     }
 }
 
+/// Where a box of the stack sits sideways, from the live box's centre: its
+/// x and width. What a change of alignment carries each box between.
+struct BoxPlacement: Equatable {
+    var x: CGFloat
+    var width: CGFloat
+
+    /// A box `width` wide lined up as `alignment` says, in a stack whose
+    /// boxes are at most `column` wide, centered on `centreX`.
+    init(width: CGFloat, centreX: CGFloat, column: CGFloat,
+         alignment: StackLayout.Alignment, rtl: Bool) {
+        self.width = width
+        x = StackLayout.boxScreenX(centreX: centreX, boxWidth: width, column: column,
+                                   alignment: alignment, rtl: rtl) - centreX
+    }
+
+    private init(x: CGFloat, width: CGFloat) {
+        self.x = x
+        self.width = width
+    }
+
+    /// `t` of the way from this to `other`.
+    func blended(to other: BoxPlacement, by t: CGFloat) -> BoxPlacement {
+        BoxPlacement(x: x + (other.x - x) * t, width: width + (other.width - width) * t)
+    }
+}
+
 final class HistoryPillView: NSView {
     /// How far the stack's text sits behind the live box's. Uniform across every
     /// box — this is the stack receding as a whole, not each box ageing.
@@ -282,7 +311,7 @@ final class HistoryPillView: NSView {
     /// the eye lands on when scanning down the stack for it.
     private static let highlight = NSColor(calibratedRed: 1, green: 0.8, blue: 0.2, alpha: 0.45)
 
-    private let entry: HistoryEntry
+    let entry: HistoryEntry
     private var text: String { entry.text }
     private let style: HistoryStyle
     /// What the icon takes around the pill.
@@ -302,6 +331,16 @@ final class HistoryPillView: NSView {
     }
     /// Where the search query occurs, in UTF-16 units of `text`.
     private let highlights: [NSRange]
+    /// Where the box was last put sideways — see `place`.
+    private(set) var placement: BoxPlacement?
+
+    /// Put the box at `placement`, against a live box whose centre is at
+    /// `centreX` in the superview's coordinates.
+    func place(_ placement: BoxPlacement, centreX: CGFloat, y: CGFloat, height: CGFloat) {
+        self.placement = placement
+        frame = NSRect(x: (centreX + placement.x).rounded(), y: y,
+                       width: placement.width.rounded(), height: height)
+    }
     /// The picture under the pill, softened, and the pill drawn over it. Two
     /// subviews rather than this view's own `draw`: a view paints beneath its
     /// subviews, and the blur is one, so the fill and text have to be one as
@@ -893,9 +932,12 @@ final class HistoryController {
 
     /// How the boxes are drawn, and the widest they may be. Kept from `present`
     /// so a keystroke in the search can rebuild the stack without the overlay.
-    private var style = HistoryStyle(fontSize: 30, fill: 0.7,
-                                     textOpacity: HistoryPillView.defaultTextOpacity)
+    private(set) var style = HistoryStyle(fontSize: 30, fill: 0.7,
+                                          textOpacity: HistoryPillView.defaultTextOpacity)
     private var ceiling: CGFloat = 400
+    /// Whether the newest box reads right to left, which puts a start-aligned
+    /// stack on the right, as its text is.
+    private var rtl = false
     private var lastAnchor = NSRect.zero
     private var lastCentreX: CGFloat = 0
 
@@ -961,6 +1003,18 @@ final class HistoryController {
     /// every frame instead (StackLayout), so a width change moves the panel
     /// at once and the boxes not at all.
     private let centreXSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
+
+    /// A change of alignment on its way, as thousandths of the way there:
+    /// where each box was when it began, and the panel's span then, both from
+    /// the live box's centre. Until it lands the panel holds both spans, so
+    /// no box is cut short by the edge of the one it is leaving; then the
+    /// stack is laid again at the new one. No overshoot: a box running past
+    /// the live box's edge and back reads as a mistake.
+    private let morph = SpringValue(1000, stiffness: 500, dampingRatio: 1)
+    private var morphFrom: [HistoryEntry: BoxPlacement] = [:]
+    private var morphSpan: (x: CGFloat, width: CGFloat)?
+    /// Each box in the document and where it is headed.
+    private var targets: [(pill: HistoryPillView, to: BoxPlacement)] = []
     private let originYSpring = SpringValue(0, stiffness: 900, dampingRatio: 0.9)
     /// Where the pill sits vertically as last placed, so the spring's ticks
     /// can lay the frame without re-deriving the panel.
@@ -1039,6 +1093,8 @@ final class HistoryController {
             spring.view = root
             spring.onTick = { [weak self] _ in self?.followOrigin() }
         }
+        morph.view = root
+        morph.onTick = { [weak self] _ in self?.stepMorph() }
         search.onChange = { [weak self] text in self?.queryChanged(text) }
         search.onCancel = { [weak self] in self?.unpin() }
 
@@ -1117,6 +1173,9 @@ final class HistoryController {
             : Self.room(above: true, anchor: anchor, screen: screen)
                 >= Self.room(above: false, anchor: anchor, screen: screen)
 
+        // A new alignment under a stack that is up carries the boxes across
+        // rather than redrawing them there.
+        if isVisible, style.alignment != self.style.alignment { beginMorph() }
         self.style = style
         // Ceiling matched to the live box: it spends `pad` of its own width on
         // the ⇧ ring margin, and these have no ring, so the same sentence must be
@@ -1166,9 +1225,12 @@ final class HistoryController {
         let previousNear = isVisible ? nearDistance() : 0
         let wasParked = !isVisible || previousNear <= 1
 
-        if measuredFor?.style != style || measuredFor?.ceiling != ceiling {
+        // Whatever the alignment: a box measures the same on either side.
+        var measuring = style
+        measuring.alignment = .center
+        if measuredFor?.style != measuring || measuredFor?.ceiling != ceiling {
             measured = [:]
-            measuredFor = (style, ceiling)
+            measuredFor = (measuring, ceiling)
         }
         // Forget boxes that have left the stack, or a long session keeps every
         // page it ever showed.
@@ -1178,6 +1240,9 @@ final class HistoryController {
         // Every box counts towards the width, filtered out or not: a stack that
         // narrowed as the query did would jitter under each keystroke, and the
         // search pill takes its width from the stack's.
+        // From the newest box, filtered out or not, for the same reason: a
+        // stack that changed sides under a keystroke.
+        rtl = Pill.isRightToLeft(shown.last?.text ?? "")
         var width: CGFloat = 0
         for entry in shown { width = max(width, size(of: entry).width) }
 
@@ -1203,23 +1268,29 @@ final class HistoryController {
         }
 
         stackWidth = width
-        let panelX = StackLayout.panelX(centreX: centreX, width: width)
+        let (panelX, panelWidth) = span(centreX: centreX)
         contentHeight = sizes.reduce(0) { $0 + $1.height }
             + Self.gap * CGFloat(max(pills.count - 1, 0))
-        document.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
+        document.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
 
         // Document coordinates are y-up. Nearest-first is laid from the edge that
         // faces the live box: the bottom when the stack is above it, the top when
         // it is below.
+        //
+        // Placed from the centre, not centred in the document: the two differ
+        // by a point whenever the stack's width changes parity. Part of the
+        // way from where they were while an alignment change is landing.
+        let t = morphSpan == nil ? 1 : morph.value / 1000
+        targets = []
         var offset: CGFloat = 0
         for (i, pill) in pills.enumerated() {
             let size = sizes[i]
             let y = placedAbove ? offset : contentHeight - offset - size.height
-            // Placed from the centre, not centred in the document: the two
-            // differ by a point whenever the stack's width changes parity.
-            pill.frame = NSRect(
-                x: StackLayout.boxX(centreX: centreX, panelX: panelX, boxWidth: size.width),
-                y: y.rounded(), width: size.width, height: size.height)
+            let to = BoxPlacement(width: size.width, centreX: centreX, column: ceiling,
+                                  alignment: style.alignment, rtl: rtl)
+            targets.append((pill, to))
+            pill.place((morphFrom[ordered[i]] ?? to).blended(to: to, by: t),
+                       centreX: centreX - panelX, y: y.rounded(), height: size.height)
             document.addSubview(pill)
             offset += size.height + Self.gap
         }
@@ -1251,6 +1322,66 @@ final class HistoryController {
         laidOut = matching
         return fits
     }
+
+    /// The panel's x and width with the live box's centre at `centreX`: the
+    /// boxes at this stack's alignment, column and direction, and room for
+    /// the search pill at its widest, which stays centered on the live box.
+    private func span(centreX: CGFloat) -> (x: CGFloat, width: CGFloat) {
+        let span = StackLayout.panel(centreX: centreX, width: stackWidth,
+                                     centred: max(searchWidth(expanded: true),
+                                                  searchWidth(expanded: false)),
+                                     column: ceiling, alignment: style.alignment, rtl: rtl)
+        guard let morphSpan else { return span }
+        let from = (centreX + morphSpan.x).rounded()
+        let x = min(span.x, from)
+        return (x, max(span.x + span.width, from + morphSpan.width) - x)
+    }
+
+    /// Set off from where the boxes are now, a morph already under way
+    /// included.
+    private func beginMorph() {
+        morphFrom = [:]
+        for pill in stackPills {
+            if let placement = pill.placement { morphFrom[pill.entry] = placement }
+        }
+        let span = self.span(centreX: lastCentreX)
+        morphSpan = (span.x - lastCentreX, span.width)
+        morph.snap(to: 0)
+        morph.animate(to: 1000)
+    }
+
+    /// One frame of the boxes on their way, and the stack laid again at the
+    /// new alignment when they arrive.
+    private func stepMorph() {
+        guard morphSpan != nil else { return }
+        guard morph.isAnimating else {
+            endMorph()
+            rebuild(anchor: lastAnchor, centreX: lastCentreX, animated: false, park: false)
+            return
+        }
+        let t = morph.value / 1000
+        let panelX = span(centreX: lastCentreX).x
+        for (pill, to) in targets {
+            pill.place((morphFrom[pill.entry] ?? to).blended(to: to, by: t),
+                       centreX: lastCentreX - panelX, y: pill.frame.minY,
+                       height: pill.frame.height)
+        }
+    }
+
+    private func endMorph() {
+        morphSpan = nil
+        morphFrom = [:]
+        morph.snap(to: 1000)
+    }
+
+    /// The search pill open, or closed down to its word: never wider than
+    /// the stack.
+    private func searchWidth(expanded: Bool) -> CGFloat {
+        expanded
+            ? min(stackWidth, max(HistorySearchView.minWidth, (stackWidth * 0.55).rounded()))
+            : min(stackWidth, search.compactWidth.rounded())
+    }
+
 
     private func size(of entry: HistoryEntry) -> NSSize {
         if let known = measured[entry] { return known }
@@ -1313,7 +1444,7 @@ final class HistoryController {
         // meant to be coming from.
         let scrollHeight = contentHeight > 0 ? min(contentHeight, room - searchBlock).rounded() : 0
         let height = Self.gap + searchHeight + (scrollHeight > 0 ? Self.gap + scrollHeight : 0)
-        let size = NSSize(width: stackWidth, height: height)
+        let size = NSSize(width: span(centreX: centreX).width, height: height)
 
         // Elastic only while there is somewhere to go. A stack that fits its
         // panel must sit dead still under the wheel: rubber-banding a list with
@@ -1322,14 +1453,15 @@ final class HistoryController {
         // already right for the first event after a resize.
         scroll.verticalScrollElasticity = contentHeight > scrollHeight + 1 ? .allowed : .none
         let origin = NSPoint(
-            x: StackLayout.panelX(centreX: centreX, width: size.width),
+            x: span(centreX: centreX).x,
             y: (placedAbove
                 ? anchor.maxY - SubtitleView.pad
                 : anchor.minY + SubtitleView.pad - size.height).rounded())
         let target = clamp(origin, size: size, to: screen.visibleFrame)
         // The centre the clamp allows: the anchor's, unless the stack would
-        // run off the screen, in which case the panel's own middle.
-        let targetCentre = target.x == origin.x ? centreX : target.x + size.width / 2
+        // run off the screen, in which case the anchor moved as far as the
+        // clamp moved the panel.
+        let targetCentre = centreX + target.x - origin.x
         // Sprung towards the target while the stack is up; straight there when
         // it is arriving, since there is nowhere for it to be coming from.
         let placedOrigin: NSPoint
@@ -1337,7 +1469,7 @@ final class HistoryController {
             centreXSpring.animate(to: targetCentre)
             originYSpring.animate(to: target.y)
             placedOrigin = NSPoint(
-                x: StackLayout.panelX(centreX: centreXSpring.value, width: size.width),
+                x: span(centreX: centreXSpring.value).x,
                 y: originYSpring.value.rounded())
         } else {
             centreXSpring.snap(to: targetCentre)
@@ -1362,7 +1494,7 @@ final class HistoryController {
         // stack is above the live box, the top when it is below — and the
         // boxes beyond it.
         let scrollFrame = NSRect(x: 0, y: placedAbove ? height - scrollHeight : 0,
-                                 width: stackWidth, height: scrollHeight)
+                                 width: size.width, height: scrollHeight)
         if scroll.frame != scrollFrame { scroll.frame = scrollFrame }
         scroll.isHidden = scrollHeight == 0
         // A pill while idle, the full field while in use — and the change
@@ -1370,9 +1502,7 @@ final class HistoryController {
         // rather than replace it. Only while the stack is up: a stack arriving
         // on screen builds the field at the width it should already have.
         search.isExpanded = searchExpanded
-        let searchWidth = searchExpanded
-            ? min(stackWidth, max(HistorySearchView.minWidth, (stackWidth * 0.55).rounded()))
-            : min(stackWidth, search.compactWidth.rounded())
+        let searchWidth = searchWidth(expanded: searchExpanded)
         searchY = placedAbove ? Self.gap : height - Self.gap - searchHeight
         self.searchHeight = searchHeight
         if isVisible, !isParked,
@@ -1406,16 +1536,17 @@ final class HistoryController {
 
     /// One frame of the panel following the live box.
     private func followOrigin() {
-        let origin = NSPoint(x: StackLayout.panelX(centreX: centreXSpring.value, width: stackWidth),
+        let origin = NSPoint(x: span(centreX: centreXSpring.value).x,
                              y: originYSpring.value.rounded())
         if origin != panel.frame.origin { panel.setFrameOrigin(origin) }
     }
 
-    /// The pill at `width`, centred where the boxes are.
+    /// The pill at `width`, centered on the live box whichever side the
+    /// boxes take.
     private func laySearch(width: CGFloat) {
-        let panelX = StackLayout.panelX(centreX: lastCentreX, width: stackWidth)
         let frame = NSRect(
-            x: StackLayout.boxX(centreX: lastCentreX, panelX: panelX, boxWidth: width.rounded()),
+            x: StackLayout.boxScreenX(centreX: lastCentreX, boxWidth: width.rounded())
+                - span(centreX: lastCentreX).x,
             y: searchY, width: width.rounded(), height: searchHeight)
         if frame != search.frame { search.frame = frame }
     }
@@ -1447,6 +1578,7 @@ final class HistoryController {
     func dismiss() {
         guard isVisible else { return }
         isVisible = false
+        endMorph()
         shown = []
         laidOut = []
         searchHotkey = nil

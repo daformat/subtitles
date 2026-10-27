@@ -28,6 +28,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     var onHistoryDepth: ((Int) -> Void)?
     var historyTextOpacity: () -> CGFloat = { HistoryPillView.defaultTextOpacity }
     var onHistoryTextOpacity: ((CGFloat) -> Void)?
+    /// See `StackLayout.Alignment`.
+    var historyAlignment: () -> StackLayout.Alignment = { .start }
+    var onHistoryAlignment: ((StackLayout.Alignment) -> Void)?
     /// Seconds of no new text before the stack is forgotten, and whether that
     /// happens at all.
     var historyExpiry: () -> Double = { OverlayController.defaultHistoryExpiry }
@@ -182,6 +185,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// The rows each switch governs, dimmed with it.
     private var revealRows: [SliderRow] = []
     private var historyRows: [SliderRow] = []
+    private var alignmentRow: SegmentRow?
     /// Governed by the section switch *and* by its own, so it is held apart.
     private var expiryRow: NumberRow?
     private var expiryToggle: ToggleRow?
@@ -238,6 +242,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         preview = nil
         revealRows = []
         historyRows = []
+        alignmentRow = nil
         expiryRow = nil
         expiryToggle = nil
         vadRow = nil
@@ -391,6 +396,39 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 sub.textColor = isEnabled ? .secondaryLabelColor : .disabledControlTextColor
             }
         }
+    }
+
+    /// A choice between a few words, in the sliders' grid: its title in their
+    /// label column and the segments where a slider would be.
+    private final class SegmentRow: NSObject {
+        let title: NSTextField
+        let control: NSSegmentedControl
+        private let apply: (Int) -> Void
+
+        var cells: [NSView] { [title, control, NSGridCell.emptyContentView] }
+
+        var isEnabled = true {
+            didSet {
+                control.isEnabled = isEnabled
+                title.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+            }
+        }
+
+        init(_ title: String, labels: [String], selected: Int,
+             apply: @escaping (Int) -> Void) {
+            self.title = NSTextField(labelWithString: title)
+            control = NSSegmentedControl(labels: labels, trackingMode: .selectOne,
+                                         target: nil, action: nil)
+            self.apply = apply
+            super.init()
+            control.segmentDistribution = .fillEqually
+            control.selectedSegment = selected
+            control.setAccessibilityLabel(title)
+            control.target = self
+            control.action = #selector(changed)
+        }
+
+        @objc private func changed(_ sender: NSSegmentedControl) { apply(sender.selectedSegment) }
     }
 
     /// A whole number: a slider for the common range, and a field for anything
@@ -926,11 +964,23 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.dimness, changed: [.historyTextOpacity])
             })
 
+        // Start and end are the sides of the widest box the stack holds, read in
+        // the text's direction, so Start is the right for Arabic captions.
+        let alignments = StackLayout.Alignment.allCases
+        let align = SegmentRow(
+            L("Align", "Settings choice: which side the recent boxes line up on, under the live caption box"),
+            labels: alignments.map(Self.title(of:)),
+            selected: alignments.firstIndex(of: historyAlignment()) ?? 0) { [weak self] index in
+                self?.onHistoryAlignment?(alignments[index])
+                self?.syncPreview(.alignment, changed: [.historyAlignment])
+            }
+        alignmentRow = align
+
         rows = [background, blur, opacity, width, height, depth, dimness]
         // The labels' column, as wide as the widest label in the app's
         // language and never narrower than English needs, so the sliders
         // still line up from one section to the next.
-        let titles = rows.map(\.title) + [lines.title, NSTextField(labelWithString: L("Clear after")),
+        let titles = rows.map(\.title) + [lines.title, align.title, NSTextField(labelWithString: L("Clear after")),
                                           NSTextField(labelWithString: Self.offerDurationTitle)]
         Self.labelWidth = max(84, ceil(titles.map(\.fittingSize.width).max() ?? 0))
 
@@ -994,15 +1044,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         expiryToggle = expires
 
         let recent = NSStackView(views: [
-            Self.grid(historyRows.map(\.cells)), expires.view, Self.grid([expiry.cells]),
+            Self.grid(historyRows.map(\.cells) + [align.cells]), expires.view,
+            Self.grid([expiry.cells]),
         ])
         recent.orientation = .vertical
         recent.alignment = .leading
         recent.spacing = 10
 
         section(L("Recent Boxes"),
-                L("How many finished boxes ⌥ can bring back and scroll through, and "
-                + "how far their text sits behind the live one's."),
+                L("How many finished boxes ⌥ can bring back and scroll through, "
+                + "how far their text sits behind the live one's, and which side "
+                + "they line up on."),
                 recent, historySwitch)
         syncHistoryEnabled()
 
@@ -1529,6 +1581,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             historyEnabled: historyEnabled(),
             historyDepth: historyDepth(),
             historyTextOpacity: historyTextOpacity(),
+            historyAlignment: historyAlignment(),
             historyExpiry: historyExpiry(),
             historyExpires: historyExpires(),
             iconStyle: iconStyle(),
@@ -1576,6 +1629,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private func syncHistoryEnabled() {
         let on = historySwitch.state == .on
         for row in historyRows { row.isEnabled = on }
+        alignmentRow?.isEnabled = on
         expiryToggle?.isEnabled = on
         // Two gates: the section's, and the expiry's own.
         expiryRow?.isEnabled = on && expiryToggle?.isOn == true
@@ -1626,6 +1680,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// Title, slider and readout in three aligned columns, so the sliders of
     /// different sections still line up with each other.
+    private static func title(of alignment: StackLayout.Alignment) -> String {
+        switch alignment {
+        case .start: return L("stack alignment|Start", "Settings choice under Align: the recent boxes line up on the side their lines start from")
+        case .center: return L("stack alignment|Center", "Settings choice under Align: the recent boxes are centered on the live box")
+        case .end: return L("stack alignment|End", "Settings choice under Align: the recent boxes line up on the side their lines end at")
+        }
+    }
+
     private static func grid(_ rows: [[NSView]]) -> NSGridView {
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 8

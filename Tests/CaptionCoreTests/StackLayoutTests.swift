@@ -92,3 +92,99 @@ final class StackLayoutTests: XCTestCase {
         XCTAssertEqual(onScreen(box: box, stack: 300), onScreen(box: box, stack: 301))
     }
 }
+
+/// Lined up on a side, the boxes share the live box's widest edge, and keep
+/// the same rule: nothing the stack's width does moves them.
+final class StackLayoutAlignmentTests: XCTestCase {
+    private let centre: CGFloat = 800
+    private let column: CGFloat = 700
+
+    private func onScreen(box: CGFloat, stack: CGFloat, _ alignment: StackLayout.Alignment,
+                          rtl: Bool = false) -> CGFloat {
+        let panel = StackLayout.panelX(centreX: centre, width: stack, column: column,
+                                       alignment: alignment, rtl: rtl)
+        return panel + StackLayout.boxX(centreX: centre, panelX: panel, boxWidth: box,
+                                        column: column, alignment: alignment, rtl: rtl)
+    }
+
+    func testStartIsTheLeftEdgeAndEndTheRight() {
+        for box: CGFloat in [120, 121, 333] {
+            XCTAssertEqual(onScreen(box: box, stack: 400, .start), centre - column / 2)
+            XCTAssertEqual(onScreen(box: box, stack: 400, .end) + box, centre + column / 2)
+        }
+    }
+
+    func testRightToLeftSwapsTheSides() {
+        for box: CGFloat in [120, 333] {
+            XCTAssertEqual(onScreen(box: box, stack: 400, .start, rtl: true),
+                           onScreen(box: box, stack: 400, .end))
+            XCTAssertEqual(onScreen(box: box, stack: 400, .end, rtl: true),
+                           onScreen(box: box, stack: 400, .start))
+        }
+    }
+
+    func testCenterIsTheStackAsItWas() {
+        for box: CGFloat in [120, 121, 200, 201] {
+            XCTAssertEqual(onScreen(box: box, stack: 400, .center),
+                           StackLayout.boxScreenX(centreX: centre, boxWidth: box))
+        }
+    }
+
+    func testABoxIsWhereItIsWhateverTheStacksWidth() {
+        for alignment in StackLayout.Alignment.allCases {
+            for box: CGFloat in [120, 121, 200, 201, 333] {
+                let alone = onScreen(box: box, stack: box, alignment)
+                for stack: CGFloat in [box + 1, box + 2, box + 99, 600] {
+                    XCTAssertEqual(onScreen(box: box, stack: stack, alignment), alone,
+                                   "a \(box) box moved at \(alignment) when the stack was \(stack) wide")
+                }
+            }
+        }
+    }
+
+    func testEveryBoxIsInsideThePanel() {
+        for alignment in StackLayout.Alignment.allCases {
+            for box: CGFloat in [120, 121, 333] {
+                let stack: CGFloat = 401
+                let panel = StackLayout.panelX(centreX: centre, width: stack, column: column,
+                                               alignment: alignment)
+                let x = StackLayout.boxX(centreX: centre, panelX: panel, boxWidth: box,
+                                         column: column, alignment: alignment)
+                XCTAssertGreaterThanOrEqual(x, 0)
+                XCTAssertLessThanOrEqual(x + box, stack + 0.5)
+            }
+        }
+    }
+}
+
+/// The panel of a stack lined up on a side holds the boxes and the search
+/// pill centered on the live box, and does not resize as the centre moves.
+final class StackLayoutPanelTests: XCTestCase {
+    private let column: CGFloat = 700
+
+    func testThePanelHoldsTheBoxesAndTheCenteredPill() {
+        for alignment in StackLayout.Alignment.allCases {
+            for centre: CGFloat in [800, 800.5, 801.3] {
+                for (stack, pill): (CGFloat, CGFloat) in [(240, 220), (333, 220), (600, 330)] {
+                    let panel = StackLayout.panel(centreX: centre, width: stack, centred: pill,
+                                                  column: column, alignment: alignment)
+                    let boxes = StackLayout.boxScreenX(centreX: centre, boxWidth: stack,
+                                                       column: column, alignment: alignment)
+                    let search = StackLayout.boxScreenX(centreX: centre, boxWidth: pill)
+                    XCTAssertGreaterThanOrEqual(min(boxes, search), panel.x)
+                    XCTAssertLessThanOrEqual(max(boxes + stack, search + pill), panel.x + panel.width)
+                }
+            }
+        }
+    }
+
+    func testThePanelsWidthDoesNotFollowTheCentre() {
+        for alignment in StackLayout.Alignment.allCases {
+            let widths = Set(stride(from: 780.0, through: 800.0, by: 0.37).map {
+                StackLayout.panel(centreX: CGFloat($0), width: 301, centred: 220,
+                                  column: column, alignment: alignment).width
+            })
+            XCTAssertEqual(widths.count, 1, "\(alignment)")
+        }
+    }
+}

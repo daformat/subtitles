@@ -1736,6 +1736,9 @@ final class OverlayController {
     /// How bright the ⌥ stack's text is against the live box's white.
     var historyTextOpacity = HistoryPillView.defaultTextOpacity
 
+    /// Which side the ⌥ stack's boxes line up on.
+    var historyAlignment: StackLayout.Alignment = .start
+
     /// Forget the stack after this long with no new text, so ⌥ pressed an hour
     /// later does not answer with whatever was on screen before lunch. Off keeps
     /// it until a pause or a model switch.
@@ -2054,17 +2057,23 @@ final class OverlayController {
         // The stack follows the live box: peeking at the original with ⌃ and
         // leaving the boxes above it translated would be the worst of both.
         let entries = pastPages
+        let style = HistoryStyle(
+            fontSize: SubtitleView.historyFontSize(for: view.fontSize),
+            fill: view.backgroundOpacity * HistoryPillView.recession,
+            textOpacity: historyTextOpacity,
+            blur: backdropBlur,
+            iconStyle: view.iconStyle,
+            textAlignment: view.textAlignment,
+            alignment: historyAlignment)
         if history.shown != entries {
-            let style = HistoryStyle(
-                fontSize: SubtitleView.historyFontSize(for: view.fontSize),
-                fill: view.backgroundOpacity * HistoryPillView.recession,
-                textOpacity: historyTextOpacity,
-                blur: backdropBlur,
-                iconStyle: view.iconStyle,
-                textAlignment: view.textAlignment)
             history.present(entries: entries, style: style, anchor: panel.frame,
                             centreX: boxCentreX, maxWidth: maxWidth,
                             animated: !isSwappingLanguage)
+        } else if history.style != style {
+            // A setting changed under a stack that is up, ⌥ held while
+            // Settings is clicked: the same boxes, redrawn in place.
+            history.present(entries: entries, style: style, anchor: panel.frame,
+                            centreX: boxCentreX, maxWidth: maxWidth, animated: false)
         } else {
             // The live box resizes on every word; the stack rides along with it.
             history.reposition(anchor: panel.frame, centreX: boxCentreX)
