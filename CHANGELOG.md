@@ -4,6 +4,16 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.21.0 · 2026-10-31
+
+- **Choose how long the box stays up.** Settings ▸ UI ▸ Subtitle Box has
+  a new Hide after slider, under Blur. Once nothing new is said, the box
+  fades after 4 to 20 seconds; 4 is the default, as before.
+- **The offer to save the transcript still comes.** With a long Hide
+  after, the ⌥ stack waits for the box to fade and for the offer to save
+  the transcript to run its course before it is forgotten, even past
+  Clear after.
+
 ## 1.20.0 · 2026-10-27
 
 - **Copy a box's text.** A Copy button shows at the top end of the box
