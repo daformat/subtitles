@@ -227,7 +227,7 @@
   },
   "Text": "النص",
   "Subtitle Box": "مربع التسميات التوضيحية",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "كم سطرًا يملأ المربع قبل أن يُمحى ويبدأ مربع جديد، ومدى عتامة الخلفية خلف النص، ومقدار تمويه الصورة تحته، وكم يبقى ظاهرًا حين لا يُقال شيء جديد. ويأخذ مكدّس ⌥ هذه الإعدادات نفسها، بخلفية أقل عتامة بقليل.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "كم سطرًا يملأ المربع قبل أن يُمحى ويبدأ مربع جديد، ومدى عتامة الخلفية خلف النص، ومقدار تمويه الصورة تحته، وكم من الوقت يبقى ظاهرًا حين لا يُقال شيء جديد. ويأخذ مكدّس ⌥ هذه الإعدادات نفسها، بخلفية أقل عتامة بقليل.",
   "Pointer Reveal and Click-Through": "الكشف تحت المؤشر والنقر عبر المربع",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "كم يختفي من المربع تحت المؤشر، وإلى أي مدى تمتد الفتحة حوله. تمر النقرات إلى التطبيق الذي تحته، واضغط ⇧ مطوّلًا ليبقى المربع معتمًا وتسحبه. عند الإيقاف، يستقبل المربع النقرات ويمكن سحبه دون ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "أشر إلى المربع لترى ما خلفه وتنقر عليه، واضغط ⇧ مطوّلًا لتحريكه",

@@ -200,7 +200,7 @@
  },
  "Text": "Testo",
  "Subtitle Box": "Riquadro dei sottotitoli",
- "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Quante righe riempie un riquadro prima di svuotarsi e ricominciare, quanto è pieno lo sfondo dietro il testo, quanto viene sfocata l'immagine sotto e quanto resta visibile quando non si dice niente di nuovo. La pila di ⌥ segue queste scelte, con uno sfondo un po' meno pieno.",
+ "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Quante righe riempie un riquadro prima di svuotarsi e ricominciare, quanto è pieno lo sfondo dietro il testo, quanto viene sfocata l'immagine sotto e per quanto tempo il riquadro resta visibile quando non si dice più niente di nuovo. La pila di ⌥ segue queste scelte, con uno sfondo un po' meno pieno.",
  "Pointer Reveal and Click-Through": "Dissolvenza sotto il puntatore e clic attraverso",
  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Quanta parte del riquadro scompare sotto il puntatore e quanto si allarga il foro intorno. I clic passano all'app sottostante; tieni premuto ⇧ per lasciare il riquadro opaco e trascinarlo. Se la disattivi, il riquadro riceve i clic e puoi trascinarlo senza ⇧.",
  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Punta il riquadro per vederci attraverso e fare clic su ciò che c'è sotto; tieni premuto ⇧ per spostarlo",
@@ -284,8 +284,8 @@
   "other": "Dopo %lld secondi senza parlato, la pila viene svuotata."
  },
  "After %lld seconds with nothing new said, the box fades away.": {
-  "one": "Dopo %lld secondo senza nuovo parlato, il riquadro svanisce.",
-  "other": "Dopo %lld secondi senza nuovo parlato, il riquadro svanisce."
+  "one": "Se per %lld secondo non si dice niente di nuovo, il riquadro svanisce.",
+  "other": "Se per %lld secondi non si dice niente di nuovo, il riquadro svanisce."
  },
  "Preparing translation…": "Preparazione della traduzione…",
  "Downloading the %@ translation…": "Download della traduzione in %@…",

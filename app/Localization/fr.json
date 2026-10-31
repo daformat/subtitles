@@ -200,7 +200,7 @@
   },
   "Text": "Texte",
   "Subtitle Box": "Bloc de sous-titres",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Le nombre de lignes qu'un bloc remplit avant de s'effacer pour laisser place au suivant, l'opacité du fond derrière le texte, le flou de l'image en dessous et la durée pendant laquelle il reste affiché quand plus rien de nouveau n'est dit. La pile ⌥ reprend ces réglages, avec un fond un peu plus transparent.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Le nombre de lignes qu'un bloc remplit avant de s'effacer pour laisser place au suivant, l'opacité du fond derrière le texte, le flou de l'image en dessous et la durée d'affichage du bloc une fois que plus rien de nouveau n'est dit. La pile ⌥ reprend ces réglages, avec un fond un peu plus transparent.",
   "Pointer Reveal and Click-Through": "Transparence sous le pointeur et clic au travers",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "À quel point le bloc disparaît sous le pointeur, et jusqu'où s'étend la zone transparente autour. Les clics le traversent jusqu'à l'app en dessous ; maintenez ⇧ pour garder le bloc opaque et le faire glisser. Si l'option est désactivée, le bloc reçoit les clics et se laisse déplacer sans ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Pointez le bloc pour voir au travers et cliquer sur ce qui est dessous ; maintenez ⇧ pour le déplacer",
@@ -284,8 +284,8 @@
     "other": "Après %lld secondes de silence, la pile est effacée."
   },
   "After %lld seconds with nothing new said, the box fades away.": {
-    "one": "Après %lld seconde sans nouvelles paroles, le bloc s'efface.",
-    "other": "Après %lld secondes sans nouvelles paroles, le bloc s'efface."
+    "one": "Si rien de nouveau n'est dit pendant %lld seconde, le bloc s'estompe.",
+    "other": "Si rien de nouveau n'est dit pendant %lld secondes, le bloc s'estompe."
   },
   "Preparing translation…": "Préparation de la traduction…",
   "Downloading the %@ translation…": "Téléchargement de la traduction en %@…",
