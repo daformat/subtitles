@@ -4,6 +4,14 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.21.1 · 2026-10-31
+
+- **Hide after, better worded in eleven languages.** In Settings ▸ UI ▸
+  Subtitle Box, the section's description now says plainly that it is
+  the box that stays up, not the picture under it, and the sentence under
+  the preview no longer borrows another setting's word. Chinese gives the
+  slider a name that pairs with Clear after's.
+
 ## 1.21.0 · 2026-10-31
 
 - **Choose how long the box stays up.** Settings ▸ UI ▸ Subtitle Box has
