@@ -176,6 +176,7 @@
   "Models": "मॉडल",
   "Language": "भाषा",
   "Clear after": "मिटाने की देरी",
+  "Hide after": "छिपाने की देरी",
   "sec": "सेकंड",
   "Settings": "सेटिंग्ज़",
   "Fade": "फीकापन",
@@ -199,7 +200,7 @@
   },
   "Text": "टेक्स्ट",
   "Subtitle Box": "कैप्शन बॉक्स",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "साफ़ होकर नया शुरू करने से पहले बॉक्स कितनी लाइनें भरे, टेक्स्ट के पीछे का बॉक्स कितना ठोस हो, और उसके नीचे की तस्वीर कितनी धुँधली हो। ⌥ वाला ढेर भी यही सेटिंग्ज़ अपनाता है, बस उसका बॉक्स थोड़ा कम ठोस होता है।",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "साफ़ होकर नया शुरू करने से पहले बॉक्स कितनी लाइनें भरे, टेक्स्ट के पीछे का बॉक्स कितना ठोस हो, उसके नीचे की तस्वीर कितनी धुँधली हो, और कुछ नया न कहे जाने पर वह कितनी देर दिखता रहे। ⌥ वाला ढेर भी यही सेटिंग्ज़ अपनाता है, बस उसका बॉक्स थोड़ा कम ठोस होता है।",
   "Pointer Reveal and Click-Through": "पॉइंटर के नीचे पारदर्शिता और आर-पार क्लिक",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "पॉइंटर के नीचे बॉक्स कितना ओझल हो, और उसके आसपास का छेद कितनी दूर तक फैले। क्लिक नीचे वाले ऐप तक पहुँचते हैं; बॉक्स को ठोस रखने और खींचने के लिए ⇧ दबाए रखें। यह बंद हो तो बॉक्स क्लिक लेता है, और उसे ⇧ के बिना भी खींचा जा सकता है।",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "बॉक्स के आर-पार देखने और नीचे की चीज़ पर क्लिक करने के लिए उस पर पॉइंटर ले जाएँ; हिलाने के लिए ⇧ दबाए रखकर खींचें",
@@ -281,6 +282,10 @@
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "one": "%lld सेकंड तक कुछ न कहा जाए, तो ढेर मिट जाता है।",
     "other": "%lld सेकंड तक कुछ न कहा जाए, तो ढेर मिट जाता है।"
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "%lld सेकंड तक कुछ नया न कहा जाए, तो बॉक्स ओझल हो जाता है।",
+    "other": "%lld सेकंड तक कुछ नया न कहा जाए, तो बॉक्स ओझल हो जाता है।"
   },
   "Preparing translation…": "अनुवाद तैयार हो रहा है…",
   "Downloading the %@ translation…": "%@ अनुवाद डाउनलोड हो रहा है…",

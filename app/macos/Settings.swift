@@ -50,6 +50,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// How far the picture behind the box is softened, in points.
     var backdropBlur: () -> CGFloat = { Pill.backdropBlur }
     var onBackdropBlur: ((CGFloat) -> Void)?
+    /// Seconds with no new words before the box fades.
+    var hideAfter: () -> Double = { OverlayController.defaultTextIdleTimeout }
+    var onHideAfter: ((Double) -> Void)?
     /// Read-only here — text size is a menu setting. The preview needs it to
     /// draw the box the size it actually is.
     var fontSize: () -> CGFloat = { 30 }
@@ -931,6 +934,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 self?.syncPreview(.blur, changed: [.blur])
             })
 
+        // Whole seconds, for the same reason.
+        let hide = SliderRow(
+            L("Hide after", "Settings slider: how long the caption box stays up after nothing new is said"),
+            range: OverlayController.textIdleTimeouts.lowerBound...OverlayController.textIdleTimeouts.upperBound,
+            value: hideAfter(), snaps: true,
+            format: { LP("%lld seconds", one: "%lld second", Int($0.rounded())) },
+            apply: { [weak self] in
+                self?.onHideAfter?($0.rounded())
+                self?.syncPreview(.hide, changed: [])
+            })
+
         // The track runs one stop past the last number, and that stop is
         // Unlimited. The setting itself is a sentinel there, not this stop's
         // ordinal, so the slider maps in both directions — and `SliderRow`'s
@@ -976,7 +990,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             }
         alignmentRow = align
 
-        rows = [background, blur, opacity, width, height, depth, dimness]
+        rows = [background, blur, hide, opacity, width, height, depth, dimness]
         // The labels' column, as wide as the widest label in the app's
         // language and never narrower than English needs, so the sliders
         // still line up from one section to the next.
@@ -999,9 +1013,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         section(L("Subtitle Box"),
                 L("How many lines a box fills before it clears and starts a new one, "
-                + "how solid the box behind the text is, and how far the picture "
-                + "under it is softened. The ⌥ stack follows these, a shade less solid."),
-                Self.grid([lines.cells, background.cells, blur.cells]), nil)
+                + "how solid the box behind the text is, how far the picture "
+                + "under it is softened, and how long it stays up once nothing new "
+                + "is said. The ⌥ stack follows these, a shade less solid."),
+                Self.grid([lines.cells, background.cells, blur.cells, hide.cells]), nil)
         revealSwitch.target = self
         revealSwitch.action = #selector(toggleReveal)
         revealSwitch.state = revealEnabled() ? .on : .off
@@ -1575,6 +1590,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             maxLines: maxLines(),
             boxOpacity: boxOpacity(),
             blur: backdropBlur(),
+            hideAfter: hideAfter(),
             revealOpacity: revealOpacity(),
             revealSize: revealSize(),
             revealEnabled: revealEnabled(),

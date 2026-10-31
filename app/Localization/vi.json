@@ -171,6 +171,7 @@
   "Models": "Mô hình",
   "Language": "Ngôn ngữ",
   "Clear after": "Xoá sau",
+  "Hide after": "Ẩn sau",
   "sec": "giây",
   "Settings": "Cài đặt",
   "Fade": "Độ mờ đi",
@@ -192,7 +193,7 @@
   },
   "Text": "Độ rõ chữ",
   "Subtitle Box": "Khung phụ đề",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Một khung chứa bao nhiêu dòng trước khi xoá đi để bắt đầu khung mới, nền phía sau chữ đậm đến đâu, và hình ảnh bên dưới được làm mờ bao nhiêu. Chồng khung ⌥ cũng theo các thiết lập này, chỉ có nền nhạt hơn một chút.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Một khung chứa bao nhiêu dòng trước khi xoá đi để bắt đầu khung mới, nền phía sau chữ đậm đến đâu, hình ảnh bên dưới được làm mờ bao nhiêu, và khung còn hiện bao lâu khi không có lời nào mới. Chồng khung ⌥ cũng theo các thiết lập này, chỉ có nền nhạt hơn một chút.",
   "Pointer Reveal and Click-Through": "Nhìn xuyên và nhấp xuyên dưới con trỏ",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Khung biến mất bao nhiêu dưới con trỏ, và vùng trống quanh con trỏ rộng đến đâu. Cú nhấp đi xuyên tới ứng dụng bên dưới; giữ ⇧ để khung không mờ đi và kéo nó. Khi tắt, khung nhận cú nhấp và kéo được mà không cần ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Trỏ vào khung để nhìn xuyên qua và nhấp vào thứ bên dưới; giữ ⇧ để dời khung",
@@ -268,6 +269,9 @@
   },
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "other": "Sau %lld giây không ai nói gì, chồng khung sẽ được xoá."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "other": "Sau %lld giây không có lời nào mới, khung sẽ mờ dần rồi ẩn đi."
   },
   "Preparing translation…": "Đang chuẩn bị bản dịch…",
   "Downloading the %@ translation…": "Đang tải gói dịch sang %@…",

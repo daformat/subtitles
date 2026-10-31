@@ -176,6 +176,7 @@
   "Models": "Modelle",
   "Language": "Sprache",
   "Clear after": "Leeren nach",
+  "Hide after": "Ausblenden nach",
   "sec": "Sek.",
   "Settings": "Einstellungen",
   "Fade": "Ausblenden",
@@ -199,7 +200,7 @@
   },
   "Text": "Text",
   "Subtitle Box": "Untertitelfeld",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Wie viele Zeilen ein Feld füllt, bevor es sich leert und ein neues beginnt, wie deckend die Fläche hinter dem Text ist und wie stark das Bild darunter weichgezeichnet wird. Der ⌥-Stapel übernimmt das, mit einer etwas durchscheinenderen Fläche.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Wie viele Zeilen ein Feld füllt, bevor es sich leert und ein neues beginnt, wie deckend die Fläche hinter dem Text ist, wie stark das Bild darunter weichgezeichnet wird und wie lange es stehen bleibt, wenn nichts Neues gesagt wird. Der ⌥-Stapel übernimmt das, mit einer etwas durchscheinenderen Fläche.",
   "Pointer Reveal and Click-Through": "Durchsicht und Durchklicken unter dem Zeiger",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Wie viel vom Feld unter dem Zeiger verschwindet und wie weit das Loch darum reicht. Klicks gehen an die App darunter; halte ⇧ gedrückt, damit das Feld deckend bleibt, und zieh es. Ausgeschaltet nimmt das Feld Klicks an und lässt sich ohne ⇧ ziehen.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Zeig auf das Feld, um hindurchzusehen und anzuklicken, was darunter liegt; halte ⇧ gedrückt, um es zu verschieben",
@@ -281,6 +282,10 @@
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "one": "Nach %lld Sekunde ohne Gesprochenes wird der Stapel vergessen.",
     "other": "Nach %lld Sekunden ohne Gesprochenes wird der Stapel vergessen."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "Nach %lld Sekunde ohne neu Gesprochenes wird das Feld ausgeblendet.",
+    "other": "Nach %lld Sekunden ohne neu Gesprochenes wird das Feld ausgeblendet."
   },
   "Preparing translation…": "Übersetzung wird vorbereitet …",
   "Downloading the %@ translation…": "Übersetzung für %@ wird heruntergeladen …",

@@ -176,6 +176,7 @@
   "Models": "Modelos",
   "Language": "Idioma",
   "Clear after": "Limpar após",
+  "Hide after": "Ocultar após",
   "sec": "s",
   "Settings": "Ajustes",
   "Fade": "Esmaecer",
@@ -199,7 +200,7 @@
   },
   "Text": "Texto",
   "Subtitle Box": "Quadro de Legendas",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Quantas linhas um quadro enche antes de se limpar e começar outro, quão sólido é o fundo atrás do texto e o quanto a imagem por baixo fica desfocada. A pilha do ⌥ segue os mesmos ajustes, com o fundo um pouco mais transparente.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Quantas linhas um quadro enche antes de se limpar e começar outro, quão sólido é o fundo atrás do texto, o quanto a imagem por baixo fica desfocada e por quanto tempo ele continua na tela quando nada de novo é dito. A pilha do ⌥ segue os mesmos ajustes, com o fundo um pouco mais transparente.",
   "Pointer Reveal and Click-Through": "Transparência sob o Ponteiro e Cliques Através",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Quanto do quadro some sob o ponteiro e até onde vai o buraco em volta dele. Os cliques passam para o app de baixo; segure ⇧ para manter o quadro sólido e arrastá-lo. Com a opção desativada, o quadro recebe os cliques e pode ser arrastado sem ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Aponte para o quadro para ver através dele e clicar no que está embaixo; segure ⇧ para movê-lo",
@@ -281,6 +282,10 @@
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "one": "Depois de %lld segundo sem ninguém falar, a pilha é esquecida.",
     "other": "Depois de %lld segundos sem ninguém falar, a pilha é esquecida."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "Depois de %lld segundo sem ninguém dizer nada novo, o quadro desaparece.",
+    "other": "Depois de %lld segundos sem ninguém dizer nada novo, o quadro desaparece."
   },
   "Preparing translation…": "Preparando a tradução…",
   "Downloading the %@ translation…": "Baixando a tradução para o %@…",

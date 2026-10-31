@@ -176,6 +176,7 @@
   "Models": "Modellen",
   "Language": "Taal",
   "Clear after": "Wis na",
+  "Hide after": "Verberg na",
   "sec": "s",
   "Settings": "Instellingen",
   "Fade": "Doorzicht",
@@ -199,7 +200,7 @@
   },
   "Text": "Tekst",
   "Subtitle Box": "Ondertitelvak",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hoeveel regels een vak vult voordat het leegloopt en er een nieuw begint, hoe dekkend de achtergrond achter de tekst is, en hoe sterk het beeld eronder vervaagt. De vakken in de ⌥-stapel nemen dit over, met een net iets minder dekkende achtergrond.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Hoeveel regels een vak vult voordat het leegloopt en er een nieuw begint, hoe dekkend de achtergrond achter de tekst is, hoe sterk het beeld eronder vervaagt, en hoe lang het blijft staan als er niets nieuws wordt gezegd. De vakken in de ⌥-stapel nemen dit over, met een net iets minder dekkende achtergrond.",
   "Pointer Reveal and Click-Through": "Doorkijken en doorklikken met de aanwijzer",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hoeveel van het vak onder de aanwijzer verdwijnt, en hoe ver het gat eromheen reikt. Klikken gaan door naar de app eronder; houd ⇧ ingedrukt om het vak dekkend te houden en te slepen. Uitgeschakeld vangt het vak klikken op en sleep je het zonder ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Wijs het vak aan om erdoorheen te kijken en te klikken op wat eronder ligt; houd ⇧ ingedrukt om het te verplaatsen",
@@ -281,6 +282,10 @@
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "one": "Na %lld seconde stilte wordt de stapel gewist.",
     "other": "Na %lld seconden stilte wordt de stapel gewist."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "Na %lld seconde waarin niets nieuws wordt gezegd, vervaagt het vak.",
+    "other": "Na %lld seconden waarin niets nieuws wordt gezegd, vervaagt het vak."
   },
   "Preparing translation…": "Vertaling voorbereiden…",
   "Downloading the %@ translation…": "Vertaling naar het %@ downloaden…",

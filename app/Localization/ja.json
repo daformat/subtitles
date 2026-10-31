@@ -171,6 +171,7 @@
  "Models": "モデル",
  "Language": "言語",
  "Clear after": "消去まで",
+ "Hide after": "非表示まで",
  "sec": "秒",
  "Settings": "設定",
  "Fade": "消える度合い",
@@ -192,7 +193,7 @@
  },
  "Text": "文字の濃さ",
  "Subtitle Box": "字幕ボックス",
- "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "ボックスが何行で埋まり、消えて次に移るか。文字の後ろのボックスをどれだけ濃くするか。その下の画面をどれだけぼかすか。⌥ のスタックもこれに従い、ボックスはひと回り淡く表示されます。",
+ "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "ボックスが何行で埋まり、消えて次に移るか。文字の後ろのボックスをどれだけ濃くするか。その下の画面をどれだけぼかすか。新しい発話がないとき、どれだけ表示し続けるか。⌥ のスタックもこれに従い、ボックスはひと回り淡く表示されます。",
  "Pointer Reveal and Click-Through": "ポインタで透かす・クリックを通す",
  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "ポインタの下でボックスがどれだけ消えるか、その穴がどこまで広がるか。クリックは下のアプリに届きます。⇧ を押している間はボックスが透けず、ドラッグで動かせます。オフにすると、ボックスがクリックを受け取り、⇧ なしでドラッグできます。",
  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "ボックスにポインタを置くと透けて見え、下にあるものをクリックできます。⇧ を押したままドラッグすると動かせます",
@@ -268,6 +269,9 @@
  },
  "After %lld seconds with nothing said, the stack is forgotten.": {
   "other": "何も話されないまま %lld 秒たつと、スタックは消去されます。"
+ },
+ "After %lld seconds with nothing new said, the box fades away.": {
+  "other": "新しい発話がないまま %lld 秒たつと、ボックスはフェードアウトします。"
  },
  "Preparing translation…": "翻訳を準備中…",
  "Downloading the %@ translation…": "%@ の翻訳をダウンロード中…",

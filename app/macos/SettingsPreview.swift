@@ -56,6 +56,9 @@ struct PreviewStyle: Equatable, Encodable {
     var maxLines = SubtitleView.defaultMaxLines
     var boxOpacity = SubtitleView.defaultBackgroundOpacity
     var blur = Pill.backdropBlur
+    /// Only for the preview's sentence. Not in `CodingKeys`: the welcome demo
+    /// has no idle fade to follow it with.
+    var hideAfter = OverlayController.defaultTextIdleTimeout
     var revealOpacity = SubtitleView.defaultMaskStrength
     var revealSize = SubtitleView.defaultMaskSize
     var revealEnabled = true
@@ -87,7 +90,7 @@ struct PreviewStyle: Equatable, Encodable {
 
 /// Which control was last touched, so the box can explain that one.
 enum PreviewTopic {
-    case lines, background, blur, reveal, keep, dimness, alignment, expiry
+    case lines, background, blur, hide, reveal, keep, dimness, alignment, expiry
 }
 
 // MARK: - Palette
@@ -1006,7 +1009,7 @@ final class SettingsPreview: NSView {
             // Not while settling: a control being given its value as the window
             // is built is not somebody touching it.
             if Date() > settledAt { stackUntil = focusUntil }
-        case .lines, .background, .blur, .reveal:
+        case .lines, .background, .blur, .hide, .reveal:
             break
         }
         // Immediately, not on the next tick: the sentence is the answer to a
@@ -1037,6 +1040,10 @@ final class SettingsPreview: NSView {
                 ? L("No blur. The picture shows through the pill exactly as it is.")
                 : LP("The picture behind the pill is softened by %lld points.",
                      one: "The picture behind the pill is softened by %lld point.", points)
+        case .hide:
+            return LP("After %lld seconds with nothing new said, the box fades away.",
+                      one: "After %lld second with nothing new said, the box fades away.",
+                      Int(style.hideAfter.rounded()))
         case .reveal:
             guard style.revealEnabled else {
                 return L("The box stays solid under the pointer and takes clicks. Drag it to move it.")

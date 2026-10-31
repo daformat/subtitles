@@ -185,6 +185,7 @@
  "Language": "Мова",
  "Clear Model Cache…": "Очистити кеш моделей…",
  "Clear after": "Очищати через",
+ "Hide after": "Ховати через",
  "sec": "с",
  "Settings": "Параметри",
  "Fade": "Розчинення",
@@ -212,7 +213,7 @@
  },
  "Text": "Текст",
  "Subtitle Box": "Блок субтитрів",
- "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Скільки рядків заповнює блок, перш ніж очиститися й почати новий, наскільки щільне тло під текстом і наскільки розмито зображення під ним. Стос ⌥ бере ці налаштування, лише тло в нього трохи прозоріше.",
+ "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Скільки рядків заповнює блок, перш ніж очиститися й почати новий, наскільки щільне тло під текстом, наскільки розмито зображення під ним і як довго блок лишається на екрані, коли нічого нового не звучить. Стос ⌥ бере ці налаштування, лише тло в нього трохи прозоріше.",
  "Pointer Reveal and Click-Through": "Просвіт і кліки крізь блок",
  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Наскільки блок зникає під вказівником і як далеко навколо нього сягає цей просвіт. Кліки проходять до програми під ним; утримуйте ⇧, щоб блок лишався непрозорим і його можна було перетягнути. Якщо вимкнути, блок приймає кліки й перетягується без ⇧.",
  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Наведіть вказівник на блок, щоб бачити крізь нього й клацати те, що під ним; утримуйте ⇧, щоб посунути його",
@@ -305,6 +306,12 @@
   "few": "Після %lld секунд тиші стос очищається.",
   "many": "Після %lld секунд тиші стос очищається.",
   "other": "Після %lld секунди тиші стос очищається."
+ },
+ "After %lld seconds with nothing new said, the box fades away.": {
+  "one": "Після %lld секунди без нових слів блок зникає.",
+  "few": "Після %lld секунд без нових слів блок зникає.",
+  "many": "Після %lld секунд без нових слів блок зникає.",
+  "other": "Після %lld секунди без нових слів блок зникає."
  },
  "Preparing translation…": "Підготовка перекладу…",
  "Downloading the %@ translation…": "Завантаження мовного пакета для перекладу: %@…",

@@ -1155,7 +1155,13 @@ final class OverlayController {
     // room is quiet.
     private var lastTextAt = Date.distantPast
     private var lastShownText = ""
-    private let textIdleTimeout: TimeInterval = 4
+    /// How long the box stays up with no new words before it fades. Settings ▸
+    /// UI's Hide after.
+    var textIdleTimeout: TimeInterval = OverlayController.defaultTextIdleTimeout
+    static let defaultTextIdleTimeout: TimeInterval = 4
+    /// The slider's ends. Under four seconds a short line is gone before it is
+    /// read; over twenty the box is still up long after the conversation moved on.
+    static let textIdleTimeouts: ClosedRange<TimeInterval> = 4...20
 
     /// When the page currently on screen was opened.
     ///
@@ -3080,9 +3086,18 @@ final class OverlayController {
         // stack that empties under their eyes because nobody spoke for a minute
         // is the one moment this must not fire.
         guard history.shown.isEmpty else { return }
-        guard Date().timeIntervalSince(lastTextAt) >= historyExpiry else { return }
+        guard Date().timeIntervalSince(lastTextAt) >= stackExpiry else { return }
         streams.clear()
         forgetStack()
+    }
+
+    /// Clear after, but never before the box has faded and the offer to save
+    /// the transcript has had its turn: the offer only comes up over a faded
+    /// box, so a long Hide after against a short Clear after would forget the
+    /// stack before it could ask.
+    private var stackExpiry: TimeInterval {
+        isTranscriptOfferEnabled
+            ? max(historyExpiry, textIdleTimeout + transcriptOfferDuration) : historyExpiry
     }
 
     /// Once the source has stopped making sound, or `transcriptOfferDuration`
@@ -3105,7 +3120,7 @@ final class OverlayController {
     /// all if the file could not be written.
     private func offerTranscriptIfIdle() {
         let idle = Date().timeIntervalSince(lastTextAt)
-        let due = isSourceSilent == true || idle >= historyExpiry - transcriptOfferDuration
+        let due = isSourceSilent == true || idle >= stackExpiry - transcriptOfferDuration
         let enoughSaid = debugOffersAnyway || speechInStack >= Self.transcriptOfferMinimum
         let wanted = isTranscriptOfferEnabled && isHistoryExpiryEnabled
             && !savingTranscript && !isSuppressed
@@ -3321,7 +3336,7 @@ final class OverlayController {
         if panel.alphaValue == 0 { boxIsCleared = true }
         offeredSinceText = false
         debugOffersAnyway = true
-        lastTextAt = Date().addingTimeInterval(-max(historyExpiry - transcriptOfferDuration, 0))
+        lastTextAt = Date().addingTimeInterval(-max(stackExpiry - transcriptOfferDuration, 0))
     }
     #endif
 

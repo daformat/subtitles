@@ -206,6 +206,7 @@
   "Transcript": "Transkrypcja",
   "Language": "Język",
   "Clear after": "Wyczyść po",
+  "Hide after": "Ukryj po",
   "sec": "s",
   "Settings": "Ustawienia",
   "Fade": "Zanikanie",
@@ -233,7 +234,7 @@
   },
   "Text": "Tekst",
   "Subtitle Box": "Ramka napisów",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Ile wierszy mieści ramka, zanim się wyczyści i zacznie się nowa, jak kryjące jest tło pod tekstem i jak mocno rozmyty jest obraz pod nim. Stos ⌥ korzysta z tych ustawień, z nieco bardziej przezroczystym tłem.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Ile wierszy mieści ramka, zanim się wyczyści i zacznie się nowa, jak kryjące jest tło pod tekstem, jak mocno rozmyty jest obraz pod nim i jak długo ramka zostaje na ekranie, gdy nie pada nic nowego. Stos ⌥ korzysta z tych ustawień, z nieco bardziej przezroczystym tłem.",
   "Pointer Reveal and Click-Through": "Prześwit i klikanie przez ramkę",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Jak bardzo ramka znika pod wskaźnikiem i jak daleko sięga prześwit wokół niego. Kliknięcia trafiają do aplikacji pod spodem; przytrzymaj ⇧, aby ramka pozostała nieprzezroczysta i dała się przeciągnąć. Po wyłączeniu ramka przyjmuje kliknięcia i można ją przeciągać bez ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Wskaż ramkę, aby widzieć przez nią i klikać to, co pod nią; przytrzymaj ⇧, aby ją przesunąć",
@@ -351,6 +352,12 @@
     "few": "Po %lld sekundach bez mowy stos zostaje zapomniany.",
     "many": "Po %lld sekundach bez mowy stos zostaje zapomniany.",
     "other": "Po %lld sekundy bez mowy stos zostaje zapomniany."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "Po %lld sekundzie bez nowych słów ramka znika.",
+    "few": "Po %lld sekundach bez nowych słów ramka znika.",
+    "many": "Po %lld sekundach bez nowych słów ramka znika.",
+    "other": "Po %lld sekundy bez nowych słów ramka znika."
   },
   "speech|Off": "Nigdy",
   "When VoiceOver Is On": "Gdy VoiceOver jest włączony",

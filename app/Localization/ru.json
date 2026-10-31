@@ -185,6 +185,7 @@
  "Language": "Язык",
  "Clear Model Cache…": "Очистить кэш моделей…",
  "Clear after": "Очищать через",
+ "Hide after": "Скрывать через",
  "sec": "с",
  "Settings": "Настройки",
  "%lld%%": "%lld %%",
@@ -302,6 +303,12 @@
   "many": "После %lld секунд тишины стопка забывается.",
   "other": "После %lld секунды тишины стопка забывается."
  },
+ "After %lld seconds with nothing new said, the box fades away.": {
+  "one": "После %lld секунды без новых слов блок исчезает.",
+  "few": "После %lld секунд без новых слов блок исчезает.",
+  "many": "После %lld секунд без новых слов блок исчезает.",
+  "other": "После %lld секунды без новых слов блок исчезает."
+ },
  "Preparing translation…": "Подготовка перевода…",
  "Downloading the %@ translation…": "Скачивание перевода: %@…",
  "Subtitles Update": "Обновление Subtitles",
@@ -372,7 +379,7 @@
  "Parakeet EOU · %lld ms": "Parakeet EOU · %lld мс",
  "Fade": "Растворение",
  "Forget the stack when idle": "Забывать стопку в тишине",
- "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Сколько строк заполняет блок, прежде чем очиститься и начать новый, насколько плотный фон под текстом и насколько размыто изображение под ним. Стопка ⌥ повторяет эти настройки, но её фон чуть прозрачнее.",
+ "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Сколько строк заполняет блок, прежде чем очиститься и начать новый, насколько плотный фон под текстом, насколько размыто изображение под ним и как долго блок остаётся на экране, когда ничего нового не звучит. Стопка ⌥ повторяет эти настройки, но её фон чуть прозрачнее.",
  "The stack's text is %lld%% as strong as the live box's.": "Текст в стопке насыщен на %lld %% от текста живого блока.",
   "Save Transcript…": "Сохранить расшифровку…",
   "Transcript %@": "Расшифровка %@",

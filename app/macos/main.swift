@@ -152,6 +152,7 @@ enum Defaults {
     static let maxLines = "overlay.maxLines"
     static let boxOpacity = "overlay.boxOpacity"
     static let backdropBlur = "overlay.backdropBlur"
+    static let hideAfter = "overlay.hideAfterSeconds"
     static let historyTextOpacity = "overlay.historyTextOpacity"
     /// See `StackLayout.Alignment`.
     static let historyAlignment = "overlay.historyAlignment"
@@ -1429,6 +1430,10 @@ if useOverlay {
     controller.backdropBlur = min(max(CGFloat(
         UserDefaults.standard.object(forKey: Defaults.backdropBlur) as? Double
             ?? Double(Pill.backdropBlur)), 0), Pill.maxBackdropBlur)
+    controller.textIdleTimeout = min(max(
+        UserDefaults.standard.object(forKey: Defaults.hideAfter) as? Double
+            ?? OverlayController.defaultTextIdleTimeout,
+        OverlayController.textIdleTimeouts.lowerBound), OverlayController.textIdleTimeouts.upperBound)
 
     // Read back from the controller rather than from a copy: the window is built
     // fresh on every open, and the overlay is the thing that actually holds these.
@@ -1489,7 +1494,7 @@ if useOverlay {
                     Defaults.borealisLook, Defaults.borealisStrength, Defaults.history,
                     Defaults.historyDepth, Defaults.historyTextOpacity,
                     Defaults.historyAlignment, Defaults.historyExpiry, Defaults.historyExpires,
-                    Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur,
+                    Defaults.maxLines, Defaults.boxOpacity, Defaults.backdropBlur, Defaults.hideAfter,
                     Defaults.revealOpacity,
                     Defaults.revealWidth, Defaults.revealHeight,
                     Defaults.iconStyle, Defaults.textAlignment, Defaults.theme] {
@@ -1520,6 +1525,7 @@ if useOverlay {
         controller.maxLines = SubtitleView.defaultMaxLines
         controller.boxOpacity = SubtitleView.defaultBackgroundOpacity
         controller.backdropBlur = Pill.backdropBlur
+        controller.textIdleTimeout = OverlayController.defaultTextIdleTimeout
         controller.historyDepth = OverlayController.defaultHistoryDepth
         controller.historyTextOpacity = HistoryPillView.defaultTextOpacity
         controller.historyAlignment = .start
@@ -1643,6 +1649,11 @@ if useOverlay {
     settings.onBackdropBlur = { value in
         controller.backdropBlur = value
         UserDefaults.standard.set(Double(value), forKey: Defaults.backdropBlur)
+    }
+    settings.hideAfter = { controller.textIdleTimeout }
+    settings.onHideAfter = { seconds in
+        controller.textIdleTimeout = seconds
+        UserDefaults.standard.set(seconds, forKey: Defaults.hideAfter)
     }
     settings.maxLines = { controller.maxLines }
     settings.onMaxLines = { lines in

@@ -196,6 +196,7 @@
   "Transcript": "Avskrift",
   "Language": "Språk",
   "Clear after": "Tøm etter",
+  "Hide after": "Skjul etter",
   "sec": "sek.",
   "Settings": "Innstillinger",
   "Fade": "Uttoning",
@@ -219,7 +220,7 @@
   },
   "Text": "Tekst",
   "Subtitle Box": "Undertekstboks",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "Hvor mange linjer en boks fyller før den tømmes og en ny begynner, hvor dekkende flaten bak teksten er, og hvor mye bildet under den mykes opp. ⌥-stabelen følger disse innstillingene, bare litt mer gjennomsiktig.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "Hvor mange linjer en boks fyller før den tømmes og en ny begynner, hvor dekkende flaten bak teksten er, hvor mye bildet under den mykes opp, og hvor lenge den blir stående når ingenting nytt blir sagt. ⌥-stabelen følger disse innstillingene, bare litt mer gjennomsiktig.",
   "Pointer Reveal and Click-Through": "Gjennomsyn og klikk gjennom boksen",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "Hvor mye av boksen som forsvinner under pekeren, og hvor langt hullet rundt den rekker. Klikk går gjennom til appen under; hold nede ⇧ for å la boksen være heldekkende og dra den. Slått av tar boksen imot klikk og kan dras uten ⇧.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "Pek på boksen for å se gjennom den og klikke på det som ligger under; hold nede ⇧ for å flytte den",
@@ -323,6 +324,10 @@
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "one": "Etter %lld sekund uten tale glemmes stabelen.",
     "other": "Etter %lld sekunder uten tale glemmes stabelen."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "one": "Etter %lld sekund uten ny tale tones boksen ut.",
+    "other": "Etter %lld sekunder uten ny tale tones boksen ut."
   },
   "speech|Off": "Av",
   "When VoiceOver Is On": "Når VoiceOver er på",

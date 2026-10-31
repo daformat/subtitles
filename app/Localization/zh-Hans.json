@@ -171,6 +171,7 @@
  "Models": "模型",
  "Language": "语言",
  "Clear after": "闲置时长",
+ "Hide after": "隐藏前等待",
  "sec": "秒",
  "Settings": "设置",
  "Fade": "淡出程度",
@@ -192,7 +193,7 @@
  },
  "Text": "文字",
  "Subtitle Box": "字幕块",
- "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "一个字幕块写满几行后清空重来、文字背后的底板有多不透明、底下的画面模糊到什么程度。⌥ 调出的这一叠也沿用这些设置，只是底板稍淡一些。",
+ "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "一个字幕块写满几行后清空重来、文字背后的底板有多不透明、底下的画面模糊到什么程度，以及没有新的话语时它停留多久。⌥ 调出的这一叠也沿用这些设置，只是底板稍淡一些。",
  "Pointer Reveal and Click-Through": "指针下淡出与点按穿透",
  "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "指针下的字幕块透明到什么程度，透明区域向四周延伸多远。点按会穿过字幕块到达下面的 App；按住 ⇧ 可让字幕块保持不透明并拖动它。关闭后，字幕块会接收点按，不按 ⇧ 也能拖动。",
  "Point at the box to see through it and click what is under it; hold ⇧ to move it": "指针移到字幕块上即可透过它看，并点按下面的内容；按住 ⇧ 拖动即可移动它",
@@ -268,6 +269,9 @@
  },
  "After %lld seconds with nothing said, the stack is forgotten.": {
   "other": "%lld 秒没人说话后，这一叠就会清空。"
+ },
+ "After %lld seconds with nothing new said, the box fades away.": {
+  "other": "%lld 秒没有新的话语后，字幕块就会淡出。"
  },
  "Preparing translation…": "正在准备翻译…",
  "Downloading the %@ translation…": "正在下载%@翻译…",

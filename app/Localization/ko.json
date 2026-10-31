@@ -171,6 +171,7 @@
   "Models": "모델",
   "Language": "언어",
   "Clear after": "지우기까지",
+  "Hide after": "숨기기까지",
   "sec": "초",
   "Settings": "설정",
   "Fade": "투명도",
@@ -192,7 +193,7 @@
   },
   "Text": "글자",
   "Subtitle Box": "캡션 상자",
-  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, and how far the picture under it is softened. The ⌥ stack follows these, a shade less solid.": "상자가 몇 줄을 채운 뒤 지우고 새로 시작할지, 글자 뒤 배경이 얼마나 불투명할지, 그 아래 화면을 얼마나 흐리게 할지 정합니다. ⌥ 키로 쌓이는 상자도 이 설정을 따르되, 배경이 조금 더 옅습니다.",
+  "How many lines a box fills before it clears and starts a new one, how solid the box behind the text is, how far the picture under it is softened, and how long it stays up once nothing new is said. The ⌥ stack follows these, a shade less solid.": "상자가 몇 줄을 채운 뒤 지우고 새로 시작할지, 글자 뒤 배경이 얼마나 불투명할지, 그 아래 화면을 얼마나 흐리게 할지, 새로 하는 말이 없을 때 얼마나 오래 남아 있을지 정합니다. ⌥ 키로 쌓이는 상자도 이 설정을 따르되, 배경이 조금 더 옅습니다.",
   "Pointer Reveal and Click-Through": "포인터 투명 효과 및 클릭 통과",
   "How much of the box disappears under the pointer, and how far the hole around it reaches. Clicks go through to the app underneath; hold ⇧ to keep the box solid and drag it. Turned off, the box takes clicks and drags without ⇧.": "포인터 아래에서 상자가 얼마나 투명해질지, 그 주변 어디까지 비쳐 보일지 정합니다. 클릭은 아래에 있는 앱으로 전달되며, ⇧ 키를 누르고 있으면 상자가 그대로 보이고 드래그할 수 있습니다. 끄면 상자가 클릭을 받고 ⇧ 키 없이 드래그할 수 있습니다.",
   "Point at the box to see through it and click what is under it; hold ⇧ to move it": "상자에 포인터를 올리면 비쳐 보이고 아래에 있는 것을 클릭할 수 있으며, ⇧ 키를 누른 채 드래그하면 옮길 수 있습니다",
@@ -268,6 +269,9 @@
   },
   "After %lld seconds with nothing said, the stack is forgotten.": {
     "other": "%lld초 동안 아무 말이 없으면 쌓인 상자를 지웁니다."
+  },
+  "After %lld seconds with nothing new said, the box fades away.": {
+    "other": "%lld초 동안 새로 하는 말이 없으면 상자가 사라집니다."
   },
   "Preparing translation…": "번역 준비 중…",
   "Downloading the %@ translation…": "%@ 번역 다운로드 중…",
