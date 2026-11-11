@@ -4,6 +4,24 @@ Every released version of Subtitles, newest first. Dates are the release commit'
 Versions are the `VERSION` at the top of `build.sh`, which is what the About panel
 and the DMG name show.
 
+## 1.22.0 · 2026-11-11
+
+- **Choose your own shortcuts.** Settings has a new Shortcuts tab. Under
+  Keys to Press, click Pause or Resume, Stop or Repeat Speech or Search
+  Recent Boxes and type new keys; ⌫ removes one and ⎋ leaves it as it
+  was. Keys another action, macOS or another app already uses are
+  refused, and so are keys without ⌥ or ⌃, which would type text or take
+  a menu command from other apps.
+- **Choose the keys you hold.** Under Keys to Hold, pick the key for
+  Recent Boxes (⌥), Move the Box (⇧) and Original Language (⌃). Pick one
+  another row has and the two swap. Search Recent Boxes follows the
+  Recent Boxes key, so ⌃ makes it ⌃F, unless you set it yourself.
+- **Everything names your keys.** The menu, its tooltips, the settings,
+  the search pill and the welcome window's demo say the keys you chose
+  and answer to them.
+- **Settings no longer quits the app** when its language is switched
+  twice in a row.
+
 ## 1.21.1 · 2026-10-31
 
 - **Hide after, better worded in eleven languages.** In Settings ▸ UI ▸
