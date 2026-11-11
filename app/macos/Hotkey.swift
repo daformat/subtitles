@@ -19,6 +19,39 @@ final class Hotkey {
     fileprivate let action: () -> Void
 
     private let id: UInt32
+    private let keyCode: Int
+    private let modifiers: Int
+
+    /// Every hotkey alive, for `isSuspended`.
+    private static let live = NSHashTable<Hotkey>.weakObjects()
+
+    /// While a shortcut is being recorded in Settings: the keys pressed go to
+    /// the field rather than to what they are bound to, and a probe for
+    /// another app's use of them is not answered by one of ours. The handlers
+    /// stay installed; only the registrations come and go.
+    static var isSuspended = false {
+        didSet {
+            guard isSuspended != oldValue else { return }
+            for hotkey in live.allObjects {
+                if isSuspended { hotkey.unregister() } else { _ = hotkey.register() }
+            }
+        }
+    }
+
+    /// Whether the combination can be registered: false when another app
+    /// has it, or macOS will not hand it out.
+    static func isFree(keyCode: Int, modifiers: Int) -> Bool {
+        var probe: EventHotKeyRef?
+        let probeID = EventHotKeyID(signature: OSType(0x5355_4253 /* "SUBS" */), id: 0xFFFF)
+        guard RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), probeID,
+                                  GetApplicationEventTarget(), 0, &probe) == noErr else { return false }
+        if let probe { UnregisterEventHotKey(probe) }
+        return true
+    }
+
+    convenience init?(_ combo: KeyCombo, id: UInt32, action: @escaping () -> Void) {
+        self.init(keyCode: combo.keyCode, modifiers: combo.carbonModifiers, id: id, action: action)
+    }
 
     /// `keyCode` is a virtual key code (`kVK_ANSI_S` etc.); `modifiers` uses the
     /// Carbon constants (`cmdKey`, `optionKey`, …). `id` tells this hotkey's
@@ -27,6 +60,8 @@ final class Hotkey {
     init?(keyCode: Int, modifiers: Int, id: UInt32 = 1, action: @escaping () -> Void) {
         self.action = action
         self.id = id
+        self.keyCode = keyCode
+        self.modifiers = modifiers
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -55,16 +90,28 @@ final class Hotkey {
         guard InstallEventHandler(GetApplicationEventTarget(), callback, 1, &eventType,
                                   selfPtr, &handlerRef) == noErr else { return nil }
 
-        let hotkeyID = EventHotKeyID(signature: OSType(0x5355_4253 /* "SUBS" */), id: id)
-        guard RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID,
-                                  GetApplicationEventTarget(), 0, &ref) == noErr else {
+        // Made while recording, it waits for the recording to end.
+        guard Self.isSuspended || register() else {
             if let handlerRef { RemoveEventHandler(handlerRef) }
             return nil
         }
+        Self.live.add(self)
+    }
+
+    private func register() -> Bool {
+        guard ref == nil else { return true }
+        let hotkeyID = EventHotKeyID(signature: OSType(0x5355_4253 /* "SUBS" */), id: id)
+        return RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID,
+                                   GetApplicationEventTarget(), 0, &ref) == noErr
+    }
+
+    private func unregister() {
+        if let ref { UnregisterEventHotKey(ref) }
+        ref = nil
     }
 
     deinit {
-        if let ref { UnregisterEventHotKey(ref) }
+        unregister()
         if let handlerRef { RemoveEventHandler(handlerRef) }
     }
 }

@@ -131,6 +131,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private static let readoutWidth: CGFloat = 88
 
     private var window: NSWindow?
+    /// `width`, or wider when the header needs it (`install`).
+    private var windowWidth = SettingsWindow.width
     /// Scrolls the pane when the screen is too short for it. Always present
     /// rather than installed on demand: a window that is tall enough today is
     /// one display change away from not being, and the scrollers hide
@@ -165,6 +167,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             (L("UI", "Settings tab: how the caption boxes look and behave"), "captions.bubble"),
             (L("Models", "Settings tab: the speech recognition models"), "cpu"),
             (L("Transcript", "Settings tab: the offer to save a transcript, and what a saved one holds"), "doc.text"),
+            (L("Shortcuts", "Settings tab: the keys pressed or held for the app's features"), "keyboard"),
             (L("Language", "Settings tab: the language of the app's own menus and windows"), "globe"),
         ]
         #if DEV_BUILD
@@ -252,6 +255,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         speakerRow = nil
         namesRow = nil
         removable = []
+        shortcutFields = [:]
+        holdPopups = [:]
     }
 
     /// The model can be switched from the menu while this window sits open, which
@@ -627,7 +632,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// construction, so the only way to show new ones is to build new rows.
     private func install(into window: NSWindow) {
         stacks = [buildUIStack(), buildModelsStack(), buildTranscriptStack(),
-                  buildLanguageStack()]
+                  buildShortcutsStack(), buildLanguageStack()]
         #if DEV_BUILD
         stacks.append(buildDebugStack())
         #endif
@@ -642,6 +647,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         header.orientation = .horizontal
         header.spacing = 2
         header.alignment = .centerY
+        // Five panes' names in Swedish come to within a few points of the
+        // column, and a development copy has a sixth: the window widens to
+        // its header rather than clip it, the panes staying the column's width.
+        windowWidth = max(Self.width, ceil(header.fittingSize.width) + 24)
 
         // Centred under the title, in a strip the window background shows
         // through — nothing here draws a surface of its own.
@@ -749,7 +758,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // `frameRect(forContentRect:)` does the titlebar arithmetic; keeping the
         // top edge is what stops the window walking up and down the screen as
         // panes of different heights are selected.
-        let content = NSRect(x: 0, y: 0, width: Self.width,
+        let content = NSRect(x: 0, y: 0, width: windowWidth,
                              height: window.contentView?.fittingSize.height ?? 0)
         var frame = window.frameRect(forContentRect: content)
         frame.origin.x = window.frame.minX
@@ -1012,10 +1021,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         screen.apply(currentStyle())
 
         section(L("Subtitle Box"),
-                L("How many lines a box fills before it clears and starts a new one, "
+                Shortcuts.say(L("How many lines a box fills before it clears and starts a new one, "
                 + "how solid the box behind the text is, how far the picture "
                 + "under it is softened, and how long it stays up once nothing new "
-                + "is said. The ⌥ stack follows these, a shade less solid."),
+                + "is said. The ⌥ stack follows these, a shade less solid.")),
                 Self.grid([lines.cells, background.cells, blur.cells, hide.cells]), nil)
         revealSwitch.target = self
         revealSwitch.action = #selector(toggleReveal)
@@ -1023,10 +1032,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         revealRows = [opacity, width, height]
 
         section(L("Pointer Reveal and Click-Through", "Settings section and menu switch: the box turning see-through under the mouse pointer, and clicks passing through it to the app underneath"),
-                L("How much of the box disappears under the pointer, and how far the "
+                Shortcuts.say(L("How much of the box disappears under the pointer, and how far the "
                 + "hole around it reaches. Clicks go through to the app underneath; "
                 + "hold ⇧ to keep the box solid and drag it. Turned off, the box "
-                + "takes clicks and drags without ⇧."),
+                + "takes clicks and drags without ⇧.")),
                 Self.grid(revealRows.map(\.cells)), revealSwitch)
         syncRevealEnabled()
         historySwitch.target = self
@@ -1067,9 +1076,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         recent.spacing = 10
 
         section(L("Recent Boxes"),
-                L("How many finished boxes ⌥ can bring back and scroll through, "
+                Shortcuts.say(L("How many finished boxes ⌥ can bring back and scroll through, "
                 + "how far their text sits behind the live one's, and which side "
-                + "they line up on."),
+                + "they line up on.")),
                 recent, historySwitch)
         syncHistoryEnabled()
 
@@ -1349,6 +1358,163 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         offerRow?.isEnabled = expires && offerSwitch.state == .on
         autoSaveRow?.isEnabled = expires && offerSwitch.state == .on
         offerCaption?.isHidden = expires
+    }
+
+    // MARK: - Shortcuts
+
+    private var shortcutFields: [ShortcutAction: ShortcutField] = [:]
+    private var holdPopups: [Hold: NSPopUpButton] = [:]
+    /// Under the fields: why the keys just typed were refused.
+    private let shortcutProblem = NSTextField(wrappingLabelWithString: "")
+    private let restoreShortcutsButton = NSButton(title: "", target: nil, action: nil)
+
+    private func buildShortcutsStack() -> NSStackView {
+        let (stack, section) = Self.makeStack()
+
+        let pressLabels = ShortcutAction.allCases.map { Self.rowLabel($0.title) }
+        let holdTitles = [
+            Hold.stack: L("Recent Boxes"),
+            Hold.drag: L("Move the Box", "Settings ▸ Shortcuts: the key held to pick up the caption box and drag it"),
+            Hold.peek: L("Original Language", "Settings ▸ Shortcuts: the key held to show the original language in place of the translation"),
+        ]
+        let holdLabels = Hold.allCases.map { Self.rowLabel(holdTitles[$0] ?? "") }
+        // One label column for both grids, so the fields and the popups start
+        // on the same line.
+        let labelWidth = (pressLabels + holdLabels).map { ceil($0.intrinsicContentSize.width) }.max() ?? 0
+
+        shortcutFields = [:]
+        var pressRows: [[NSView]] = []
+        for (action, label) in zip(ShortcutAction.allCases, pressLabels) {
+            let field = ShortcutField(title: action.title)
+            field.combo = action.combo
+            field.onRecord = { [weak self] combo in
+                if let combo {
+                    // Pressed with the stack up, so with its key down: Search
+                    // has it, whatever else was typed.
+                    let combo = action == .search
+                        ? KeyCombo(keyCode: combo.keyCode, modifiers: combo.modifiers.union(Hold.stack.key.flag))
+                        : combo
+                    if let problem = Shortcuts.problem(with: combo, for: action) { return problem }
+                    Shortcuts.set(combo, for: action)
+                } else {
+                    Shortcuts.set(nil, for: action)
+                }
+                self?.syncShortcuts()
+                return nil
+            }
+            field.onProblem = { [weak self] message in
+                self?.shortcutProblem.stringValue = message ?? ""
+                self?.shortcutProblem.isHidden = message == nil
+            }
+            shortcutFields[action] = field
+            pressRows.append([label, field])
+        }
+        shortcutProblem.font = .systemFont(ofSize: 11)
+        shortcutProblem.textColor = .systemRed
+        shortcutProblem.preferredMaxLayoutWidth = Self.contentWidth
+        shortcutProblem.isHidden = true
+        let press = NSStackView(views: [Self.shortcutGrid(pressRows, labelWidth: labelWidth), shortcutProblem])
+        press.orientation = .vertical
+        press.alignment = .leading
+        press.spacing = 8
+
+        section(L("Keys to Press", "Settings section: shortcuts that work in any app"),
+                Shortcuts.say(L("These work from any app, and those keys no longer reach it. Click "
+                  + "one and type new keys; ⌫ removes it, ⎋ leaves it as it was. Search "
+                  + "is pressed with the recent boxes up, so it always includes their key, ⌥.",
+                  "Settings ▸ Shortcuts; Search is the Search Recent Boxes shortcut, ⌥ the key held for the recent boxes")),
+                press, nil)
+
+        holdPopups = [:]
+        var holdRows: [[NSView]] = []
+        for (hold, label) in zip(Hold.allCases, holdLabels) {
+            let popup = NSPopUpButton()
+            popup.autoenablesItems = false
+            for key in HoldKey.allCases {
+                popup.addItem(withTitle: key.title)
+                popup.lastItem?.representedObject = key.rawValue
+                if let refusal = hold.refusal(of: key) {
+                    popup.lastItem?.isEnabled = false
+                    popup.lastItem?.toolTip = refusal
+                }
+            }
+            popup.target = self
+            popup.action = #selector(chooseHoldKey(_:))
+            popup.identifier = NSUserInterfaceItemIdentifier(hold.rawValue)
+            holdPopups[hold] = popup
+            holdRows.append([label, popup])
+        }
+        syncHoldPopups()
+
+        section(L("Keys to Hold", "Settings section: keys held down over the captions"),
+                L("Held over the captions, these leave other apps their keys. Each "
+                  + "needs a key of its own: pick one another uses, and the two swap."),
+                Self.shortcutGrid(holdRows, labelWidth: labelWidth), nil)
+
+        restoreShortcutsButton.title = L("Restore Default Shortcuts", "Settings ▸ Shortcuts button: every shortcut and held key back to how it started")
+        restoreShortcutsButton.bezelStyle = .push
+        restoreShortcutsButton.target = self
+        restoreShortcutsButton.action = #selector(restoreShortcuts)
+        restoreShortcutsButton.isEnabled = !Shortcuts.areDefaults
+        if let last = stack.arrangedSubviews.last { stack.setCustomSpacing(20, after: last) }
+        stack.addArrangedSubview(restoreShortcutsButton)
+        return stack
+    }
+
+    private func syncShortcuts() {
+        for (action, field) in shortcutFields { field.combo = action.combo }
+        restoreShortcutsButton.isEnabled = !Shortcuts.areDefaults
+    }
+
+    private func syncHoldPopups() {
+        for (hold, popup) in holdPopups {
+            popup.selectItem(at: HoldKey.allCases.firstIndex(of: hold.key) ?? 0)
+        }
+    }
+
+    /// A held key changed, and maybe another's with it, and Search's: the
+    /// whole window is built again, after the popup's menu has finished with
+    /// it, since the UI pane's captions name the held keys too.
+    @objc private func chooseHoldKey(_ sender: NSPopUpButton) {
+        guard let hold = sender.identifier.flatMap({ Hold(rawValue: $0.rawValue) }),
+              let key = (sender.selectedItem?.representedObject as? String).flatMap(HoldKey.init(rawValue:))
+        else { return }
+        Shortcuts.set(key, for: hold)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            self.install(into: window)
+        }
+    }
+
+    @objc private func restoreShortcuts() {
+        Shortcuts.restoreDefaults()
+        shortcutProblem.isHidden = true
+        // Not from inside the button's own action: it is one of the views
+        // being replaced.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            self.install(into: window)
+        }
+    }
+
+    private static func rowLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.alignment = .right
+        return label
+    }
+
+    /// Label and control, the labels' column as wide as the widest label in
+    /// the pane, and the controls their own width rather than stretched.
+    private static func shortcutGrid(_ rows: [[NSView]], labelWidth: CGFloat) -> NSGridView {
+        let grid = NSGridView(views: rows)
+        grid.rowSpacing = 8
+        grid.columnSpacing = 10
+        grid.yPlacement = .center
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 0).width = labelWidth
+        grid.column(at: 1).xPlacement = .leading
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        return grid
     }
 
     // MARK: - Language

@@ -627,8 +627,9 @@ speaker.speed = UserDefaults.standard.string(forKey: Defaults.speechSpeed)
 if #available(macOS 15, *) { speaker.language = translateTo?.locale }
 speaker.onSpeaking = { speaking in tap.duck.target = speaking ? Speaker.duckedGain : 1 }
 speaker.onVoice = { echoGate.appIsSpeaking($0) }
-/// ⌥⌘. while the translation is read aloud: registered only then, so it is
-/// not taken from other apps for a feature that is off.
+/// ⌥⌘. while the translation is read aloud, or the keys chosen for it in
+/// Settings ▸ Shortcuts: registered only then, so they are not taken from
+/// other apps for a feature that is off.
 var speechHotkey: Hotkey?
 
 var startingSource: AudioSource = .allSystemAudio
@@ -722,16 +723,21 @@ func applySpeechState() {
     }
     followEchoCancellation()
     syncEchoGate()
-    if speaker.isActive, speechHotkey == nil {
-        speechHotkey = Hotkey(keyCode: kVK_ANSI_Period, modifiers: cmdKey | optionKey, id: 3) {
+    syncSpeechHotkey()
+}
+speaker.onStateChanged = { applySpeechState() }
+
+/// Up while the translation is read aloud and has keys to answer to.
+func syncSpeechHotkey() {
+    if speaker.isActive, speechHotkey == nil, let combo = ShortcutAction.speech.combo {
+        speechHotkey = Hotkey(combo, id: ShortcutAction.speech.hotkeyID) {
             speaker.stopOrRepeat()
         }
-        if speechHotkey == nil { err("could not register ⌥⌘. (already taken?)") }
+        if speechHotkey == nil { err("could not register \(combo.glyphs) (already taken?)") }
     } else if !speaker.isActive {
         speechHotkey = nil
     }
 }
-speaker.onStateChanged = { applySpeechState() }
 
 func resumeCapture() {
     // Paused means the tap stays down, whoever is asking. Variant and source
@@ -1340,6 +1346,15 @@ func shutdownCleanly() -> Never {
 var statusMenu: StatusMenuController?
 var hotkey: Hotkey?
 
+/// ⌥⌘S, or the keys chosen in Settings ▸ Shortcuts, or none. Carbon, so it
+/// needs no Accessibility permission: see Hotkey.swift.
+func registerPauseHotkey() {
+    hotkey = nil
+    guard let combo = ShortcutAction.pause.combo else { return }
+    hotkey = Hotkey(combo, id: ShortcutAction.pause.hotkeyID) { togglePause() }
+    if hotkey == nil { err("could not register \(combo.glyphs) (already taken?)") }
+}
+
 if useOverlay {
     let controller = OverlayController(fontSize: fontSize)
     if resetPosition { controller.resetPosition() }
@@ -1946,13 +1961,25 @@ if useOverlay {
     // the overlay and the menu, both of which exist only here.
     if let target = translateTo { applyTranslation(target) }
 
-    // ⌥⌘S. Carbon, so it needs no Accessibility permission — see Hotkey.swift.
-    hotkey = Hotkey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey) { togglePause() }
-    if hotkey == nil { err("could not register ⌥⌘S (already taken?)") }
-    // ⌥⌘. too, when the translation is read aloud.
+    registerPauseHotkey()
+    // Stop or Repeat Speech too, when the translation is read aloud.
     applySpeechState()
+    // Changed in Settings ▸ Shortcuts: registered again with the new keys.
+    // The holds are read as they are polled, and the menu as it opens. The
+    // welcome window's demo and hints are given the held keys when they are
+    // built, so a change to those shows it again, if it is up.
+    var heldKeys = Hold.allCases.map(\.key)
+    NotificationCenter.default.addObserver(forName: Shortcuts.changed, object: nil, queue: .main) { _ in
+        registerPauseHotkey()
+        speechHotkey = nil
+        syncSpeechHotkey()
+        guard Hold.allCases.map(\.key) != heldKeys else { return }
+        heldKeys = Hold.allCases.map(\.key)
+        WelcomeWindow.shared.relocalize()
+    }
 
-    err("overlay on: click-through; hold ⇧ to drag it, ⌥ for recent boxes. ⌥⌘S pauses.")
+    err("overlay on: click-through; hold \(Hold.drag.key.glyph) to drag it, \(Hold.stack.key.glyph) for recent boxes."
+        + (ShortcutAction.pause.combo.map { " \($0.glyphs) pauses." } ?? ""))
 }
 
 // [main-edition]

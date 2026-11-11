@@ -336,8 +336,9 @@ final class SubtitleView: NSView {
         }
     }
 
-    /// ⇧ is down: every box drags, the ones that take clicks included.
-    static var isDragHeld: Bool { NSEvent.modifierFlags.contains(.shift) }
+    /// ⇧ is down, or the key chosen for it: every box drags, the ones that
+    /// take clicks included.
+    static var isDragHeld: Bool { Hold.drag.isDown }
 
     /// The buttons in reading order: `secondaryAction`'s, when there is
     /// one, then `action`'s.
@@ -2063,13 +2064,13 @@ final class OverlayController {
             // because it changes what is drawn, not how the panel behaves, and the
             // two are independent: peeking while dragging is fine. Inert with
             // both languages shown: there is nothing to peek at.
-            let wantsSource = NSEvent.modifierFlags.contains(.control) && !self.showsBothLanguages
+            let wantsSource = Hold.peek.isDown && !self.showsBothLanguages
             if wantsSource != self.showsSource {
                 self.showsSource = wantsSource
                 self.redraw()
             }
 
-            let wantsDrag = NSEvent.modifierFlags.contains(.shift) && !self.isSuppressed
+            let wantsDrag = Hold.drag.isDown && !self.isSuppressed
             if wantsDrag != self.isDraggable {
                 self.isDraggable = wantsDrag
                 // Nudge visible while it can be grabbed, so it is obvious the
@@ -2129,7 +2130,6 @@ final class OverlayController {
     /// closing while ⌥ is still held joins the stack immediately — `present`
     /// leaves boxes that were already up alone and animates only the new one.
     private func updateHistory() {
-        let flags = NSEvent.modifierFlags
         // Same poll, same reason: an outside click unpins the search, and the
         // mouse buttons are as pollable as the modifiers.
         history.noticeClicks()
@@ -2137,7 +2137,7 @@ final class OverlayController {
         // the box while it is being picked up just gets in the way. Pinned by
         // the search, the stack stays whatever the keys are doing: that is what
         // pinning is for.
-        let held = flags.contains(.option) && !flags.contains(.shift)
+        let held = Hold.stack.isDown && !Hold.drag.isDown
         let wants = isHistoryEnabled && !isSuppressed && !pastPages.isEmpty
             && (held || history.isPinned)
         guard wants else {
@@ -2248,8 +2248,7 @@ final class OverlayController {
     /// starts going solid the moment ⇧ is down rather than on the next
     /// modifier poll.
     private var revealHeld: Bool {
-        let flags = NSEvent.modifierFlags
-        return flags.contains(.shift) || flags.contains(.option) || history.isPinned || isHandled
+        return Hold.drag.isDown || Hold.stack.isDown || history.isPinned || isHandled
     }
 
     /// How far open the reveal is before easing, 0 to 1.
@@ -2993,8 +2992,7 @@ final class OverlayController {
     /// its own, nor while it is being dragged or resized. Under ⌥ alone the
     /// box still lets clicks through, except on the button itself.
     private func updateCopyButton() {
-        let flags = NSEvent.modifierFlags
-        let takesClicks = flags.contains(.shift) || flags.contains(.option) || !isRevealEnabled
+        let takesClicks = Hold.drag.isDown || Hold.stack.isDown || !isRevealEnabled
         let wanted = takesClicks && !isSuppressed && !isHandled && panel.alphaValue > 0
             && view.action == nil && panel.frame.contains(NSEvent.mouseLocation)
             && !view.copyText.isEmpty

@@ -478,8 +478,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         let toggle = NSMenuItem(
             title: isPaused() ? L("Resume Subtitles") : L("Pause Subtitles"),
-            action: #selector(togglePause), keyEquivalent: "s")
-        toggle.keyEquivalentModifierMask = [.command, .option]
+            action: #selector(togglePause), keyEquivalent: "")
+        Self.show(ShortcutAction.pause.combo, on: toggle)
         toggle.target = self
         menu.addItem(toggle)
         menu.addItem(.separator())
@@ -526,14 +526,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                                 action: #selector(toggleReveal), keyEquivalent: "")
         reveal.target = self
         reveal.state = revealEnabled() ? .on : .off
-        reveal.toolTip = L("Point at the box to see through it and click what is under it; hold ⇧ to move it")
+        reveal.toolTip = Shortcuts.say(L("Point at the box to see through it and click what is under it; hold ⇧ to move it"))
         menu.addItem(reveal)
 
-        let history = NSMenuItem(title: L("Recent Boxes On ⌥", "Menu switch: holding the ⌥ key brings back the last few caption boxes"),
+        let history = NSMenuItem(title: Shortcuts.say(L("Recent Boxes On ⌥", "Menu switch: holding the ⌥ key brings back the last few caption boxes")),
                                  action: #selector(toggleHistory), keyEquivalent: "")
         history.target = self
         history.state = historyEnabled() ? .on : .off
-        history.toolTip = L("Hold ⌥ to stack the last few boxes back up; scroll for older")
+        history.toolTip = Shortcuts.say(L("Hold ⌥ to stack the last few boxes back up; scroll for older"))
         menu.addItem(history)
 
         // The box's colors and the glow, a group of their own under the
@@ -1004,8 +1004,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // The global ⌥⌘. shown where it can be found, and usable from here too.
         let active = speechActive()
         let stop = NSMenuItem(title: L("Stop or Repeat Speech", "Speak Translation action: silences the voice, or reads the last line again when it is quiet"),
-                              action: active ? #selector(stopOrRepeatSpeech) : nil, keyEquivalent: ".")
-        stop.keyEquivalentModifierMask = [.command, .option]
+                              action: active ? #selector(stopOrRepeatSpeech) : nil, keyEquivalent: "")
+        Self.show(ShortcutAction.speech.combo, on: stop)
         stop.target = active ? self : nil
         stop.isEnabled = active
         sub.addItem(stop)
@@ -1150,6 +1150,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: actions
 
     @objc private func togglePause() { onTogglePause?() }
+
+    /// The keys set in Settings ▸ Shortcuts beside the item they also do,
+    /// or none.
+    private static func show(_ combo: KeyCombo?, on item: NSMenuItem) {
+        guard let combo else { return }
+        item.keyEquivalent = combo.keyEquivalent
+        item.keyEquivalentModifierMask = combo.modifiers
+    }
     @objc private func toggleReveal() { onToggleReveal?() }
 
     /// Auto, light and dark — see `Pill.Theme`.

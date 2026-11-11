@@ -62,6 +62,10 @@ const CUT_MS = 250;
 //   borealis            Audio Borealis: off | rainbow | northernLights | autumn | monochromeHaze
 //   borealisStrength    strong | medium | subtle
 //   theme               Color Theme, the boxes' colors: auto (the page's) | light | dark
+//   holdStack           the key held for the recent boxes: option | control
+//   holdDrag            the key held to move the box: shift | control | command
+//   holdPeek            the key held for the original: any of the four
+//                       (the app's Settings ▸ Shortcuts; see HOLD)
 const readSettings = (given) => {
   const NUMBER = {
     fontSize: [1, 400], maxLines: [1, 50], boxOpacity: [0, 1], blur: [0, 200],
@@ -75,6 +79,9 @@ const readSettings = (given) => {
     borealis: ['off', 'rainbow', 'northernLights', 'autumn', 'monochromeHaze'],
     borealisStrength: ['strong', 'medium', 'subtle'],
     theme: ['auto', 'light', 'dark'],
+    holdStack: ['option', 'control'],
+    holdDrag: ['shift', 'control', 'command'],
+    holdPeek: ['option', 'control', 'shift', 'command'],
   };
   const out = {};
   const take = (key, value) => {
@@ -242,6 +249,31 @@ const appendKeys = (el, text) => {
   if (at < text.length) el.append(text.slice(at));
 };
 const setKeys = (el, text) => { el.textContent = ''; appendKeys(el, text); };
+
+// The keys held over the captions: ⌥ for the recent boxes, ⇧ to move the
+// box, ⌃ for the original, unless the app's Settings ▸ Shortcuts has chosen
+// others and seeded them (holdStack, holdDrag, holdPeek). Every key the home
+// demo listens for and every one its lines name comes from here: `key` is
+// the event's, `flag` the event property that says it is down, and `say`
+// trades the three default glyphs in a sentence for the chosen ones, in one
+// pass, so two keys that swapped do not swap back. Read once: the app shows
+// the demo again when they change.
+const HOLD = (() => {
+  const KEYS = {
+    option: { key: 'Alt', flag: 'altKey', glyph: '⌥' },
+    control: { key: 'Control', flag: 'ctrlKey', glyph: '⌃' },
+    shift: { key: 'Shift', flag: 'shiftKey', glyph: '⇧' },
+    command: { key: 'Meta', flag: 'metaKey', glyph: '⌘' },
+  };
+  const hold = {
+    stack: KEYS[SETTINGS.holdStack || 'option'],
+    drag: KEYS[SETTINGS.holdDrag || 'shift'],
+    peek: KEYS[SETTINGS.holdPeek || 'control'],
+  };
+  const swaps = { '⌥': hold.stack.glyph, '⇧': hold.drag.glyph, '⌃': hold.peek.glyph };
+  hold.say = (text) => text.replace(/[⌥⇧⌃]/g, (g) => swaps[g]);
+  return hold;
+})();
 (function keycapLabels() {
   document.querySelectorAll('.scene-label').forEach((el) => {
     if (!el.querySelector('kbd') && /[⌥⇧⌃⌘]/.test(el.textContent)) setKeys(el, el.textContent);
@@ -2213,7 +2245,7 @@ const stackSearch = (() => {
       + '<circle cx="10.4" cy="10.4" r="6.8"/><path d="M15.5 15.5 21.4 21.4"/></svg>'
       + '<input class="ds-field" type="text" placeholder="' + label + '" aria-label="' + label + '" tabindex="-1"'
       + ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'
-      + '<span class="ds-hint" aria-hidden="true">⌥F</span>'
+      + '<span class="ds-hint" aria-hidden="true">' + HOLD.stack.glyph + 'F</span>'
       + '<button type="button" class="ds-clear" tabindex="-1" aria-label="Clear">'
       + '<svg viewBox="0 0 24 24" aria-hidden="true"><mask id="ds-x' + n + '"><rect width="24" height="24" fill="#fff"/>'
       + '<path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#000" stroke-width="2.4" stroke-linecap="round"/></mask>'
@@ -2221,7 +2253,7 @@ const stackSearch = (() => {
       // For measuring the closed pill: the placeholder and the hint in their
       // own fonts, laid out but never seen.
       + '<span class="ds-measure" aria-hidden="true">' + label + '</span>'
-      + '<span class="ds-measure ds-hint" aria-hidden="true">⌥F</span>';
+      + '<span class="ds-measure ds-hint" aria-hidden="true">' + HOLD.stack.glyph + 'F</span>';
     history.parentNode.insertBefore(el, history);
     const field = el.querySelector('.ds-field');
     const icon = el.querySelector('.ds-icon');
@@ -2315,14 +2347,18 @@ const stackSearch = (() => {
       opts.onPin();
     });
     field.addEventListener('input', changed);
+    // ⌘, or whichever of ⌥ and ⌃ did not raise the stack: a command, which
+    // is left to the field.
+    const otherHeld = (e) => ['metaKey', 'altKey', 'ctrlKey'].some((f) => f !== HOLD.stack.flag && e[f]);
     field.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); unpin(); return; }
-      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      if (!e[HOLD.stack.flag] || otherHeld(e)) return;
       // ⌥ is what raised the stack, so it is still down as the first letters
       // of a search are typed, and ⌥ with a letter is the layout's alternate
       // character: "an" arrives as "åñ". Stripped from anything that would
       // type a character, and left on everything else, so ⌥⌫ and ⌥← still
       // edit the way they do in any field. ⌥F is the hotkey and types nothing.
+      // The same for ⌃ when it is ⌃ that raises the stack (HOLD).
       let ch = null;
       const letter = /^Key([A-Z])$/.exec(e.code);
       if (letter) ch = e.shiftKey ? letter[1] : letter[1].toLowerCase();
@@ -2356,7 +2392,7 @@ const stackSearch = (() => {
     // ⌥F, only while the stack is up: the rest of the time it belongs to
     // whatever is in front.
     window.addEventListener('keydown', (e) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== 'KeyF') return;
+      if (!e[HOLD.stack.flag] || otherHeld(e) || e.code !== 'KeyF') return;
       if (!visible || starved) return;
       e.preventDefault();
       if (!focused) field.focus();
@@ -3228,13 +3264,14 @@ function fullyInView(el, slack = 0) {
   // twice by then, in the call's second line and the notes' first, in that
   // language. An array of two lines is the older contract and keeps its
   // English word.
+  // The keys they name are the reader's, see HOLD.
   const EPILOGUE = Array.isArray(window.SUBTITLES_EPILOGUE) && window.SUBTITLES_EPILOGUE.length === 2
-    ? window.SUBTITLES_EPILOGUE.map(String)
+    ? window.SUBTITLES_EPILOGUE.map((line) => HOLD.say(String(line)))
     : window.SUBTITLES_EPILOGUE === true
       ? [
         I18N('line.epilogue1', 'Missed a line? Hold ⌥ to rewind: every caption that closed stacks back up.'),
         I18N('line.epilogue2', 'Press ⌥F and type: the stack narrows to the boxes that match.'),
-      ]
+      ].map(HOLD.say)
       : null;
   const EPILOGUE_QUERY = window.SUBTITLES_EPILOGUE === true ? I18N('epilogue.query', 'meeting') : 'meeting';
   // Translation, between the podcast's two lines, on the site as well as on
@@ -3252,8 +3289,8 @@ function fullyInView(el, slack = 0) {
   // most often have to follow.
   const TRANSLATE = {
     first: I18N('line.translate1', '¿Y cuando es en otro idioma?'),
-    source: I18N('line.translate2-src', 'La traducción se hace en tiempo real para ti: pulsa ⌃ para ver el original.'),
-    shown: I18N('line.translate2', 'The translation runs live for you: press ⌃ to reveal the original.'),
+    source: HOLD.say(I18N('line.translate2-src', 'La traducción se hace en tiempo real para ti: pulsa ⌃ para ver el original.')),
+    shown: HOLD.say(I18N('line.translate2', 'The translation runs live for you: press ⌃ to reveal the original.')),
     bothSource: I18N('line.translate3-src', 'O muestra los dos a la vez: el original se queda debajo de la traducción.'),
     both: I18N('line.translate3', 'Or show both at once: the original stays under the translation.'),
   };
@@ -3403,9 +3440,9 @@ function fullyInView(el, slack = 0) {
   // does nothing, in the box or in the stack: the original is already on
   // screen, and there is nothing to reveal.
   let cur = null;
-  let ctrlKey = false;
+  let peekHeld = false;
   let ctrlBeat = false;
-  const peeking = () => (ctrlKey || ctrlBeat) && !S.bothLanguages;
+  const peeking = () => (peekHeld || ctrlBeat) && !S.bothLanguages;
   const underLive = () => {
     if (!cur || !cur.source || !S.bothLanguages) return '';
     const of = cur.line.split(' ').length;
@@ -3464,9 +3501,9 @@ function fullyInView(el, slack = 0) {
     });
   };
   const redraw = () => { drawLive(); retextHistory(); };
-  window.addEventListener('keydown', (e) => { if (e.key === 'Control') { ctrlKey = true; redraw(); } });
-  window.addEventListener('keyup', (e) => { if (e.key === 'Control') { ctrlKey = false; redraw(); } });
-  window.addEventListener('blur', () => { ctrlKey = false; redraw(); });
+  window.addEventListener('keydown', (e) => { if (e.key === HOLD.peek.key) { peekHeld = true; redraw(); } });
+  window.addEventListener('keyup', (e) => { if (e.key === HOLD.peek.key) { peekHeld = false; redraw(); } });
+  window.addEventListener('blur', () => { peekHeld = false; redraw(); });
 
   // `wears` is the app the line belongs to, when the scene knows better than
   // the stack: the podcast's first line starts while its ⌘-tab is still
@@ -3569,7 +3606,7 @@ function fullyInView(el, slack = 0) {
 
       // On film, only under the line that says to press it: the lines with
       // both languages on screen have their original under them already.
-      if (source && CAPTURE && /⌃/.test(line)) {
+      if (source && CAPTURE && line.includes(HOLD.peek.glyph)) {
         await step(hold * 0.45);
         ctrlBeat = true;
         redraw();
@@ -3635,7 +3672,7 @@ function fullyInView(el, slack = 0) {
   // at once and what fades is what the search had on screen.
   const endEpilogue = () => {
     if (!search) return;
-    altKey = false;
+    stackHeld = false;
     search.unpin();
     showHistory();
   };
@@ -3646,6 +3683,10 @@ function fullyInView(el, slack = 0) {
   // blinks the item it is about to act on, and takes the check. No pointer
   // is drawn; the highlight moving is the hand.
   const menu = demoEl && demoEl.querySelector('.mn-root');
+  // Recent Boxes On ⌥, in this page's language, naming the key the reader
+  // holds for it.
+  const historyRow = menu && menu.querySelector('.mn-row[data-id="history"] .mn-label');
+  if (historyRow && historyRow.firstChild) historyRow.firstChild.nodeValue = HOLD.say(historyRow.firstChild.nodeValue);
   const submenu = menu && menu.querySelector('.mn-sub[data-for="translate"]');
   // By hand too, see statusMenu: the rows with a Try badge act on this
   // demo's box and stack, through applySettings below, as the app's own
@@ -3792,12 +3833,12 @@ function fullyInView(el, slack = 0) {
   async function epilogue(from, to) {
     if (EPILOGUE && search) {
       await both(say(EPILOGUE[0], from, from), (async () => {
-        await saidYet('⌥');
-        altKey = true;
+        await saidYet(HOLD.stack.glyph);
+        stackHeld = true;
         showHistory();
       })());
       await both(say(EPILOGUE[1], from, from), (async () => {
-        await saidYet('⌥F');
+        await saidYet(HOLD.stack.glyph + 'F');
         search.focus();
         await step(600);
         for (const ch of EPILOGUE_QUERY) { search.type(ch); await step(150); }
@@ -4101,14 +4142,14 @@ function fullyInView(el, slack = 0) {
   // the app do: the box is being picked up, and the stack is pinned to it.
   // With Pointer Reveal and Click-Through off, the pointer over the box
   // arms it as ⇧ does: see hoverGrab.
-  const boxArm = hoverGrab(box, stage, () => shiftKey || !!boxGrab);
+  const boxArm = hoverGrab(box, stage, () => dragHeld || !!boxGrab);
   const armBox = (on) => {
-    shiftKey = on;
+    dragHeld = on;
     boxArm.sync();
     showHistory();
   };
-  window.addEventListener('keydown', (e) => { if (e.key === 'Shift' && !e.repeat) armBox(true); });
-  window.addEventListener('keyup', (e) => { if (e.key === 'Shift') armBox(false); });
+  window.addEventListener('keydown', (e) => { if (e.key === HOLD.drag.key && !e.repeat) armBox(true); });
+  window.addEventListener('keyup', (e) => { if (e.key === HOLD.drag.key) armBox(false); });
   window.addEventListener('blur', () => armBox(false));
 
   box.addEventListener('pointerdown', (event) => {
@@ -4175,8 +4216,8 @@ function fullyInView(el, slack = 0) {
     },
   });
   const follow = history && stackSearch.follow(history, search);
-  let altKey = false;
-  let shiftKey = false;
+  let stackHeld = false;
+  let dragHeld = false;
   // The menu's Recent Boxes On ⌥.
   let historyOn = S.historyEnabled;
 
@@ -4592,7 +4633,7 @@ function fullyInView(el, slack = 0) {
   // keys are doing.
   const showHistory = () => {
     if (!history || !stage) return;
-    const want = historyOn && ((altKey && !shiftKey) || search.pinned) && past.length > 0;
+    const want = historyOn && ((stackHeld && !dragHeld) || search.pinned) && past.length > 0;
 
     if (want) {
       // A fresh press builds the stack from nothing, so every box rises. Only
@@ -4643,14 +4684,14 @@ function fullyInView(el, slack = 0) {
   window.addEventListener('keydown', (e) => {
     // Held keys repeat, and a repeat that repainted would restart the stagger
     // over and over for as long as ⌥ is down.
-    if (e.key === 'Alt' && !e.repeat) { altKey = true; showHistory(); }
-    if (e.key === 'Shift') queueHole();
+    if (e.key === HOLD.stack.key && !e.repeat) { stackHeld = true; showHistory(); }
+    if (e.key === HOLD.drag.key) queueHole();
   });
   window.addEventListener('keyup', (e) => {
-    if (e.key === 'Alt') { altKey = false; showHistory(); }
-    if (e.key === 'Shift') queueHole();
+    if (e.key === HOLD.stack.key) { stackHeld = false; showHistory(); }
+    if (e.key === HOLD.drag.key) queueHole();
   });
-  window.addEventListener('blur', () => { altKey = false; showHistory(); });
+  window.addEventListener('blur', () => { stackHeld = false; showHistory(); });
 
   // Scrolled away, the demo plays on, and is heard. It only runs while the
   // tab is in front: timers in a backgrounded tab are throttled to about one

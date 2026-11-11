@@ -856,7 +856,7 @@ final class SettingsPreview: NSView {
         L("Play something and these become the real captions, live."),
         L("A box fills to the line limit, then clears and starts the next one. It never scrolls."),
         L("Point anywhere in here and the box dissolves under the pointer, so you can read through it."),
-        L("Finished boxes are kept. Hold ⌥ here, or over the overlay, and they stack back up."),
+        Shortcuts.say(L("Finished boxes are kept. Hold ⌥ here, or over the overlay, and they stack back up.")),
         L("All of it runs on this Mac. Nothing is recorded and nothing is sent anywhere."),
     ] }
 
@@ -1056,16 +1056,16 @@ final class SettingsPreview: NSView {
             return L("Point at the box and this much of it dissolves, this far around the pointer.")
         case .keep:
             guard style.historyEnabled, style.historyDepth > 0 else {
-                return L("⌥ brings nothing back. Finished boxes are gone once they clear.")
+                return Shortcuts.say(L("⌥ brings nothing back. Finished boxes are gone once they clear."))
             }
             switch style.historyDepth {
             case 1:
-                return L("⌥ brings back the last box.")
+                return Shortcuts.say(L("⌥ brings back the last box."))
             case OverlayController.unlimitedHistoryDepth:
-                return L("⌥ brings back every box, newest first, and scrolls through them.")
+                return Shortcuts.say(L("⌥ brings back every box, newest first, and scrolls through them."))
             case let n:
-                return LP("⌥ brings back the last %lld boxes, newest first, and scrolls through them.",
-                          one: "⌥ brings back the last %lld box, newest first, and scrolls through them.", n)
+                return Shortcuts.say(LP("⌥ brings back the last %lld boxes, newest first, and scrolls through them.",
+                                        one: "⌥ brings back the last %lld box, newest first, and scrolls through them.", n))
             }
         case .dimness:
             return LF("The stack's text is %lld%% as strong as the live box's.", pct(style.historyTextOpacity))
@@ -1417,7 +1417,7 @@ final class SettingsPreview: NSView {
     /// keyboard monitor would demand Accessibility permission, and one is not
     /// being asked for to animate a preview.
     private var optionHeld: Bool {
-        window?.isKeyWindow == true && NSEvent.modifierFlags.contains(.option)
+        window?.isKeyWindow == true && Hold.stack.isDown
     }
 
     /// Up while something is asking for it.

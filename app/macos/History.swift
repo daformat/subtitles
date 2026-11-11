@@ -91,17 +91,22 @@ final class HistoryPanel: NSPanel {
     /// a search are typed — and ⌥ with a letter is the layout's alternate
     /// character: "an" arrives as "åñ". Stripped from any keystroke that would
     /// type a character, and left on everything else, so ⌥⌫ and ⌥← still edit
-    /// the way they do in any field.
+    /// the way they do in any field. The same for ⇧ or ⌃ when one of those
+    /// raises the stack instead; never ⌘, which would take ⌘V and ⌘A from
+    /// the field.
     override func sendEvent(_ event: NSEvent) {
-        super.sendEvent(Self.withoutOption(event))
+        super.sendEvent(Self.withoutStackKey(event))
     }
 
-    private static func withoutOption(_ event: NSEvent) -> NSEvent {
+    private static func withoutStackKey(_ event: NSEvent) -> NSEvent {
+        let held = Hold.stack.key.flag
+        let others = NSEvent.ModifierFlags([.command, .control, .option]).subtracting(held)
         guard event.type == .keyDown,
-              event.modifierFlags.contains(.option),
-              !event.modifierFlags.contains(.command),
-              !event.modifierFlags.contains(.control),
-              let plain = event.charactersIgnoringModifiers,
+              held != .command,
+              event.modifierFlags.contains(held),
+              event.modifierFlags.isDisjoint(with: others),
+              let plain = event.characters(byApplyingModifiers: event.modifierFlags
+                  .intersection(.shift).subtracting(held)),
               !plain.isEmpty,
               plain.unicodeScalars.allSatisfy({ scalar in
                   // Printable, and not one of the function-key code points
@@ -112,7 +117,7 @@ final class HistoryPanel: NSPanel {
         else { return event }
         return NSEvent.keyEvent(
             with: .keyDown, location: event.locationInWindow,
-            modifierFlags: event.modifierFlags.subtracting(.option),
+            modifierFlags: event.modifierFlags.subtracting(held),
             timestamp: event.timestamp, windowNumber: event.windowNumber, context: nil,
             characters: plain, charactersIgnoringModifiers: plain,
             isARepeat: event.isARepeat, keyCode: event.keyCode) ?? event
@@ -641,10 +646,12 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
     var compactWidth: CGFloat {
         let word = field.placeholderAttributedString?.size().width ?? 0
         return Self.inset.width + fontSize.rounded() + Self.iconGap + ceil(word) + 4
-            + Self.iconGap + hintWidth + Self.inset.width
+            + hintRoom + Self.inset.width
     }
 
     private var hintWidth: CGFloat { ceil(hint.attributedStringValue.size().width) }
+    /// The hint and the gap before it, or nothing with no keys set for Search.
+    private var hintRoom: CGFloat { hint.stringValue.isEmpty ? 0 : Self.iconGap + hintWidth }
 
     /// Under everything, the blur; over it, the fill; over that, the controls.
     /// The same arrangement as HistoryPillView, for the same reason.
@@ -657,10 +664,11 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
     /// it reaches the controller by the same route, and the field keeps the
     /// keyboard for the next word.
     private let clearButton = ClearButton()
-    /// "⌥F", at the far end of the closed pill: the one place the shortcut can
-    /// be found without reading about it. Gone once the field is open, where
-    /// the ✕ takes that spot.
-    private let hint = NSTextField(labelWithString: "⌥F")
+    /// "⌥F", or the keys set for Search, at the far end of the closed pill:
+    /// the one place the shortcut can be found without reading about it. Gone
+    /// once the field is open, where the ✕ takes that spot, and with no keys
+    /// set. Read again with the style, which is every time the stack goes up.
+    private let hint = NSTextField(labelWithString: "")
     private var style: HistoryStyle
 
     /// The field took the keyboard.
@@ -758,6 +766,7 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
                                                                 weight: .semibold)
         clearButton.contentTintColor = Pill.ink.withAlphaComponent(style.textOpacity * (0.75 + lift))
+        hint.stringValue = ShortcutAction.search.combo?.glyphs ?? ""
         hint.font = Pill.font(ofSize: (fontSize * 0.85).rounded())
         hint.textColor = Pill.ink.withAlphaComponent(style.textOpacity * (0.5 + lift))
         clearButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: fontSize * 0.85,
@@ -814,7 +823,8 @@ final class HistorySearchView: NSView, NSTextFieldDelegate {
                             y: ((bounds.height - hintHeight) / 2).rounded(),
                             width: hintWidth, height: hintHeight)
         let x = icon.frame.maxX + Self.iconGap
-        let right = isExpanded ? clearButton.frame.minX - Self.iconGap : hint.frame.minX - Self.iconGap
+        let right = isExpanded ? clearButton.frame.minX - Self.iconGap
+            : bounds.width - Self.inset.width - hintRoom
         let height = field.intrinsicContentSize.height
         field.frame = NSRect(x: x, y: ((bounds.height - height) / 2).rounded(),
                              width: max(right - x, 0), height: height)
@@ -1083,11 +1093,11 @@ final class HistoryController {
     private var searchY: CGFloat = 0
     private var searchHeight: CGFloat = 0
 
-    /// ⌥F, registered only while the stack is up. A Carbon hotkey rather than
-    /// a key monitor, for the reason in Hotkey.swift; and not registered for
-    /// good, because ⌥F belongs to whatever app is in front the rest of the
-    /// time. The stack goes up within a poll of ⌥ going down, which is sooner
-    /// than the F can follow it.
+    /// ⌥F, or the keys set for Search, registered only while the stack is up.
+    /// A Carbon hotkey rather than a key monitor, for the reason in
+    /// Hotkey.swift; and not registered for good, because ⌥F belongs to
+    /// whatever app is in front the rest of the time. The stack goes up within
+    /// a poll of ⌥ going down, which is sooner than the F can follow it.
     private var searchHotkey: Hotkey?
 
     /// For the outside-click poll: the buttons as they were last tick.
@@ -1261,8 +1271,10 @@ final class HistoryController {
                 ctx.duration = 0.12
                 panel.animator().alphaValue = 1
             }
-            searchHotkey = Hotkey(keyCode: kVK_ANSI_F, modifiers: optionKey, id: 2) { [weak self] in
-                self?.focusSearch()
+            if let combo = ShortcutAction.search.combo {
+                searchHotkey = Hotkey(combo, id: ShortcutAction.search.hotkeyID) { [weak self] in
+                    self?.focusSearch()
+                }
             }
         }
     }

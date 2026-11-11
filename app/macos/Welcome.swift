@@ -424,7 +424,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// key can light up when the key is actually held.
     private func buildShiftHint() -> NSView {
         keyHint(L("Hold %@ and drag the captions to move them.", "Welcome window; %@ is a drawn ⇧ key"),
-                KeycapView(key: "⇧", modifier: .shift))
+                KeycapView(key: Hold.drag.key.glyph, modifier: Hold.drag.key.flag))
     }
 
     /// "Hold ⌥ to stack the last few back up."
@@ -434,7 +434,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// earns it a line of its own.
     private func buildOptionHint() -> NSView {
         keyHint(L("Hold %@ to stack the last few back up.", "Welcome window; %@ is a drawn ⌥ key. The last few caption boxes come back, stacked"),
-                KeycapView(key: "⌥", modifier: .option))
+                KeycapView(key: Hold.stack.key.glyph, modifier: Hold.stack.key.flag))
     }
 
     /// A sentence with a key drawn in it where its %@ is, so each language
@@ -552,9 +552,18 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
     /// fails to encode leaves it on the site's own defaults. Injected at
     /// document start, well ahead of the script at the end of the page, the
     /// way the site's own recording flag is set.
+    ///
+    /// With them, the keys held over the captions (HOLD in demo.js), which
+    /// are not the box's look and so not in the style: the demo answers to
+    /// the ones chosen in Settings ▸ Shortcuts and names them in its lines.
+    /// Seeded only: a change rebuilds this window (main.swift).
     private static func seed(_ style: PreviewStyle) -> WKUserScript? {
         guard let text = json(style) else { return nil }
-        return WKUserScript(source: "window.SUBTITLES_SETTINGS = \(text);",
+        let holds = Hold.allCases.map { hold -> String in
+            let name = "hold" + hold.rawValue.prefix(1).uppercased() + hold.rawValue.dropFirst()
+            return "SUBTITLES_SETTINGS.\(name) = '\(hold.key.rawValue)';"
+        }
+        return WKUserScript(source: "window.SUBTITLES_SETTINGS = \(text); " + holds.joined(separator: " "),
                             injectionTime: .atDocumentStart, forMainFrameOnly: true)
     }
 
@@ -587,10 +596,11 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
         let web = DemoWebView(frame: .zero, configuration: configuration)
         web.windowWantsWheel = { [weak self] in
             guard let scroll = self?.pageScroll else { return false }
-            // Never while ⌥ is down. That is the gesture that raises the demo's
-            // own stack, and a wheel over the demo with ⌥ held is somebody
-            // scrolling that stack, on any size of screen.
-            guard !NSEvent.modifierFlags.contains(.option) else { return false }
+            // Never while ⌥ is down, or the key chosen in its place. That is
+            // the gesture that raises the demo's own stack, and a wheel over
+            // the demo with it held is somebody scrolling that stack, on any
+            // size of screen.
+            guard !Hold.stack.isDown else { return false }
             return WindowFit.canScroll(scroll)
         }
         web.translatesAutoresizingMaskIntoConstraints = false
