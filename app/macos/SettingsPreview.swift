@@ -277,7 +277,11 @@ private final class PreviewStage: NSView {
     private var nextHand: TimeInterval = 0
     private var lastFrame: TimeInterval = 0
     /// On the display's own frames, so the pulses move at the screen's rate.
-    private lazy var frames = FrameClock { [weak self] in self?.advance() }
+    /// Made the first time the stage is on screen, not lazily: a stage built
+    /// for a pane never shown would otherwise make it in `deinit`, and its
+    /// `[weak self]` to an object being deallocated aborts the app (Settings
+    /// rebuilds every pane when a held key changes, behind the Shortcuts tab).
+    private var frames: FrameClock?
 
     /// Still rings and no hand-off under Reduce Motion, as the demo does: it is
     /// who is speaking, not an animation.
@@ -287,15 +291,16 @@ private final class PreviewStage: NSView {
     /// same reason the preview's own loop does.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        frames.stop()
+        frames?.stop()
         guard window != nil else { return }
         let now = CACurrentMediaTime()
         lastFrame = now
         nextHand = now + 1.9
-        frames.start(in: self)
+        if frames == nil { frames = FrameClock { [weak self] in self?.advance() } }
+        frames?.start(in: self)
     }
 
-    deinit { frames.stop() }
+    deinit { frames?.stop() }
 
     private func advance() {
         let now = CACurrentMediaTime()
